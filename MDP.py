@@ -1,20 +1,48 @@
 import numpy as np
+import time
+from stats import ValueIterationStats
 
 
 
 class MDP:
+    """
+    A class representing a Markov Decision Process (MDP).
+
+    The MDP is defined by a 5-tuple: (S, A, T, R, gamma) where:
+    - S: A finite set of states (num_states)
+    - A: A finite set of actions (num_actions)
+    - P: A state transition probability function P(s' | s, a)
+    - R: A reward function R(s, a)
+    - gamma: A discount factor (gamma)
+
+    Attributes:
+    - num_states (int): The total number of states in the MDP.
+    - num_terminal_states (int): The number of terminal states.
+    - num_non_terminal_states (int): The number of non-terminal states.
+    - num_actions (int): The number of actions available in the MDP.
+    - s0 (int): The initial state index.
+    - gamma (float): The discount factor (must be between 0 and 1).
+    - P (np.ndarray): The state transition probability matrix.
+    - R (np.ndarray): The reward matrix for each state-action pair.
+    """
+
     def __init__(self, num_states: int, num_terminal_states: int, num_actions: int, gamma: int = 1, s0: int = 0) -> None:
         """
-        An MDP is a 5 tuple (S, A, T, R, gamma) where:
-        - S is the state space (s_0 is the initial state)
-        - A is the action space
-        - P is the transition function (notation from Jonsson, Gómez 2016)
-        - R is the reward function
-        - gamma is the discount factor
+        Initialize the MDP with the given parameters.
+
+        Args:
+        - num_states (int): The total number of states in the MDP.
+        - num_terminal_states (int): The number of terminal states in the MDP.
+        - num_actions (int): The number of actions available.
+        - gamma (float, optional): The discount factor (default is 1).
+        - s0 (int, optional): The initial state (default is 0).
+
+        Raises:
+        - AssertionError: If the initial state is not valid or the number of terminal states is greater than or equal to the total number of states.
         """
         assert 0 <= s0 <= num_states - 1, "Initial state must be a valid state"
-        assert num_terminal_states < num_states, "There must be less terminal states than the overall number of states"
-        assert 0 <= gamma <= 1, "Discount must be in the range [0, 1]"
+        assert num_terminal_states < num_states, "There must be fewer terminal states than the total number of states"
+        assert 0 <= gamma <= 1, "Discount factor must be in the range [0, 1]"
         
         self.num_states = num_states
         self.num_terminal_states = num_terminal_states
@@ -23,17 +51,22 @@ class MDP:
         self.s0 = s0
         self.gamma = gamma
         
-        # In the MDP superclass, P and R are set to 0. It will be in the subclasses where they will be set to the appropriate values for each domain.
+        # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
         self.R = np.zeros((self.num_states, self.num_actions))
-        
-    
+
     def transition(self, action: int, state: int) -> tuple[int, float, bool]:
         """
-        action - action that needs to be taken
-        state - current state where the agent is
-        
-        Returns the next state, the reward and whether the transitioned state is terminal or not
+        Simulate a state transition given an action and current state.
+
+        Args:
+        - action (int): The action taken.
+        - state (int): The current state.
+
+        Returns:
+        - next_state (int): The state reached after the transition.
+        - reward (float): The reward obtained for the transition.
+        - terminal (bool): True if the next state is a terminal state, False otherwise.
         """
         # With probability P, choose one of the next states
         next_state = np.random.choice(self.num_states, p=self.P[state, action])
@@ -42,27 +75,58 @@ class MDP:
             self.R[state, action],
             next_state >= self.num_non_terminal_states
         )
-        
-    def value_iteration(self, epsilon=1e-5):
+
+    def value_iteration(self, epsilon=1e-5) -> tuple[np.ndarray, ValueIterationStats]:
+        """
+        Perform value iteration to compute the optimal value function.
+
+        Args:
+        - epsilon (float, optional): The threshold for stopping the iteration (default is 1e-5).
+
+        Returns:
+        - V (np.ndarray): The optimal value function for each state.
+        - ValueIterationStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
+        """
         V = np.zeros(self.num_states)
-        
+        iterations = 0
+        cumulative_reward = 0
+        rewards = []
+        start_time = time.time()
+        deltas = []
+
         while True:
             delta = 0
             for s in range(self.num_non_terminal_states):
                 v = V[s]
-                V[s] = max(sum(self.P[s, a, s_next] * 
-                           (self.R[s, a] + self.gamma * V[s_next])
-                           for s_next in range(self.num_states)) for a in range(self.num_actions))
+                action_rewards = [
+                    sum(self.P[s, a, s_next] * (self.R[s, a] + self.gamma * V[s_next])
+                        for s_next in range(self.num_states))
+                    for a in range(self.num_actions)
+                ]
+                best_action_reward = max(action_rewards)
+                V[s] = best_action_reward
+                cumulative_reward += best_action_reward
                 delta = max(delta, abs(v - V[s]))
+            
+            rewards.append(cumulative_reward)
+            deltas.append(delta)
+            iterations += 1
             if delta < epsilon:
                 break
 
-        return V
-    
-    def get_optimal_policy(self, V):
+        elapsed_time = time.time() - start_time
+        
+        return V, ValueIterationStats(elapsed_time, rewards, iterations, deltas, self.num_states)
+
+    def get_optimal_policy(self, V: np.ndarray) -> np.ndarray:
         """
-        Derive the optimal policy based on the computed value function V.
-        Returns a list where each element corresponds to the optimal action for a state.
+        Derive the optimal policy from the value function.
+
+        Args:
+        - V (np.ndarray): The computed value function.
+
+        Returns:
+        - policy (np.ndarray): The optimal policy, where each element corresponds to the optimal action for a state.
         """
         policy = np.zeros(self.num_states, dtype=int)
         for s in range(self.num_non_terminal_states):  # Skip terminal states
@@ -76,7 +140,9 @@ class MDP:
 
     def print_rewards(self):
         """
-        Print the rewards for each action in every state.
+        Print the rewards for each state-action pair.
+
+        This method outputs the reward function R(s, a), showing the reward obtained by taking action a from state s.
         """
         print("State | Action | Reward")
         print("-" * 25)
@@ -86,8 +152,12 @@ class MDP:
 
     def print_action_values(self, V):
         """
-        Print the value obtained at each state for each action.
-        This uses the value function V to compute Q(s, a).
+        Print the action values (Q(s, a)) for each state-action pair.
+
+        This method computes Q(s, a) using the value function V and prints the values for each state-action pair.
+
+        Args:
+        - V (np.ndarray): The computed value function.
         """
         print("State | Action | Value")
         print("-" * 25)
@@ -98,4 +168,3 @@ class MDP:
                     for s_next in range(self.num_states)
                 )
                 print(f"{s:5d} | {a:6d} | {q_value:.3f}")
-
