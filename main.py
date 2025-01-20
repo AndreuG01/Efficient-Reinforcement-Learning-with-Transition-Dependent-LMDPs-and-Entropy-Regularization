@@ -56,9 +56,10 @@ CLIFF = [
 
 if __name__ == "__main__":
     grid_size = 10
-    name = f"simple{grid_size}x{grid_size}"
+    name = f"walls"
     mdp = GridWorldMDP(
-        # map=LARGE_TEST,
+        grid_size=grid_size,
+        map=WALL_TEST,
         deterministic=True
     )
     
@@ -80,17 +81,18 @@ if __name__ == "__main__":
         figsize=(7, 5),
         name=name,
     )
-    # plotter.plot_grid_world(
-    #     show_value_function=True,
-    #     savefig=False,
-    # )
+    plotter.plot_grid_world(
+        show_value_function=True,
+        savefig=True,
+        multiple_actions=True
+    )
     
     # plotter.plot_stats(savefig=False)
     
-    training_epochs = 300000
-    epsilon = 0.1
+    training_epochs = 1000000
+    epsilon = 1
     q_learner = QLearning(mdp, alpha=0.01, gamma=1, epsilon=epsilon, info_every=50000)
-    Q, policy, reward = q_learner.train(num_steps=training_epochs)
+    Q, policy, reward = q_learner.train(num_steps=training_epochs, multiple_actions=True)
     
     fig = plt.figure(figsize=(10, 5))
     plt.plot(np.arange(len(reward)), reward, label=f"$\epsilon$ = {epsilon}")
@@ -98,11 +100,10 @@ if __name__ == "__main__":
     plt.ylabel("Cumulative reward")
     plt.grid()
     plt.legend()
-    plt.title("Epsilon effect on large test")
+    plt.title("Epsilon decay effect on walls test", fontsize=14, fontweight="bold")
+    # plt.savefig("assets/walls/q_learning_reward.png", dpi=300)
     plt.show()
     
-    
-
-    print("Policy")
-    print(policy)
     plotter.plot_grid_world(show_value_function=True, savefig=False, policy=policy)
+    
+    

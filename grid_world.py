@@ -33,6 +33,7 @@ class GridWorldMDP(MDP):
     - num_actions (int): The number of possible actions the agent can take.
     - deterministic (bool): Whether the environment is deterministic or stochastic.
     - policy (list[int]): The optimal policy for each state.
+    - policy_multiple_actions (list[list[int]]): The optimal policy for each state considering all the actions that maximize the reward.
     - V (list[float]): The value function for each state.
     - stats (Statistics): The statistics associated with the value iteration process.
     """
@@ -179,7 +180,9 @@ class GridWorldMDP(MDP):
         Computes the value function using value iteration and extracts the optimal policy.
         """
         self.V, self.stats = self.value_iteration()
+        
         self.policy = self.get_optimal_policy(self.V)
+        self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True)
 
     def __generate_P(self):
         """
@@ -265,7 +268,7 @@ class GridWorldPlotter:
         self.__out_path = os.path.join("assets", name)
         if not os.path.exists(self.__out_path): os.makedirs(self.__out_path)
 
-    def plot_grid_world(self, savefig: bool = False, show_value_function: bool = False, policy: np.ndarray = None):
+    def plot_grid_world(self, savefig: bool = False, show_value_function: bool = False, policy: np.ndarray = None, multiple_actions: bool = False):
         """
         Plots the grid world environment, optionally showing the value function and policy.
 
@@ -280,7 +283,10 @@ class GridWorldPlotter:
         grid = np.full((self.gridworld.grid_size_x, self.gridworld.grid_size_y), self.gridworld.NORMAL)
         
         if policy is None:
-            policy = self.gridworld.policy
+            policy = self.gridworld.policy if not multiple_actions else self.gridworld.policy_multiple_actions
+        else:
+            print("WARNING: multiple actions in the policy found but `multiple_actions` parameter not set appropriately. Changing...")
+            multiple_actions = isinstance(policy[0], list)
 
         for pos in self.gridworld.POSITIONS[self.gridworld.WALL]:
             grid[pos] = self.gridworld.WALL
@@ -325,14 +331,14 @@ class GridWorldPlotter:
 
         # Add policy arrows
         for idx, pos in enumerate(self.gridworld.POSITIONS[self.gridworld.NORMAL]):
-            action = policy[idx]
-            dx, dy = self.gridworld.OFFSETS[action]
+            actions = policy[idx] if multiple_actions else [policy[idx]]
             y, x = pos
-
-            ax.quiver(
-                x, y, 0.35 * dy, 0.35 * dx, scale=1, scale_units="xy", angles="xy", 
-                width=0.005, color=self.POLICY_COLOR, headaxislength=3, headlength=3
-            )
+            for action in actions:
+                dx, dy = self.gridworld.OFFSETS[action]
+                ax.quiver(
+                    x, y, 0.35 * dy, 0.35 * dx, scale=1, scale_units="xy", angles="xy", 
+                    width=0.005, color=self.POLICY_COLOR, headaxislength=3, headlength=3
+                )
 
         # Adjust grid lines and labels
         ax.set_xticks(np.arange(-0.5, grid.shape[1], 1))

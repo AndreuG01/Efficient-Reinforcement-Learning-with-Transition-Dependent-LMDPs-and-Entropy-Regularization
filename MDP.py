@@ -119,7 +119,7 @@ class MDP:
         
         return V, ValueIterationStats(elapsed_time, rewards, iterations, deltas, self.num_states)
 
-    def get_optimal_policy(self, V: np.ndarray) -> np.ndarray:
+    def get_optimal_policy(self, V: np.ndarray, multiple_actions: bool = False) -> np.ndarray:
         """
         Derive the optimal policy from the value function.
 
@@ -129,14 +129,19 @@ class MDP:
         Returns:
         - policy (np.ndarray): The optimal policy, where each element corresponds to the optimal action for a state.
         """
-        policy = np.zeros(self.num_states, dtype=int)
+        policy = np.zeros(self.num_states, dtype=object)
         for s in range(self.num_non_terminal_states):  # Skip terminal states
             # Find the action that maximizes the expected utility
-            policy[s] = np.argmax([
+            vals = [
                 sum(self.P[s, a, s_next] * (self.R[s, a] + self.gamma * V[s_next])
                     for s_next in range(self.num_states))
                 for a in range(self.num_actions)
-            ])
+            ]
+            if multiple_actions:
+                policy[s] = [i for i in range(len(vals)) if vals[i] == np.max(vals)]
+            else:
+                policy[s] = np.argmax(vals)
+            
         return policy
 
     def print_rewards(self):
