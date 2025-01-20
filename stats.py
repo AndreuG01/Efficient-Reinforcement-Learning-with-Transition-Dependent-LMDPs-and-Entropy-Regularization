@@ -25,4 +25,3 @@ class ValueIterationStats:
         plt.grid()
         return fig
         
-    

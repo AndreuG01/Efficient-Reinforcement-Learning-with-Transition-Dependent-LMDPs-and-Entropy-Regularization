@@ -265,18 +265,22 @@ class GridWorldPlotter:
         self.__out_path = os.path.join("assets", name)
         if not os.path.exists(self.__out_path): os.makedirs(self.__out_path)
 
-    def plot_grid_world(self, savefig: bool = False, show_value_function: bool = False):
+    def plot_grid_world(self, savefig: bool = False, show_value_function: bool = False, policy: np.ndarray = None):
         """
         Plots the grid world environment, optionally showing the value function and policy.
 
         Args:
         - savefig (bool, optional): If True, the plot is saved to a file; otherwise, it is displayed (default is False).
         - show_value_function (bool, optional): If True, the value function of each state is displayed in the grid world (default is False).
+        - policy (np.ndarray, optional): If exists, it uses the given policy. Otherwise, it uses the class policy
 
         If `show_value_function` is set to True, the grid will display a color map representing the value function. Otherwise, the grid will display the basic layout of the grid world, including walls and goal positions.
         The policy (optimal action) is visualized as arrows for each non-terminal state.
         """
         grid = np.full((self.gridworld.grid_size_x, self.gridworld.grid_size_y), self.gridworld.NORMAL)
+        
+        if policy is None:
+            policy = self.gridworld.policy
 
         for pos in self.gridworld.POSITIONS[self.gridworld.WALL]:
             grid[pos] = self.gridworld.WALL
@@ -321,7 +325,7 @@ class GridWorldPlotter:
 
         # Add policy arrows
         for idx, pos in enumerate(self.gridworld.POSITIONS[self.gridworld.NORMAL]):
-            action = self.gridworld.policy[idx]
+            action = policy[idx]
             dx, dy = self.gridworld.OFFSETS[action]
             y, x = pos
 
@@ -360,85 +364,3 @@ class GridWorldPlotter:
 
         
 
-SIMPLE_TEST = [
-    "####",
-    "#S #",
-    "# G#",
-    "####"
-]
-
-
-LARGE_TEST = [
-    "##########",
-    "#    #  G#",
-    "#    #   #",
-    "#    #   #",
-    "#    #   #",
-    "#        #",
-    "#S       #",
-    "##########",
-]
-
-WALL_TEST = [
-    "##################",
-    "#S   ########    #",
-    "#    #      #  # #",
-    "#    #  #   #  # #",
-    "#    #  #   #  # #",
-    "#    #  #   #  # #",
-    "#       #      #G#",
-    "##################"
-]
-
-CLIFF = [
-    "#################",
-    "#               #",
-    "# #             #", # TODO: add cliff cells
-    "# ############  #",
-    "# #   #   #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "#S  #   #      G#",
-    "#################",
-]
-
-if __name__ == "__main__":
-    grid_size = 3
-    name = "cliff"
-    mdp = GridWorldMDP(
-        map=CLIFF,
-        deterministic=False
-    )
-    
-    
-
-    mdp.compute_value_function()
-    
-    # # for i in range(len(policy)):
-    # #     print(f"State {i}: action {policy[i]}")
-    # # print(policy)
-    
-    # # mdp.print_rewards()
-    # # mdp.print_action_values(V)
-    
-    # # mdp.print_grid()
-    
-    
-    plotter = GridWorldPlotter(mdp,
-        figsize=(7, 5),
-        name=name,
-    )
-    plotter.plot_grid_world(
-        show_value_function=True,
-        savefig=False,
-    )
-    
-    plotter.plot_stats(savefig=True)

@@ -79,6 +79,7 @@ class MDP:
     def value_iteration(self, epsilon=1e-5) -> tuple[np.ndarray, ValueIterationStats]:
         """
         Perform value iteration to compute the optimal value function.
+        From Sutton and Barto, page 83 from my references PDF #TODO: remove in a future.
 
         Args:
         - epsilon (float, optional): The threshold for stopping the iteration (default is 1e-5).
