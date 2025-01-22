@@ -70,6 +70,7 @@ class MDP:
         """
         # With probability P, choose one of the next states
         next_state = np.random.choice(self.num_states, p=self.P[state, action])
+        
         return (
             next_state,
             self.R[state, action],

@@ -42,6 +42,7 @@ class GridWorldMDP(MDP):
     WALL = 1
     START = 2
     GOAL = 3
+    CLIFF = 4
     # ... --> can be extended in the future to acount for more wall types
 
     OFFSETS = {
@@ -55,14 +56,16 @@ class GridWorldMDP(MDP):
         " ": NORMAL,
         "#": WALL,
         "S": START,
-        "G": GOAL
+        "G": GOAL,
+        "C": CLIFF
     }
 
     POSITIONS = {
         NORMAL: [],
         WALL: [],
         START: [],
-        GOAL: []
+        GOAL: [],
+        CLIFF: []
     }
 
     def __init__(self, grid_size: int = 3, start_pos: tuple[int, int] = (1, 1), map: list[str] = None, deterministic: bool = True):
@@ -91,10 +94,20 @@ class GridWorldMDP(MDP):
             self.start_pos = start_pos
             self.__generate_simple_grid(self.grid_size_x)
 
-        self.agent_pos = self.start_pos
-        super().__init__(self.num_states, num_terminal_states=1, num_actions=4)
+        self.__generate_state_index_mapper()
+        self.agent_pos = self.POSITIONS[self.NORMAL].index(self.start_pos)
+        n_terminal_states = len(self.POSITIONS[self.GOAL])
+        super().__init__(self.num_states, num_terminal_states=n_terminal_states, num_actions=4, s0=self.agent_pos)
         self.__generate_P()
         self.__generate_R()
+        
+        
+    
+    def __generate_state_index_mapper(self) -> dict[int, tuple[int, int]]:
+        self.state_index_mapper = {} # Maps the state index to the position in the grid.
+        for count, pos in enumerate(self.POSITIONS[self.NORMAL] + self.POSITIONS[self.GOAL]):
+            self.state_index_mapper[count] = pos
+        
 
     def __generate_simple_grid(self, grid_size: int):
         """
@@ -109,6 +122,8 @@ class GridWorldMDP(MDP):
                     self.POSITIONS[self.WALL].append((i, j))
                 elif (i, j) != self.goal_pos[0]:
                     self.POSITIONS[self.NORMAL].append((i, j))
+                    count += 1
+                
         self.POSITIONS[self.START].append(self.start_pos)
         self.POSITIONS[self.GOAL] = self.goal_pos
 
@@ -120,10 +135,10 @@ class GridWorldMDP(MDP):
         - map (list[str]): The grid map, where each character represents a type of cell.
         """
         assert all(len(row) == len(map[0]) for row in map), "Not all rows have the same length"
-
         for i, row in enumerate(map):
             for j, cell in enumerate(row):
-                if cell == "S": self.POSITIONS[self.NORMAL].append((i, j))
+                if cell == self.CHAR_POSITIONS[self.START]: self.POSITIONS[self.NORMAL].append((i, j))
+                if cell == self.CHAR_POSITIONS[self.CLIFF]: self.POSITIONS[self.NORMAL].append((i, j))
                 self.POSITIONS[self.POSITIONS_CHAR[cell]].append((i, j))
 
         self.start_pos = self.POSITIONS[self.START][0]
@@ -172,8 +187,28 @@ class GridWorldMDP(MDP):
         next_pos = (x + dx, y + dy)
         in_bounds = self.__is_valid(next_pos)
         if not in_bounds: next_pos = pos
+        
+        # if next_pos in self.POSITIONS[self.CLIFF]: next_pos = self.start_pos
 
         return next_pos, in_bounds, self.__is_terminal(next_pos)
+    
+    
+    
+    def transition(self, action, state):
+        # Override the parent transition method.
+        
+        if self.state_index_mapper[state] in self.POSITIONS[self.CLIFF]:
+            # If you try to transition from a cliff state, you transition to the start state
+            next_state = self.s0
+        else:
+            # With probability P, choose one of the next states
+            next_state = np.random.choice(self.num_states, p=self.P[state, action])
+        
+        return (
+            next_state,
+            self.R[state, action],
+            next_state >= self.num_non_terminal_states
+        )
 
     def compute_value_function(self):
         """
@@ -190,11 +225,15 @@ class GridWorldMDP(MDP):
         """
         for state in range(self.num_non_terminal_states):
             for action in range(self.num_actions):
-                next_state, _, _ = self.__move(self.POSITIONS[self.NORMAL][state], action)
-                if next_state in self.POSITIONS[self.GOAL]:
-                    next_state = self.POSITIONS[self.GOAL].index(next_state) + len(self.POSITIONS[self.NORMAL])
+                if self.state_index_mapper[state] in self.POSITIONS[self.CLIFF]:
+                    next_state = self.s0
                 else:
-                    next_state = self.POSITIONS[self.NORMAL].index(next_state)
+                    next_state, _, _ = self.__move(self.POSITIONS[self.NORMAL][state], action)
+                    # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
+                    if next_state in self.POSITIONS[self.GOAL]:
+                        next_state = self.POSITIONS[self.GOAL].index(next_state) + len(self.POSITIONS[self.NORMAL])
+                    else:
+                        next_state = self.POSITIONS[self.NORMAL].index(next_state)
 
                 if self.deterministic:
                     self.P[state, action, next_state] = 1
@@ -213,8 +252,14 @@ class GridWorldMDP(MDP):
         """
         Generates the reward matrix (R) for the grid world, setting the default reward to -1 for all actions.
         """
-        for state in range(self.num_non_terminal_states):
-            self.R[state, :] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
+        for i in range(self.grid_size_x):
+            for j in range(self.grid_size_y):
+                if (i, j) in self.POSITIONS[self.NORMAL]:
+                    self.R[self.POSITIONS[self.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
+                if (i, j) in self.POSITIONS[self.CLIFF]:
+                    self.R[self.POSITIONS[self.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.int32)
+        # for state in range(self.num_non_terminal_states):
+        #     self.R[state, :] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
 
     def print_grid(self):
         """
@@ -250,6 +295,7 @@ class GridWorldPlotter:
     NORMAL_COLOR = "white"
     WALL_COLOR = "#383838"
     GOAL_COLOR = "#4EFF10"
+    CLIFF_COLOR = "#3F043C"
     POLICY_COLOR = "#FF1010"
 
     def __init__(self, gridworld: GridWorldMDP, figsize: tuple[int, int] = (5, 5), name: str = None):
@@ -312,12 +358,16 @@ class GridWorldPlotter:
             cbar = plt.colorbar(im, cax=cax)
             cbar.set_label("Value Function", fontsize=12)
 
-            # Put the walls as black
+            # Put the walls to its color
             for pos in self.gridworld.POSITIONS[self.gridworld.WALL]:
                 ax.add_patch(plt.Rectangle((pos[1] - 0.5, pos[0] - 0.5), 1, 1, color=self.WALL_COLOR))
-            # Put the goal as green
+            # Put the goal to its color
             for pos in self.gridworld.POSITIONS[self.gridworld.GOAL]:
                 ax.add_patch(plt.Rectangle((pos[1] - 0.5, pos[0] - 0.5), 1, 1, color=self.GOAL_COLOR))
+            # Put the cliff to its color
+            for pos in self.gridworld.POSITIONS[self.gridworld.CLIFF]:
+                ax.add_patch(plt.Rectangle((pos[1] - 0.5, pos[0] - 0.5), 1, 1, color=self.CLIFF_COLOR))
+            
         else:
             # Default color scheme for grid elements
             colormap = {

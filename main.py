@@ -22,22 +22,32 @@ LARGE_TEST = [
     "#S       #",
     "##########",
 ]
+LARGE_TEST_CLIFF = [
+    "##########",
+    "#    #  G#",
+    "#    #   #",
+    "#    #   #",
+    "#    #   #",
+    "#      C #",
+    "#S       #",
+    "##########",
+]
 
 WALL_TEST = [
     "##################",
-    "#S   ########    #",
+    "#    ########    #",
     "#    #      #  # #",
     "#    #  #   #  # #",
     "#    #  #   #  # #",
     "#    #  #   #  # #",
-    "#       #      #G#",
+    "#S      #      #G#",
     "##################"
 ]
 
 CLIFF = [
     "#################",
     "#               #",
-    "# #             #", # TODO: add cliff cells
+    "# #CCCCCCCCCCC  #", # TODO: add cliff cells
     "# ############  #",
     "# #   #   #  #  #",
     "# # # # # #  #  #",
@@ -54,16 +64,24 @@ CLIFF = [
     "#################",
 ]
 
+CHEATING_CLIFF = [
+    "#######",
+    "#    C#",
+    "#G    #",
+    "#S    #",
+    "#######"
+]
+
 if __name__ == "__main__":
     grid_size = 10
-    name = f"walls"
+    name = f"cliff"
     mdp = GridWorldMDP(
         grid_size=grid_size,
-        map=WALL_TEST,
+        map=CLIFF,
         deterministic=True
     )
     
-    
+    # print(mdp.P.shape)
 
     mdp.compute_value_function()
     
@@ -83,15 +101,22 @@ if __name__ == "__main__":
     )
     plotter.plot_grid_world(
         show_value_function=True,
-        savefig=True,
+        savefig=False,
         multiple_actions=True
     )
     
     # plotter.plot_stats(savefig=False)
     
-    training_epochs = 1000000
+    training_epochs = 2000000
     epsilon = 1
-    q_learner = QLearning(mdp, alpha=0.01, gamma=1, epsilon=epsilon, info_every=50000)
+    q_learner = QLearning(
+        mdp,
+        alpha=0.01,
+        gamma=1,
+        epsilon=epsilon,
+        info_every=50000,
+        # epsilon_decay=1.0
+    )
     Q, policy, reward = q_learner.train(num_steps=training_epochs, multiple_actions=True)
     
     fig = plt.figure(figsize=(10, 5))
