@@ -2,82 +2,16 @@ from grid_world import GridWorldMDP, GridWorldPlotter
 from algorithms import QLearning
 import matplotlib.pyplot as plt
 import numpy as np
+from maps import Maps
 
 
-SIMPLE_TEST = [
-    "####",
-    "#S #",
-    "# G#",
-    "####"
-]
-
-
-LARGE_TEST = [
-    "##########",
-    "#    #  G#",
-    "#    #   #",
-    "#    #   #",
-    "#    #   #",
-    "#        #",
-    "#S       #",
-    "##########",
-]
-LARGE_TEST_CLIFF = [
-    "##########",
-    "#    #  G#",
-    "#    #   #",
-    "#    #   #",
-    "#    #   #",
-    "#      C #",
-    "#S       #",
-    "##########",
-]
-
-WALL_TEST = [
-    "##################",
-    "#    ########    #",
-    "#    #      #  # #",
-    "#    #  #   #  # #",
-    "#    #  #   #  # #",
-    "#    #  #   #  # #",
-    "#S      #      #G#",
-    "##################"
-]
-
-CLIFF = [
-    "#################",
-    "#               #",
-    "# #CCCCCCCCCCC  #", # TODO: add cliff cells
-    "# ############  #",
-    "# #   #   #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "# # # # # #  #  #",
-    "#S  #   #      G#",
-    "#################",
-]
-
-CHEATING_CLIFF = [
-    "#######",
-    "#    C#",
-    "#G    #",
-    "#S    #",
-    "#######"
-]
 
 if __name__ == "__main__":
-    grid_size = 10
+    grid_size = 2
     name = f"cliff"
     mdp = GridWorldMDP(
         grid_size=grid_size,
-        map=CLIFF,
+        map=Maps.CLIFF,
         deterministic=True
     )
     
@@ -107,7 +41,7 @@ if __name__ == "__main__":
     
     # plotter.plot_stats(savefig=False)
     
-    training_epochs = 2000000
+    training_epochs = 4000000
     epsilon = 1
     q_learner = QLearning(
         mdp,

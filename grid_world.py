@@ -7,8 +7,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
-
-
+from grid import CustomGrid, CellType
+ 
+                
 class GridWorldMDP(MDP):
     """
     A class representing a GridWorld Markov Decision Process (MDP).
@@ -16,16 +17,9 @@ class GridWorldMDP(MDP):
     This class models a grid world environment where an agent navigates through a grid to reach a goal. The grid consists of various types of cells, such as normal cells, walls, a start position, and a goal position. The agent's task is to move from the start position to the goal while avoiding walls. The class supports both deterministic and stochastic dynamics for movement.
 
     Attributes:
-    - NORMAL (int): Constant representing a normal position where the agent can be at.
-    - WALL (int): Constant representing a wall blocking the agent's movement.
-    - START (int): Constant representing the start position of the agent.
-    - GOAL (int): Constant representing the goal position of the agent.
     - OFFSETS (dict): A dictionary mapping actions to directional offsets.
-    - POSITIONS_CHAR (dict): A mapping of characters to cell types (normal, wall, start, goal).
-    - POSITIONS (dict): A dictionary mapping cell types to a list of positions (coordinates) for that type.
-    - CHAR_POSITIONS (dict): A reverse mapping of cell types to characters.
-    - grid_size_x (int): The number of rows in the grid.
-    - grid_size_y (int): The number of columns in the grid.
+    - size_x (int): The number of rows in the grid.
+    - size_y (int): The number of columns in the grid.
     - num_states (int): The total number of states (excluding terminal states).
     - start_pos (tuple[int, int]): The start position of the agent.
     - goal_pos (list[tuple[int, int]]): A list of goal positions.
@@ -38,13 +32,6 @@ class GridWorldMDP(MDP):
     - stats (Statistics): The statistics associated with the value iteration process.
     """
 
-    NORMAL = 0
-    WALL = 1
-    START = 2
-    GOAL = 3
-    CLIFF = 4
-    # ... --> can be extended in the future to acount for more wall types
-
     OFFSETS = {
         0: (0, -1),  # UP
         1: (1, 0),   # RIGHT
@@ -52,23 +39,7 @@ class GridWorldMDP(MDP):
         3: (-1, 0)   # LEFT
     }
 
-    POSITIONS_CHAR = {
-        " ": NORMAL,
-        "#": WALL,
-        "S": START,
-        "G": GOAL,
-        "C": CLIFF
-    }
-
-    POSITIONS = {
-        NORMAL: [],
-        WALL: [],
-        START: [],
-        GOAL: [],
-        CLIFF: []
-    }
-
-    def __init__(self, grid_size: int = 3, start_pos: tuple[int, int] = (1, 1), map: list[str] = None, deterministic: bool = True):
+    def __init__(self, grid_size: int = 3, map: list[str] = None, deterministic: bool = True):
         """
         Initializes the grid world based on the provided map or generates a simple grid. Also initializes matrices for state transitions (P) and rewards (R).
 
@@ -80,97 +51,26 @@ class GridWorldMDP(MDP):
 
         """
         assert grid_size > 0, "Grid size must be > 0"
-        self.CHAR_POSITIONS = {v: k for k, v in self.POSITIONS_CHAR.items()}
+        
 
         self.deterministic = deterministic
-
-        if map is not None:
-            self.__load_from_map(map)
-        else:
-            self.grid_size_x = grid_size + 2
-            self.grid_size_y = grid_size + 2
-            self.num_states = grid_size ** 2
-            self.goal_pos = [(grid_size, grid_size)]
-            self.start_pos = start_pos
-            self.__generate_simple_grid(self.grid_size_x)
-
-        self.__generate_state_index_mapper()
-        self.agent_pos = self.POSITIONS[self.NORMAL].index(self.start_pos)
-        n_terminal_states = len(self.POSITIONS[self.GOAL])
-        super().__init__(self.num_states, num_terminal_states=n_terminal_states, num_actions=4, s0=self.agent_pos)
+        
+        self.grid = CustomGrid(map=map, grid_size=grid_size)
+        self.num_states = self.grid.get_num_states()
+        self.num_actions = len(self.OFFSETS)
+        
+        
+        super().__init__(
+            self.num_states,
+            num_terminal_states=self.grid.get_num_terminal_states(),
+            num_actions=4,
+            s0=self.grid.positions[CellType.NORMAL].index(self.grid.start_pos)
+        )
+        
         self.__generate_P()
         self.__generate_R()
-        
-        
     
-    def __generate_state_index_mapper(self) -> dict[int, tuple[int, int]]:
-        self.state_index_mapper = {} # Maps the state index to the position in the grid.
-        for count, pos in enumerate(self.POSITIONS[self.NORMAL] + self.POSITIONS[self.GOAL]):
-            self.state_index_mapper[count] = pos
-        
-
-    def __generate_simple_grid(self, grid_size: int):
-        """
-        Generates a simple grid with walls surrounding the grid and the goal positioned at the bottom-right corner.
-
-        Args:
-        - grid_size (int): The size of the grid (excluding the walls).
-        """
-        for j in range(grid_size):
-            for i in range(grid_size):
-                if (i == 0 or i == grid_size - 1) or (j == 0 or j == grid_size - 1):
-                    self.POSITIONS[self.WALL].append((i, j))
-                elif (i, j) != self.goal_pos[0]:
-                    self.POSITIONS[self.NORMAL].append((i, j))
-                    count += 1
-                
-        self.POSITIONS[self.START].append(self.start_pos)
-        self.POSITIONS[self.GOAL] = self.goal_pos
-
-    def __load_from_map(self, map: list[str]):
-        """
-        Loads the grid world from a custom map represented as a list of strings. The map must have rows of equal length.
-
-        Args:
-        - map (list[str]): The grid map, where each character represents a type of cell.
-        """
-        assert all(len(row) == len(map[0]) for row in map), "Not all rows have the same length"
-        for j, row in enumerate(map):
-            for i, cell in enumerate(row):
-                if cell == self.CHAR_POSITIONS[self.START]: self.POSITIONS[self.NORMAL].append((i, j))
-                if cell == self.CHAR_POSITIONS[self.CLIFF]: self.POSITIONS[self.NORMAL].append((i, j))
-                self.POSITIONS[self.POSITIONS_CHAR[cell]].append((i, j))
-
-        self.start_pos = self.POSITIONS[self.START][0]
-        self.goal_pos = self.POSITIONS[self.GOAL]
-        self.num_states = len(self.POSITIONS[self.NORMAL]) + len(self.POSITIONS[self.GOAL])
-        self.grid_size_x = len(map)
-        self.grid_size_y = len(map[0])
-
-    def __is_valid(self, pos: tuple[int, int]) -> bool:
-        """
-        Checks if a position is valid (i.e., not a wall).
-
-        Args:
-        - pos (tuple[int, int]): The position to check.
-
-        Returns:
-        - bool: True if the position is valid, False otherwise.
-        """
-        return pos not in self.POSITIONS[self.WALL]
-
-    def __is_terminal(self, pos: tuple[int, int]) -> bool:
-        """
-        Checks if a position is a terminal state (i.e., a goal position).
-
-        Args:
-        - pos (tuple[int, int]): The position to check.
-
-        Returns:
-        - bool: True if the position is terminal, False otherwise.
-        """
-        return pos in self.goal_pos
-
+    
     def __move(self, pos: tuple[int, int], action: int) -> tuple[tuple[int, int], bool, bool]:
         """
         Computes the next position after performing an action, and returns whether the move is valid and whether the agent has reached a terminal state.
@@ -185,15 +85,13 @@ class GridWorldMDP(MDP):
         y, x = pos
         dy, dx = self.OFFSETS[action]
         next_pos = (y + dy, x + dx)
-        in_bounds = self.__is_valid(next_pos)
+        in_bounds = self.grid.is_valid(next_pos)
         if not in_bounds: next_pos = pos
         
-        # if next_pos in self.POSITIONS[self.CLIFF]: next_pos = self.start_pos
+        # if next_pos in self.grid.positions[self.CLIFF]: next_pos = self.start_pos
 
-        return next_pos, in_bounds, self.__is_terminal(next_pos)
-    
-    
-    
+        return next_pos, in_bounds, self.grid.is_terminal(next_pos)
+
 
     def compute_value_function(self):
         """
@@ -208,17 +106,18 @@ class GridWorldMDP(MDP):
         """
         Generates the transition probability matrix (P) for the grid world, based on the dynamics of the environment (deterministic or stochastic).
         """
+        pos = self.grid.positions
         for state in range(self.num_non_terminal_states):
             for action in range(self.num_actions):
-                if self.state_index_mapper[state] in self.POSITIONS[self.CLIFF]:
+                if self.grid.state_index_mapper[state] in pos[CellType.CLIFF]:
                     next_state = self.s0
                 else:
-                    next_state, _, _ = self.__move(self.POSITIONS[self.NORMAL][state], action)
+                    next_state, _, _ = self.__move(pos[CellType.NORMAL][state], action)
                     # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
-                    if next_state in self.POSITIONS[self.GOAL]:
-                        next_state = self.POSITIONS[self.GOAL].index(next_state) + len(self.POSITIONS[self.NORMAL])
+                    if next_state in pos[CellType.GOAL]:
+                        next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
                     else:
-                        next_state = self.POSITIONS[self.NORMAL].index(next_state)
+                        next_state = pos[CellType.NORMAL].index(next_state)
 
                 if self.deterministic:
                     self.P[state, action, next_state] = 1
@@ -226,33 +125,25 @@ class GridWorldMDP(MDP):
                     # Stochastic policy. With 70% take the correct action, with 30% take a random action
                     self.P[state, action, next_state] = 0.7
                     rand_action = np.random.choice([a for a in range(self.num_actions) if a != action])
-                    next_state, _, _ = self.__move(self.POSITIONS[self.NORMAL][state], rand_action)
-                    if next_state in self.POSITIONS[self.GOAL]:
-                        next_state = self.POSITIONS[self.GOAL].index(next_state) + len(self.POSITIONS[self.NORMAL])
+                    next_state, _, _ = self.__move(pos[CellType.NORMAL][state], rand_action)
+                    if next_state in pos[CellType.GOAL]:
+                        next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
                     else:
-                        next_state = self.POSITIONS[self.NORMAL].index(next_state)
+                        next_state = pos[CellType.NORMAL].index(next_state)
                     self.P[state, action, next_state] += 0.3
 
     def __generate_R(self):
         """
         Generates the reward matrix (R) for the grid world, setting the default reward to -1 for all actions.
         """
-        for j in range(self.grid_size_x):
-            for i in range(self.grid_size_y):
-                if (i, j) in self.POSITIONS[self.NORMAL]:
-                    self.R[self.POSITIONS[self.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
-                if (i, j) in self.POSITIONS[self.CLIFF]:
-                    self.R[self.POSITIONS[self.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.int32)
+        pos = self.grid.positions
+        for j in range(self.grid.size_x):
+            for i in range(self.grid.size_y):
+                if (i, j) in pos[CellType.NORMAL]:
+                    self.R[pos[CellType.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
+                if (i, j) in pos[CellType.CLIFF]:
+                    self.R[pos[CellType.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.int32)
 
-    def print_grid(self):
-        """
-        Prints a textual representation of the grid world, showing the types of cells (normal, wall, start, goal).
-        """
-        for j in range(self.grid_size_x):
-            for i in range(self.grid_size_y):
-                type = [k for k, v in self.POSITIONS.items() if (i, j) in v][-1]
-                print(self.CHAR_POSITIONS[type], end="")
-            print()
 
 
 
@@ -309,7 +200,8 @@ class GridWorldPlotter:
         If `show_value_function` is set to True, the grid will display a color map representing the value function. Otherwise, the grid will display the basic layout of the grid world, including walls and goal positions.
         The policy (optimal action) is visualized as arrows for each non-terminal state.
         """
-        grid = np.full((self.gridworld.grid_size_x, self.gridworld.grid_size_y), self.gridworld.NORMAL)
+        grid = np.full((self.gridworld.grid.size_x, self.gridworld.grid.size_y), CellType.NORMAL)
+        grid_positions = self.gridworld.grid.positions
         
         if policy is None:
             policy = self.gridworld.policy if not multiple_actions else self.gridworld.policy_multiple_actions
@@ -317,20 +209,20 @@ class GridWorldPlotter:
             print("WARNING: multiple actions in the policy found but `multiple_actions` parameter not set appropriately. Changing...")
             multiple_actions = isinstance(policy[0], list)
 
-        for pos in self.gridworld.POSITIONS[self.gridworld.WALL]:
-            grid[pos[1], pos[0]] = self.gridworld.WALL
-        for pos in self.gridworld.POSITIONS[self.gridworld.GOAL]:
-            grid[pos[1], pos[0]] = self.gridworld.GOAL
+        for pos in grid_positions[CellType.WALL]:
+            grid[pos[1], pos[0]] = CellType.WALL
+        for pos in grid_positions[CellType.GOAL]:
+            grid[pos[1], pos[0]] = CellType.GOAL
 
         fig, ax = plt.subplots(figsize=self.__figsize)
 
         if show_value_function:
             value_grid = np.zeros_like(grid, dtype=float)
-            for idx, pos in enumerate(self.gridworld.POSITIONS[self.gridworld.NORMAL]):
+            for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
                 value_grid[pos[1], pos[0]] = self.gridworld.V[idx]
             
             # Walls should not be affected by the value function color
-            for pos in self.gridworld.POSITIONS[self.gridworld.WALL]:
+            for pos in grid_positions[CellType.WALL]:
                 value_grid[pos[1], pos[0]] = np.nan
 
             im = ax.imshow(value_grid, cmap="Blues", origin="upper")
@@ -342,28 +234,28 @@ class GridWorldPlotter:
             cbar.set_label("Value Function", fontsize=12)
 
             # Put the walls to its color
-            for pos in self.gridworld.POSITIONS[self.gridworld.WALL]:
+            for pos in grid_positions[CellType.WALL]:
                 ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.WALL_COLOR))
             # Put the goal to its color
-            for pos in self.gridworld.POSITIONS[self.gridworld.GOAL]:
+            for pos in grid_positions[CellType.GOAL]:
                 ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.GOAL_COLOR))
             # Put the cliff to its color
-            for pos in self.gridworld.POSITIONS[self.gridworld.CLIFF]:
+            for pos in grid_positions[CellType.CLIFF]:
                 ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.CLIFF_COLOR))
             
         else:
             # Default color scheme for grid elements
             colormap = {
-                self.gridworld.NORMAL: self.NORMAL_COLOR,
-                self.gridworld.WALL: self.WALL_COLOR,
-                self.gridworld.GOAL: self.GOAL_COLOR
+                CellType.NORMAL: self.NORMAL_COLOR,
+                CellType.WALL: self.WALL_COLOR,
+                CellType.GOAL: self.GOAL_COLOR
             }
             color_list = [colormap[k] for k in sorted(colormap)]
             cmap = plt.matplotlib.colors.ListedColormap(color_list)
             ax.imshow(grid, cmap=cmap, origin="upper")
 
         # Add policy arrows
-        for idx, pos in enumerate(self.gridworld.POSITIONS[self.gridworld.NORMAL]):
+        for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
             actions = policy[idx] if multiple_actions else [policy[idx]]
             y, x = pos
             for action in actions:
