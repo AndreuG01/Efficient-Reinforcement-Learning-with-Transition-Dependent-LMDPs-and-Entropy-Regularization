@@ -46,10 +46,10 @@ class GridWorldMDP(MDP):
     # ... --> can be extended in the future to acount for more wall types
 
     OFFSETS = {
-        0: (-1, 0),  # UP
-        1: (0, 1),   # RIGHT
-        2: (1, 0),   # DOWN
-        3: (0, -1)   # LEFT
+        0: (0, -1),  # UP
+        1: (1, 0),   # RIGHT
+        2: (0, 1),   # DOWN
+        3: (-1, 0)   # LEFT
     }
 
     POSITIONS_CHAR = {
@@ -116,8 +116,8 @@ class GridWorldMDP(MDP):
         Args:
         - grid_size (int): The size of the grid (excluding the walls).
         """
-        for i in range(grid_size):
-            for j in range(grid_size):
+        for j in range(grid_size):
+            for i in range(grid_size):
                 if (i == 0 or i == grid_size - 1) or (j == 0 or j == grid_size - 1):
                     self.POSITIONS[self.WALL].append((i, j))
                 elif (i, j) != self.goal_pos[0]:
@@ -135,8 +135,8 @@ class GridWorldMDP(MDP):
         - map (list[str]): The grid map, where each character represents a type of cell.
         """
         assert all(len(row) == len(map[0]) for row in map), "Not all rows have the same length"
-        for i, row in enumerate(map):
-            for j, cell in enumerate(row):
+        for j, row in enumerate(map):
+            for i, cell in enumerate(row):
                 if cell == self.CHAR_POSITIONS[self.START]: self.POSITIONS[self.NORMAL].append((i, j))
                 if cell == self.CHAR_POSITIONS[self.CLIFF]: self.POSITIONS[self.NORMAL].append((i, j))
                 self.POSITIONS[self.POSITIONS_CHAR[cell]].append((i, j))
@@ -182,9 +182,9 @@ class GridWorldMDP(MDP):
         Returns:
         - tuple[tuple[int, int], bool, bool]: The next position, whether the move is valid, and whether the position is terminal.
         """
-        x, y = pos
-        dx, dy = self.OFFSETS[action]
-        next_pos = (x + dx, y + dy)
+        y, x = pos
+        dy, dx = self.OFFSETS[action]
+        next_pos = (y + dy, x + dx)
         in_bounds = self.__is_valid(next_pos)
         if not in_bounds: next_pos = pos
         
@@ -194,21 +194,6 @@ class GridWorldMDP(MDP):
     
     
     
-    def transition(self, action, state):
-        # Override the parent transition method.
-        
-        if self.state_index_mapper[state] in self.POSITIONS[self.CLIFF]:
-            # If you try to transition from a cliff state, you transition to the start state
-            next_state = self.s0
-        else:
-            # With probability P, choose one of the next states
-            next_state = np.random.choice(self.num_states, p=self.P[state, action])
-        
-        return (
-            next_state,
-            self.R[state, action],
-            next_state >= self.num_non_terminal_states
-        )
 
     def compute_value_function(self):
         """
@@ -252,21 +237,19 @@ class GridWorldMDP(MDP):
         """
         Generates the reward matrix (R) for the grid world, setting the default reward to -1 for all actions.
         """
-        for i in range(self.grid_size_x):
-            for j in range(self.grid_size_y):
+        for j in range(self.grid_size_x):
+            for i in range(self.grid_size_y):
                 if (i, j) in self.POSITIONS[self.NORMAL]:
                     self.R[self.POSITIONS[self.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
                 if (i, j) in self.POSITIONS[self.CLIFF]:
                     self.R[self.POSITIONS[self.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.int32)
-        # for state in range(self.num_non_terminal_states):
-        #     self.R[state, :] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
 
     def print_grid(self):
         """
         Prints a textual representation of the grid world, showing the types of cells (normal, wall, start, goal).
         """
-        for i in range(self.grid_size_x):
-            for j in range(self.grid_size_y):
+        for j in range(self.grid_size_x):
+            for i in range(self.grid_size_y):
                 type = [k for k, v in self.POSITIONS.items() if (i, j) in v][-1]
                 print(self.CHAR_POSITIONS[type], end="")
             print()
@@ -335,20 +318,20 @@ class GridWorldPlotter:
             multiple_actions = isinstance(policy[0], list)
 
         for pos in self.gridworld.POSITIONS[self.gridworld.WALL]:
-            grid[pos] = self.gridworld.WALL
+            grid[pos[1], pos[0]] = self.gridworld.WALL
         for pos in self.gridworld.POSITIONS[self.gridworld.GOAL]:
-            grid[pos] = self.gridworld.GOAL
+            grid[pos[1], pos[0]] = self.gridworld.GOAL
 
         fig, ax = plt.subplots(figsize=self.__figsize)
 
         if show_value_function:
             value_grid = np.zeros_like(grid, dtype=float)
             for idx, pos in enumerate(self.gridworld.POSITIONS[self.gridworld.NORMAL]):
-                value_grid[pos] = self.gridworld.V[idx]
+                value_grid[pos[1], pos[0]] = self.gridworld.V[idx]
             
             # Walls should not be affected by the value function color
             for pos in self.gridworld.POSITIONS[self.gridworld.WALL]:
-                value_grid[pos] = np.nan
+                value_grid[pos[1], pos[0]] = np.nan
 
             im = ax.imshow(value_grid, cmap="Blues", origin="upper")
 
@@ -360,13 +343,13 @@ class GridWorldPlotter:
 
             # Put the walls to its color
             for pos in self.gridworld.POSITIONS[self.gridworld.WALL]:
-                ax.add_patch(plt.Rectangle((pos[1] - 0.5, pos[0] - 0.5), 1, 1, color=self.WALL_COLOR))
+                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.WALL_COLOR))
             # Put the goal to its color
             for pos in self.gridworld.POSITIONS[self.gridworld.GOAL]:
-                ax.add_patch(plt.Rectangle((pos[1] - 0.5, pos[0] - 0.5), 1, 1, color=self.GOAL_COLOR))
+                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.GOAL_COLOR))
             # Put the cliff to its color
             for pos in self.gridworld.POSITIONS[self.gridworld.CLIFF]:
-                ax.add_patch(plt.Rectangle((pos[1] - 0.5, pos[0] - 0.5), 1, 1, color=self.CLIFF_COLOR))
+                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.CLIFF_COLOR))
             
         else:
             # Default color scheme for grid elements
@@ -384,9 +367,9 @@ class GridWorldPlotter:
             actions = policy[idx] if multiple_actions else [policy[idx]]
             y, x = pos
             for action in actions:
-                dx, dy = self.gridworld.OFFSETS[action]
+                dy, dx = self.gridworld.OFFSETS[action]
                 ax.quiver(
-                    x, y, 0.35 * dy, 0.35 * dx, scale=1, scale_units="xy", angles="xy", 
+                    y, x, 0.35 * dy, 0.35 * dx, scale=1, scale_units="xy", angles="xy", 
                     width=0.005, color=self.POLICY_COLOR, headaxislength=3, headlength=3
                 )
 
