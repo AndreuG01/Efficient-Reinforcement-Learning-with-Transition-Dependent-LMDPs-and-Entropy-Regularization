@@ -1,10 +1,12 @@
 import numpy as np
 import time
 from stats import ValueIterationStats
+from abc import ABC, abstractmethod
+from grid import CellType, CustomGrid
+from collections.abc import Callable
+from state import State
 
-
-
-class MDP:
+class MDP(ABC):
     """
     A class representing a Markov Decision Process (MDP).
 
@@ -54,6 +56,53 @@ class MDP:
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
         self.R = np.zeros((self.num_states, self.num_actions))
+    
+    
+    
+    def generate_P(self, pos: State, move: Callable, grid: CustomGrid):
+        """
+        Generates the transition probability matrix (P) for the grid world, based on the dynamics of the environment
+        (deterministic or stochastic).
+
+        Args:
+        - pos (State): The current state representation, containing information about all possible states grouped by their type.
+        - move (Callable): A function that determines the next state based on the current state and action.
+        The function signature should be `move(state: State, action: int) -> tuple[next_state: State, reward: float, done: bool]`.
+        - grid (CustomGrid): The grid environment for which the transition matrix is being generated.
+        """
+        
+        for state in range(self.num_non_terminal_states):
+            for action in range(self.num_actions):
+                if grid.state_index_mapper[state] in pos[CellType.CLIFF]:
+                    next_state = self.s0
+                else:
+                    next_state, _, _ = move(pos[CellType.NORMAL][state], action)
+                    # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
+                    if next_state in pos[CellType.GOAL]:
+                        next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
+                    else:
+                        next_state = pos[CellType.NORMAL].index(next_state)
+
+                if self.deterministic:
+                    self.P[state, action, next_state] = 1
+                else:
+                    # TODO: not tested for minigrid
+                    # Stochastic policy. With 70% take the correct action, with 30% take a random action
+                    self.P[state, action, next_state] = 0.7
+                    rand_action = np.random.choice([a for a in range(self.num_actions) if a != action])
+                    next_state, _, _ = move(pos[CellType.NORMAL][state], rand_action)
+                    if next_state in pos[CellType.GOAL]:
+                        next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
+                    else:
+                        next_state = pos[CellType.NORMAL].index(next_state)
+                    self.P[state, action, next_state] += 0.3
+    
+    
+    
+    @abstractmethod
+    def _generate_R(self):
+        raise NotImplementedError("Implement in the subclass.")
+    
 
     def transition(self, action: int, state: int) -> tuple[int, float, bool]:
         """
@@ -119,6 +168,18 @@ class MDP:
         elapsed_time = time.time() - start_time
         
         return V, ValueIterationStats(elapsed_time, rewards, iterations, deltas, self.num_states)
+    
+    
+    def compute_value_function(self):
+        """
+        Computes the value function using value iteration and extracts the optimal policy.
+        """
+        self.V, self.stats = self.value_iteration()
+        
+        self.policy = self.get_optimal_policy(self.V)
+        self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True)
+    
+    
 
     def get_optimal_policy(self, V: np.ndarray, multiple_actions: bool = False) -> np.ndarray:
         """

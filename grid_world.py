@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
 from grid import CustomGrid, CellType
+from state import State
  
                 
 class GridWorldMDP(MDP):
@@ -60,18 +61,20 @@ class GridWorldMDP(MDP):
         self.num_actions = len(self.OFFSETS)
         
         
+        start_pos = self.grid.start_pos
+        
         super().__init__(
             self.num_states,
             num_terminal_states=self.grid.get_num_terminal_states(),
             num_actions=4,
-            s0=self.grid.positions[CellType.NORMAL].index(self.grid.start_pos)
+            s0=self.grid.positions[CellType.NORMAL].index(State(start_pos[0], start_pos[1]))
         )
         
-        self.__generate_P()
-        self.__generate_R()
+        self.generate_P(self.grid.positions, self.move, self.grid)
+        self._generate_R()
     
     
-    def __move(self, pos: tuple[int, int], action: int) -> tuple[tuple[int, int], bool, bool]:
+    def move(self, state: State, action: int) -> tuple[State, bool, bool]:
         """
         Computes the next position after performing an action, and returns whether the move is valid and whether the agent has reached a terminal state.
 
@@ -82,68 +85,31 @@ class GridWorldMDP(MDP):
         Returns:
         - tuple[tuple[int, int], bool, bool]: The next position, whether the move is valid, and whether the position is terminal.
         """
-        y, x = pos
+        y = state.y
+        x = state.x
         dy, dx = self.OFFSETS[action]
-        next_pos = (y + dy, x + dx)
-        in_bounds = self.grid.is_valid(next_pos)
-        if not in_bounds: next_pos = pos
+        next_state = State(y + dy, x + dx)
+        
+        in_bounds = self.grid.is_valid(next_state)
+        if not in_bounds: next_state = state
         
         # if next_pos in self.grid.positions[self.CLIFF]: next_pos = self.start_pos
 
-        return next_pos, in_bounds, self.grid.is_terminal(next_pos)
+        return next_state, in_bounds, self.grid.is_terminal(next_state)
 
 
-    def compute_value_function(self):
-        """
-        Computes the value function using value iteration and extracts the optimal policy.
-        """
-        self.V, self.stats = self.value_iteration()
-        
-        self.policy = self.get_optimal_policy(self.V)
-        self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True)
-
-    def __generate_P(self):
-        """
-        Generates the transition probability matrix (P) for the grid world, based on the dynamics of the environment (deterministic or stochastic).
-        """
-        pos = self.grid.positions
-        for state in range(self.num_non_terminal_states):
-            for action in range(self.num_actions):
-                if self.grid.state_index_mapper[state] in pos[CellType.CLIFF]:
-                    next_state = self.s0
-                else:
-                    next_state, _, _ = self.__move(pos[CellType.NORMAL][state], action)
-                    # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
-                    if next_state in pos[CellType.GOAL]:
-                        next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
-                    else:
-                        next_state = pos[CellType.NORMAL].index(next_state)
-
-                if self.deterministic:
-                    self.P[state, action, next_state] = 1
-                else:
-                    # Stochastic policy. With 70% take the correct action, with 30% take a random action
-                    self.P[state, action, next_state] = 0.7
-                    rand_action = np.random.choice([a for a in range(self.num_actions) if a != action])
-                    next_state, _, _ = self.__move(pos[CellType.NORMAL][state], rand_action)
-                    if next_state in pos[CellType.GOAL]:
-                        next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
-                    else:
-                        next_state = pos[CellType.NORMAL].index(next_state)
-                    self.P[state, action, next_state] += 0.3
-
-    def __generate_R(self):
+    def _generate_R(self):
         """
         Generates the reward matrix (R) for the grid world, setting the default reward to -1 for all actions.
         """
         pos = self.grid.positions
         for j in range(self.grid.size_x):
             for i in range(self.grid.size_y):
-                if (i, j) in pos[CellType.NORMAL]:
-                    self.R[pos[CellType.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
-                if (i, j) in pos[CellType.CLIFF]:
-                    self.R[pos[CellType.NORMAL].index((i, j))] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.int32)
-
+                tmp_state = State(i, j)
+                if tmp_state in pos[CellType.NORMAL]:
+                    self.R[pos[CellType.NORMAL].index(tmp_state)] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
+                if tmp_state in pos[CellType.CLIFF]:
+                    self.R[pos[CellType.NORMAL].index(tmp_state)] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.int32)
 
 
 
@@ -209,21 +175,21 @@ class GridWorldPlotter:
             print("WARNING: multiple actions in the policy found but `multiple_actions` parameter not set appropriately. Changing...")
             multiple_actions = isinstance(policy[0], list)
 
-        for pos in grid_positions[CellType.WALL]:
-            grid[pos[1], pos[0]] = CellType.WALL
-        for pos in grid_positions[CellType.GOAL]:
-            grid[pos[1], pos[0]] = CellType.GOAL
+        for wall_state in grid_positions[CellType.WALL]:
+            grid[wall_state.x, wall_state.y] = CellType.WALL
+        for goal_state in grid_positions[CellType.GOAL]:
+            grid[goal_state.x, goal_state.y] = CellType.GOAL
 
         fig, ax = plt.subplots(figsize=self.__figsize)
 
         if show_value_function:
             value_grid = np.zeros_like(grid, dtype=float)
             for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
-                value_grid[pos[1], pos[0]] = self.gridworld.V[idx]
+                value_grid[pos.x, pos.y] = self.gridworld.V[idx]
             
             # Walls should not be affected by the value function color
             for pos in grid_positions[CellType.WALL]:
-                value_grid[pos[1], pos[0]] = np.nan
+                value_grid[pos.x, pos.y] = np.nan
 
             im = ax.imshow(value_grid, cmap="Blues", origin="upper")
 
@@ -235,13 +201,13 @@ class GridWorldPlotter:
 
             # Put the walls to its color
             for pos in grid_positions[CellType.WALL]:
-                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.WALL_COLOR))
+                ax.add_patch(plt.Rectangle((pos.y - 0.5, pos.x - 0.5), 1, 1, color=self.WALL_COLOR))
             # Put the goal to its color
             for pos in grid_positions[CellType.GOAL]:
-                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.GOAL_COLOR))
+                ax.add_patch(plt.Rectangle((pos.y - 0.5, pos.x - 0.5), 1, 1, color=self.GOAL_COLOR))
             # Put the cliff to its color
             for pos in grid_positions[CellType.CLIFF]:
-                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.CLIFF_COLOR))
+                ax.add_patch(plt.Rectangle((pos.y - 0.5, pos.x - 0.5), 1, 1, color=self.CLIFF_COLOR))
             
         else:
             # Default color scheme for grid elements
@@ -257,7 +223,8 @@ class GridWorldPlotter:
         # Add policy arrows
         for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
             actions = policy[idx] if multiple_actions else [policy[idx]]
-            y, x = pos
+            y = pos.y
+            x = pos.x
             for action in actions:
                 dy, dx = self.gridworld.OFFSETS[action]
                 ax.quiver(

@@ -1,4 +1,5 @@
 from grid_world import GridWorldMDP, GridWorldPlotter
+from minigrid_env import MinigridMDP, MinigridActions
 from algorithms import QLearning
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,29 +8,41 @@ from maps import Maps
 
 
 if __name__ == "__main__":
-    grid_size = 2
+    grid_size = 5
     name = f"cliff"
-    mdp = GridWorldMDP(
+    
+    gridworld_mdp = GridWorldMDP(
         grid_size=grid_size,
         map=Maps.CLIFF,
         deterministic=True
     )
     
-    # print(mdp.P.shape)
+    minigrid_mdp = MinigridMDP(
+        grid_size=grid_size,
+        map=Maps.CLIFF,
+        allowed_actions=[
+            MinigridActions.ROTATE_LEFT,
+            MinigridActions.ROTATE_RIGHT,
+            MinigridActions.FORWARD
+        ]
+    )
 
-    mdp.compute_value_function()
+    # minigrid_mdp.visualize_policy(
+    #     save_gif=False,
+    #     save_path="assets/cliff.gif"
+    # )
     
-    # # for i in range(len(policy)):
-    # #     print(f"State {i}: action {policy[i]}")
-    # # print(policy)
+
+    gridworld_mdp.compute_value_function()
+    minigrid_mdp.compute_value_function()
     
-    # # mdp.print_rewards()
-    # # mdp.print_action_values(V)
-    
-    # # mdp.print_grid()
+    print(gridworld_mdp.stats.iterations)
+    print(minigrid_mdp.stats.iterations)
     
     
-    plotter = GridWorldPlotter(mdp,
+    
+        
+    plotter = GridWorldPlotter(gridworld_mdp,
         figsize=(7, 5),
         name=name,
     )
@@ -41,10 +54,10 @@ if __name__ == "__main__":
     
     # plotter.plot_stats(savefig=False)
     
-    training_epochs = 4000000
+    training_epochs = 1000000
     epsilon = 1
     q_learner = QLearning(
-        mdp,
+        gridworld_mdp,
         alpha=0.01,
         gamma=1,
         epsilon=epsilon,

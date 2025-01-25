@@ -1,3 +1,6 @@
+from state import State
+from itertools import product
+
 class CellType:
     """
     Represents different types of cells in the grid in an Enum like style.
@@ -43,7 +46,7 @@ class CustomGrid:
         "C": CellType.CLIFF
     }
 
-    def __init__(self, map: list[str] = None, grid_size: int = 3):
+    def __init__(self, map: list[str] = None, grid_size: int = 3, properties: dict[str, list] = None):
         """
         Initializes the grid with either a predefined map or generates a simple grid.
 
@@ -54,20 +57,23 @@ class CustomGrid:
         self.map = map
         self.char_positions = {v: k for k, v in self.POSITIONS_CHAR.items()}
         
-        self.positions = {
-            CellType.NORMAL: [],
-            CellType.WALL: [],
-            CellType.START: [],
-            CellType.GOAL: [],
-            CellType.CLIFF: []
-        }
+        self.positions = {k: [] for k in self.POSITIONS_CHAR.values()}
+        self.state_properties = {} if properties is None else properties
+            
         
         if self.map is None:
             self.generate_simple_grid(grid_size=grid_size)
         else:
             self.load_from_map()
         
-        self.__generate_state_index_mapper()
+        self.generate_state_index_mapper()
+    
+    def _generate_states(self, x: int, y: int) -> list[State]:
+        property_keys = list(self.state_properties.keys())
+        property_values = [self.state_properties[key] for key in property_keys]
+        combinations = product(*property_values)
+        
+        return [State(x, y, **dict(zip(property_keys, values))) for values in combinations]
         
 
     def generate_simple_grid(self, grid_size: int):
@@ -86,12 +92,12 @@ class CustomGrid:
         for j in range(self.size_x):
             for i in range(self.size_y):
                 if (i == 0 or i == self.size_y - 1) or (j == 0 or j == self.size_x - 1):
-                    self.positions[CellType.WALL].append((i, j))
+                    self.positions[CellType.WALL].extend(self._generate_states(i, j))
                 elif (i, j) != self.goal_pos[0]:
-                    self.positions[CellType.NORMAL].append((i, j))
+                    self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
                 
-        self.positions[CellType.START].append(self.start_pos)
-        self.positions[CellType.GOAL] = self.goal_pos
+        self.positions[CellType.START].append(State(self.start_pos[0], self.start_pos[1], **{k: v[0] for k, v in self.state_properties.items()}))
+        self.positions[CellType.GOAL] = self._generate_states(self.goal_pos[0][0], self.goal_pos[0][1])
         
         
     
@@ -106,12 +112,14 @@ class CustomGrid:
         assert all(len(row) == len(self.map[0]) for row in self.map), "Not all rows have the same length"
         for j, row in enumerate(self.map):
             for i, cell in enumerate(row):
-                if cell == self.char_positions[CellType.START]: self.positions[CellType.NORMAL].append((i, j))
-                if cell == self.char_positions[CellType.CLIFF]: self.positions[CellType.NORMAL].append((i, j))
-                self.positions[self.POSITIONS_CHAR[cell]].append((i, j))
+                if cell == self.char_positions[CellType.START]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
+                if cell == self.char_positions[CellType.CLIFF]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
+                self.positions[self.POSITIONS_CHAR[cell]].extend(self._generate_states(i, j))
         
-        self.start_pos: tuple[int, int] = self.positions[CellType.START][0]
-        self.goal_pos = self.positions[CellType.GOAL]
+        start_state = self.positions[CellType.START][0]
+        goal_states = self.positions[CellType.GOAL]
+        self.start_pos: tuple[int, int] = (start_state.y, start_state.x)
+        self.goal_pos = [(goal_state.y, goal_state.x) for goal_state in goal_states]
         self.size_x = len(self.map)
         self.size_y = len(self.map[0])
     
@@ -136,7 +144,7 @@ class CustomGrid:
         return len(self.positions[CellType.GOAL])
     
     
-    def __generate_state_index_mapper(self) -> dict[int, tuple[int, int]]:
+    def generate_state_index_mapper(self) -> dict[int, tuple[int, int]]:
         """
         Generates a mapping of state indices to grid positions.
 
@@ -148,7 +156,7 @@ class CustomGrid:
             self.state_index_mapper[count] = pos
     
     
-    def is_valid(self, pos: tuple[int, int]) -> bool:
+    def is_valid(self, state: State) -> bool:
         """
         Checks if a position is valid (i.e., not a wall).
 
@@ -158,10 +166,10 @@ class CustomGrid:
         Returns:
         - bool: True if the position is valid, False otherwise.
         """
-        return pos not in self.positions[CellType.WALL]
+        return state not in self.positions[CellType.WALL]
 
 
-    def is_terminal(self, pos: tuple[int, int]) -> bool:
+    def is_terminal(self, state: State) -> bool:
         """
         Checks if a position is a terminal state (i.e., a goal position).
 
@@ -171,7 +179,7 @@ class CustomGrid:
         Returns:
         - bool: True if the position is terminal, False otherwise.
         """
-        return pos in self.goal_pos
+        return state in self.goal_pos
     
     
     def print_grid(self):
