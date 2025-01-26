@@ -154,7 +154,7 @@ class GridWorldPlotter:
         self.__out_path = os.path.join("assets", name)
         if not os.path.exists(self.__out_path): os.makedirs(self.__out_path)
 
-    def plot_grid_world(self, savefig: bool = False, show_value_function: bool = False, policy: np.ndarray = None, multiple_actions: bool = False):
+    def plot_grid_world(self, savefig: bool = False, save_title: str = None, show_value_function: bool = False, policy: np.ndarray = None, multiple_actions: bool = False):
         """
         Plots the grid world environment, optionally showing the value function and policy.
 
@@ -240,7 +240,10 @@ class GridWorldPlotter:
         ax.grid(color="gray", linestyle="-", linewidth=0.5)
 
         if savefig:
-            plt.savefig(os.path.join(self.__out_path, f"{'deterministic' if self.gridworld.deterministic else 'stochastic'}_policy{'_value_function' if show_value_function else ''}"), dpi=300)
+            if save_title is None:
+                plt.savefig(os.path.join(self.__out_path, f"{'deterministic' if self.gridworld.deterministic else 'stochastic'}_policy{'_value_function' if show_value_function else ''}"), dpi=300)
+            else:
+                plt.savefig(os.path.join(self.__out_path, save_title), dpi=300)
         else:
             plt.show()
 

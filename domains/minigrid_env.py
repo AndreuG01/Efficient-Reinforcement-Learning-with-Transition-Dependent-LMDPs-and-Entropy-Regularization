@@ -8,7 +8,7 @@ from minigrid.minigrid_env import MiniGridEnv
 from .grid import CustomGrid, CellType
 from models.MDP import MDP
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from utils.state import State
 from tqdm import tqdm
 
@@ -72,7 +72,7 @@ class CustomMinigridEnv(MiniGridEnv):
         mission_space = MissionSpace(mission_func=self._gen_mission)
         self.max_steps = max_steps
         if max_steps is None:
-            max_steps = 100
+            max_steps = 70
 
         super().__init__(
             mission_space=mission_space,
@@ -149,7 +149,25 @@ class CustomMinigridEnv(MiniGridEnv):
                     
                     action = policy[state_idx]
                     frame = self.render()
-                    if save_gif: frames.append(Image.fromarray(frame))
+                    if save_gif:
+                        curr_frame = Image.fromarray(frame)
+                        draw = ImageDraw.Draw(curr_frame)
+                        
+                        title_height = 40
+                        frame_with_title = Image.new("RGB", (curr_frame.width, curr_frame.height + title_height), "white")
+                        frame_with_title.paste(curr_frame, (0, title_height))
+                        
+                        # Add the text to the frame
+                        draw_title = ImageDraw.Draw(frame_with_title)
+                        title_text = f"Epoch: {policy_epoch}"
+                        font = ImageFont.truetype("UbuntuMono-RI.ttf", size=20)  
+                        text_bbox = draw_title.textbbox((0, 0), title_text, font=font)
+                        text_width = text_bbox[2] - text_bbox[0]
+                        text_height = text_bbox[3] - text_bbox[1]
+                        text_position = ((frame_with_title.width - text_width) // 2, (title_height - text_height) // 2)
+                        draw_title.text(text_position, title_text, fill="black", font=font)
+                        
+                        frames.append(frame_with_title)
                     _, _, done, _, _ = self.step(action)
                     actions += 1
                     if actions == self.max_steps:
@@ -163,7 +181,7 @@ class CustomMinigridEnv(MiniGridEnv):
                 save_path,
                 save_all=True,
                 append_images=frames[1:],
-                duration=200,
+                duration=50,
                 loop=0  # Loop forever
             )
         

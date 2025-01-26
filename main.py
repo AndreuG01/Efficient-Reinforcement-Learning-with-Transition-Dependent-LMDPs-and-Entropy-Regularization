@@ -44,25 +44,27 @@ if __name__ == "__main__":
     
     
         
-    plotter = GridWorldPlotter(gridworld_mdp,
+    plotter = GridWorldPlotter(
+        gridworld_mdp,
         figsize=(7, 5),
         name=name,
     )
-    gridworld_mdp.compute_value_function()
+    # gridworld_mdp.compute_value_function()
     
-    plotter.plot_grid_world(
-        show_value_function=True,
-        savefig=False,
-        multiple_actions=True
-    )
+    # plotter.plot_grid_world(
+    #     show_value_function=True,
+    #     savefig=True,
+    #     multiple_actions=True,
+    #     save_title="gridworld_value_iteration_policy.png"
+    # )
     
     # plotter.plot_stats(savefig=False)
     
     training_epochs = 2000000
     epsilon = 1
     q_learner = QLearning(
-        gridworld_mdp,
-        alpha=0.01,
+        minigrid_mdp,
+        alpha=0.1,
         gamma=1,
         epsilon=epsilon,
         info_every=100000,
@@ -76,18 +78,25 @@ if __name__ == "__main__":
     plt.ylabel("Cumulative reward")
     plt.grid()
     plt.legend()
-    plt.title("Epsilon decay effect on walls test", fontsize=14, fontweight="bold")
-    # plt.savefig("assets/walls/q_learning_reward.png", dpi=300)
-    plt.show()
+    plt.title(f"Epsilon decay effect on {name}", fontsize=14, fontweight="bold")
+    # plt.savefig(f"assets/{name}/minigrid_q-learning_reward.png", dpi=300)
+    # plt.show()
     
     # plotter.plot_grid_world(show_value_function=True, savefig=False, policy=policy)
     
     
-    plotter.plot_grid_world(savefig=False, show_value_function=True, policy=policies[0][1])
+    # plotter.plot_grid_world(
+    #     savefig=True,
+    #     show_value_function=False,
+    #     save_title="minigrid_q-learning_policy.png",
+    #     policy=policies[0][1]
+    # )
     
     minigrid_mdp.visualize_policy(
         policies=policies,
-        num_times=1,    
+        num_times=1,
+        save_gif=True,
+        save_path=f"assets/{name}/minigrid_q-learning_policy.gif"
     )
     
     
