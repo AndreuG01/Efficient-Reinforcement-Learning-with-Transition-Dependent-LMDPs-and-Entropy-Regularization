@@ -2,13 +2,13 @@
 # UP (0), RIGHT (1), DOWN (2), LEFT (3)
 # (0, 0) is the top left corner
 
-from MDP import MDP
+from models.MDP import MDP
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
-from grid import CustomGrid, CellType
-from state import State
+from .grid import CustomGrid, CellType
+from utils.state import State
  
                 
 class GridWorldMDP(MDP):

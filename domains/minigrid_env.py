@@ -4,17 +4,12 @@ from minigrid.core.constants import COLOR_NAMES
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import Door, Goal, Key, Wall, Lava
-from minigrid.manual_control import ManualControl
 from minigrid.minigrid_env import MiniGridEnv
-from grid import CustomGrid, CellType
-from maps import Maps
-from MDP import MDP
-from gym.spaces import Discrete
+from .grid import CustomGrid, CellType
+from models.MDP import MDP
 import numpy as np
 from PIL import Image
-from algorithms import QLearning
-import matplotlib.pyplot as plt
-from state import State
+from utils.state import State
 from tqdm import tqdm
 
 class MinigridActions:
@@ -75,9 +70,9 @@ class CustomMinigridEnv(MiniGridEnv):
         self.agent_start_dir = agent_start_dir
 
         mission_space = MissionSpace(mission_func=self._gen_mission)
-
+        self.max_steps = max_steps
         if max_steps is None:
-            max_steps = 4 * grid_size ** 3
+            max_steps = 100
 
         super().__init__(
             mission_space=mission_space,
@@ -128,13 +123,13 @@ class CustomMinigridEnv(MiniGridEnv):
         
     
     
-    def visualize_policy(self, policies: list[np.ndarray], num_times: int=10, save_gif: bool = False, save_path: str = None):
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]], num_times: int=10, save_gif: bool = False, save_path: str = None):
         """
         Visualizes the behavior of the agent under some given policies by running multiple episodes, rendering each step, 
         and optionally saving the resulting frames as a GIF.
 
         Args:
-        - policies (list[np.ndarray]): A list of policy arrays, one for each possible policy to visualize.
+        - policies (list[tuple[int, np.ndarray]]): A list of policy arrays, one for each possible policy to visualize. Each policy contains the training epoch from which it was derived.
         - num_times (int): The number of times to run each policy (default is 10).
         - save_gif (bool): Whether to save the visualization as a GIF (default is False).
         - save_path (str): The path to save the GIF if `save_gif` is True.
@@ -142,10 +137,12 @@ class CustomMinigridEnv(MiniGridEnv):
         frames = []
         if not save_gif:
             self.render_mode = "human"
-        for policy in policies:
+        for policy_epoch, policy in policies:
+            print(f"Visualizing policy from training epoch: {policy_epoch}")
             for i in tqdm(range(num_times), desc=f"Playing {num_times} games"):
                 self.reset()
                 done = False
+                actions = 0
                 while not done:
                     state = State(self.agent_pos[0], self.agent_pos[1], **{"orientation": self.agent_dir})
                     state_idx = next(k for k, v in self.custom_grid.state_index_mapper.items() if v == state)
@@ -154,7 +151,10 @@ class CustomMinigridEnv(MiniGridEnv):
                     frame = self.render()
                     if save_gif: frames.append(Image.fromarray(frame))
                     _, _, done, _, _ = self.step(action)
-        
+                    actions += 1
+                    if actions == self.max_steps:
+                        break
+                    
         if not save_gif:
             self.close()
         

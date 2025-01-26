@@ -1,4 +1,4 @@
-from state import State
+from utils.state import State
 from itertools import product
 
 class CellType:

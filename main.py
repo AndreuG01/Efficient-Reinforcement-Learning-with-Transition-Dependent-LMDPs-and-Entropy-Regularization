@@ -1,14 +1,14 @@
-from grid_world import GridWorldMDP, GridWorldPlotter
-from minigrid_env import MinigridMDP, MinigridActions
+from domains.grid_world import GridWorldMDP, GridWorldPlotter
+from domains.minigrid_env import MinigridMDP, MinigridActions
 from algorithms import QLearning
 import matplotlib.pyplot as plt
 import numpy as np
-from maps import Maps
+from utils.maps import Maps
 
 
 
 if __name__ == "__main__":
-    grid_size = 5
+    grid_size = 10
     name = f"cliff"
     
     gridworld_mdp = GridWorldMDP(
@@ -26,6 +26,8 @@ if __name__ == "__main__":
             MinigridActions.FORWARD
         ]
     )
+    print(f"Gridworld num states: {gridworld_mdp.num_states}")
+    print(f"Minigrid num states: {minigrid_mdp.num_states}")
 
     # minigrid_mdp.visualize_policy(
     #     save_gif=False,
@@ -33,11 +35,11 @@ if __name__ == "__main__":
     # )
     
 
-    gridworld_mdp.compute_value_function()
-    minigrid_mdp.compute_value_function()
+    # gridworld_mdp.compute_value_function()
+    # minigrid_mdp.compute_value_function()
     
-    print(gridworld_mdp.stats.iterations)
-    print(minigrid_mdp.stats.iterations)
+    # print(gridworld_mdp.stats.iterations)
+    # print(minigrid_mdp.stats.iterations)
     
     
     
@@ -46,6 +48,8 @@ if __name__ == "__main__":
         figsize=(7, 5),
         name=name,
     )
+    gridworld_mdp.compute_value_function()
+    
     plotter.plot_grid_world(
         show_value_function=True,
         savefig=False,
@@ -54,17 +58,17 @@ if __name__ == "__main__":
     
     # plotter.plot_stats(savefig=False)
     
-    training_epochs = 1000000
+    training_epochs = 2000000
     epsilon = 1
     q_learner = QLearning(
         gridworld_mdp,
         alpha=0.01,
         gamma=1,
         epsilon=epsilon,
-        info_every=50000,
-        # epsilon_decay=1.0
+        info_every=100000,
+        # alpha_decay=1000
     )
-    Q, policy, reward = q_learner.train(num_steps=training_epochs, multiple_actions=True)
+    Q, policies, reward = q_learner.train(num_steps=training_epochs, multiple_actions=False, multiple_policies=False)
     
     fig = plt.figure(figsize=(10, 5))
     plt.plot(np.arange(len(reward)), reward, label=f"$\epsilon$ = {epsilon}")
@@ -76,6 +80,14 @@ if __name__ == "__main__":
     # plt.savefig("assets/walls/q_learning_reward.png", dpi=300)
     plt.show()
     
-    plotter.plot_grid_world(show_value_function=True, savefig=False, policy=policy)
+    # plotter.plot_grid_world(show_value_function=True, savefig=False, policy=policy)
+    
+    
+    plotter.plot_grid_world(savefig=False, show_value_function=True, policy=policies[0][1])
+    
+    minigrid_mdp.visualize_policy(
+        policies=policies,
+        num_times=1,    
+    )
     
     

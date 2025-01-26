@@ -1,5 +1,5 @@
 import numpy as np
-from MDP import MDP
+from models.MDP import MDP
 import matplotlib.pyplot as plt
 
 
@@ -20,7 +20,16 @@ class QLearning:
         info_every (int): Frequency of logging training progress (in steps).
     """
 
-    def __init__(self, mdp: MDP, alpha: float, gamma: float, epsilon: float = 1.0, info_every: int = 1000, epsilon_decay: float = 0.995):
+    def __init__(
+        self,
+        mdp: MDP,
+        alpha: float,
+        gamma: float,
+        epsilon: float = 1.0,
+        info_every: int = 1000,
+        epsilon_decay: float = 0.995,
+        alpha_decay: float = None
+    ):
         """
         Initializes the Q-Learning agent with the given parameters.
 
@@ -43,6 +52,8 @@ class QLearning:
         self.episode_terminated = False
         self.info_every = info_every
         self.epsilon_decay = epsilon_decay
+        self.alpha_decay = alpha_decay
+        self.curr_epoch = 0
 
     def __take_action(self, state: int) -> int:
         """
@@ -75,46 +86,54 @@ class QLearning:
             self.curr_state = self.mdp.s0
             self.episode_terminated = True
             self.epsilon = max(0.01, self.epsilon * self.epsilon_decay)
+            if self.alpha_decay is not None:
+                self.alpha = self.alpha_decay / (self.alpha_decay + self.curr_epoch)
 
-    def train(self, num_steps: int, multiple_actions: bool = False) -> tuple[np.ndarray, np.ndarray, list[float]]:
+    def train(self, num_steps: int, multiple_actions: bool = False, multiple_policies: bool = False) -> tuple[np.ndarray, list[tuple[int, np.ndarray]], list[float]]:
         """
         Trains the agent by performing the Q-learning algorithm for a specified number of steps.
 
         Args:
             num_steps (int): The number of steps to train.
             multiple_actions (bool, optional): If True, the policy will allow multiple optimal actions for each state. Defaults to False.
+            multiple_policies (bool, optional): If True, every self.info_every training epochs, a policy will be computed and stored
 
         Returns:
             tuple[np.ndarray, np.ndarray, list[float]]:
                 - Q (np.ndarray): The learned Q-value table.
-                - policy (np.ndarray): The derived policy based on the Q-values.
+                - policies (list[tuple[int, np.ndarray]]): The derived policies during different episodes of the training process. It will contain only one policy if multiple_policies = False. Each element contains [epoch, policy]
                 - rewards (list[float]): A list of cumulative rewards per episode.
         """
-        epoch = 0
+        self.curr_epoch = 0
         cumulative_reward = 0
         rewards = []
         episode_start = 0
 
-        while epoch < num_steps:
+        policies = []
+
+        while self.curr_epoch < num_steps:
             self.__step()
             cumulative_reward += self.reward
-            epoch += 1
+            self.curr_epoch += 1
 
             if self.episode_terminated:
-                rewards[episode_start:epoch] = [cumulative_reward] * (epoch - episode_start + 1)
-                episode_start = epoch
+                rewards[episode_start:self.curr_epoch] = [cumulative_reward] * (self.curr_epoch - episode_start + 1)
+                episode_start = self.curr_epoch
                 cumulative_reward = 0
                 self.episode_terminated = False
 
-            if epoch % self.info_every == 0:
-                print(f"Epoch [{epoch} / {num_steps}]. Cumulative reward last episode: {rewards[episode_start - 1]}")
+            if self.curr_epoch % self.info_every == 0:
+                print(f"Epoch [{self.curr_epoch} / {num_steps}]. Cumulative reward last episode: {rewards[episode_start - 1]}")
+                if multiple_policies:
+                    policies.append((self.curr_epoch, self.get_policy(multiple_actions=multiple_actions)))
 
-        policy = self.get_policy(multiple_actions=multiple_actions)
+        if not multiple_policies:
+            policies.append((num_steps, self.get_policy(multiple_actions=multiple_actions)))
 
         if not self.episode_terminated:
-            rewards[episode_start:epoch] = [cumulative_reward] * (epoch - episode_start)
+            rewards[episode_start:self.curr_epoch] = [cumulative_reward] * (self.curr_epoch - episode_start)
 
-        return self.Q, policy, rewards
+        return self.Q, policies, rewards
 
     def get_policy(self, multiple_actions: bool) -> np.ndarray:
         """
@@ -135,3 +154,13 @@ class QLearning:
             policy = np.argmax(self.Q, axis=1)
 
         return policy
+
+
+
+class QLearningHyperparameterExplorer:
+    def __init__(self, mdp: MDP, alphas: list[float], alphas_decays: list[float]):
+        raise NotImplementedError("Still not implemented")
+        
+    
+    def test_hyperparameters(self):
+        raise NotImplementedError("Still not implemented")

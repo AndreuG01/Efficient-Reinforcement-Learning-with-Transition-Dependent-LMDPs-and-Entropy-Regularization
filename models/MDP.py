@@ -1,10 +1,10 @@
 import numpy as np
 import time
-from stats import ValueIterationStats
+from utils.stats import ValueIterationStats
 from abc import ABC, abstractmethod
-from grid import CellType, CustomGrid
+from domains.grid import CellType, CustomGrid
 from collections.abc import Callable
-from state import State
+from utils.state import State
 
 class MDP(ABC):
     """
