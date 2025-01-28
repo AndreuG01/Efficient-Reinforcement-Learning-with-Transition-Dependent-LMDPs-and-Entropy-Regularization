@@ -20,6 +20,8 @@ class CellType:
     START = 2
     GOAL = 3
     CLIFF = 4
+    DOOR = 5
+    KEY = 6
     # ... --> can be extended in the future to acount for more wall types
 
 class CustomGrid:
@@ -43,7 +45,9 @@ class CustomGrid:
         "#": CellType.WALL,
         "S": CellType.START,
         "G": CellType.GOAL,
-        "C": CellType.CLIFF
+        "C": CellType.CLIFF,
+        "D": CellType.DOOR,
+        "K": CellType.KEY
     }
 
     def __init__(self, map: list[str] = None, grid_size: int = 3, properties: dict[str, list] = None):
@@ -114,12 +118,14 @@ class CustomGrid:
             for i, cell in enumerate(row):
                 if cell == self.char_positions[CellType.START]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
                 if cell == self.char_positions[CellType.CLIFF]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
+                if cell == self.char_positions[CellType.KEY]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
+                if cell == self.char_positions[CellType.DOOR]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
                 self.positions[self.POSITIONS_CHAR[cell]].extend(self._generate_states(i, j))
         
         start_state = self.positions[CellType.START][0]
         goal_states = self.positions[CellType.GOAL]
         self.start_pos: tuple[int, int] = (start_state.y, start_state.x)
-        self.goal_pos = [(goal_state.y, goal_state.x) for goal_state in goal_states]
+        self.goal_pos = [(goal_state.x, goal_state.y) for goal_state in goal_states]
         self.size_x = len(self.map)
         self.size_y = len(self.map[0])
     
@@ -180,6 +186,31 @@ class CustomGrid:
         - bool: True if the position is terminal, False otherwise.
         """
         return state in self.goal_pos
+    
+    def is_key(self, state: State) -> bool:
+        """
+        Checks if a position is a key
+
+        Args:
+        - pos (tuple[int, int]): The position to check.
+
+        Returns:
+        - bool: True if the position is a key, False otherwise.
+        """
+        return state in self.positions[CellType.KEY]
+    
+    
+    def is_door(self, state: State) -> bool:
+        """
+        Checks if a position is a door.
+
+        Args:
+        - pos (tuple[int, int]): The position to check.
+
+        Returns:
+        - bool: True if the position is a door, False otherwise.
+        """
+        return state in self.positions[CellType.DOOR]
     
     
     def print_grid(self):

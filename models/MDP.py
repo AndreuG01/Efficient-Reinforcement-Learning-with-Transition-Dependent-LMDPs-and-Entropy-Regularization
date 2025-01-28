@@ -28,7 +28,7 @@ class MDP(ABC):
     - R (np.ndarray): The reward matrix for each state-action pair.
     """
 
-    def __init__(self, num_states: int, num_terminal_states: int, num_actions: int, gamma: int = 1, s0: int = 0) -> None:
+    def __init__(self, num_states: int, num_terminal_states: int, allowed_actions: list[int], gamma: int = 1, s0: int = 0) -> None:
         """
         Initialize the MDP with the given parameters.
 
@@ -49,13 +49,15 @@ class MDP(ABC):
         self.num_states = num_states
         self.num_terminal_states = num_terminal_states
         self.num_non_terminal_states = self.num_states - self.num_terminal_states
-        self.num_actions = num_actions
+        self.__alowed_actions = allowed_actions
+        self.num_actions = len(self.__alowed_actions)
         self.s0 = s0
         self.gamma = gamma
         
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
         self.R = np.zeros((self.num_states, self.num_actions))
+        
     
     
     
@@ -72,7 +74,7 @@ class MDP(ABC):
         """
         
         for state in range(self.num_non_terminal_states):
-            for action in range(self.num_actions):
+            for action in self.__alowed_actions:
                 if grid.state_index_mapper[state] in pos[CellType.CLIFF]:
                     next_state = self.s0
                 else:
@@ -89,7 +91,7 @@ class MDP(ABC):
                     # TODO: not tested for minigrid
                     # Stochastic policy. With 70% take the correct action, with 30% take a random action
                     self.P[state, action, next_state] = 0.7
-                    rand_action = np.random.choice([a for a in range(self.num_actions) if a != action])
+                    rand_action = np.random.choice([a for a in self.__alowed_actions if a != action])
                     next_state, _, _ = move(pos[CellType.NORMAL][state], rand_action)
                     if next_state in pos[CellType.GOAL]:
                         next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
