@@ -24,12 +24,30 @@ if __name__ == "__main__":
         properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]}
     )
     
-    print("Computing value function...")
+    training_epochs = 2000000
+    hyperparameters = QLearningHyperparameters(
+        alpha = 0.15,
+        alpha_decay=0,
+        gamma=1
+    )
+    epsilon = 0.7
+    q_learner = QLearning(
+        minigrid_mdp,
+        alpha=hyperparameters.alpha,
+        gamma=hyperparameters.gamma,
+        epsilon=epsilon,
+        info_every=100000,
+        epsilon_decay=0.999,
+        alpha_decay=hyperparameters.alpha_decay
+    )
+    _, policies, reward, errors = q_learner.train(num_steps=training_epochs, multiple_actions=False, multiple_policies=False)
     
+        
     minigrid_mdp.visualize_policy(
-        num_times=10,
+        policies=policies,
         save_gif=True,
-        save_path="assets/door_gif.gif"
+        num_times=10,
+        save_path="assets/door_gif_last.gif"
     
     )
     # manual_control = ManualControl(minigrid_mdp.minigrid_env, seed=42)

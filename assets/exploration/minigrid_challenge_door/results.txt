@@ -1,0 +1,2 @@
+Min error: 307.5643741723092 at epoch 3999999. Hyperparameters: \alpha = 0.15, \alpha_\text{decay} = 0, \gamma = 1
+Max reward: -156726.0 at epoch 3849358. Hyperparameters: \alpha = 0.01, \alpha_\text{decay} = 1000, \gamma = 1

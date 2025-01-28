@@ -246,14 +246,7 @@ class MinigridMDP(MDP):
             s0=self.minigrid_env.custom_grid.positions[CellType.NORMAL].index(State(start_pos[0], start_pos[1], **{k: v[0] for k, v in self.minigrid_env.custom_grid.state_properties.items()}))
         )
 
-        # self._generate_P()
         self.generate_P(self.minigrid_env.custom_grid.positions, self.move, self.minigrid_env.custom_grid)
-        
-        print(self.P.shape)
-        n = 17
-        print(self.P[n, :, :])
-        print(np.where(self.P[n, :, :]))
-        
         self._generate_R()
                 
     
@@ -342,7 +335,7 @@ class MinigridMDP(MDP):
 
 
 
-    def visualize_policy(self, policies: list[np.ndarray] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
         assert not save_gif or save_path is not None, "Must specify save path"
         if not hasattr(self, "V") and policies is None:
             print(f"Computing value function...")
