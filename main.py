@@ -61,14 +61,14 @@ if __name__ == "__main__":
     # plotter.plot_stats(savefig=False)
     
     explorer = QLearningHyperparameterExplorer(
-        gridworld_mdp,
+        minigrid_mdp,
         # alphas=[0.15, 0.1],
         alphas=[0.15, 0.1, 0.05, 0.01, 0.001],
         alphas_decays=[0, 100, 1000, 10000],
         # alphas_decays=[0],
         gammas=[1],
         epochs=2000000,
-        out_path="assets/exploration/gridworld_cliff",
+        out_path="assets/exploration/minigrid_cliff",
         domain_name="Cliff"
     )
     

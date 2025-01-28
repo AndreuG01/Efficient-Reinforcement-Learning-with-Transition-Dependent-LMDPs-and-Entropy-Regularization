@@ -1,2 +1,2 @@
-Min error: -inf at epoch 0. Hyperparameters: (0.15, 0, 1)
-Max reward: inf at epoch 0. Hyperparameters: (0.15, 0, 1)
+Min error: 335.6226813598033 at epoch 1999820. Hyperparameters: \alpha = 0.15, \alpha_\text{decay} = 0, \gamma = 1
+Max reward: -38.0 at epoch 1999962. Hyperparameters: \alpha = 0.05, \alpha_\text{decay} = 0, \gamma = 1

@@ -6,6 +6,7 @@ from itertools import product
 import random
 import os
 import pickle
+import concurrent.futures
 
 
 class QLearning:
@@ -180,13 +181,35 @@ class QLearning:
 
 
 class QLearningHyperparameters:
+    """
+    Represents the hyperparameters used for Q-Learning.
+
+    Attributes:
+        alpha (float): The learning rate that determines the extent to which newly acquired information overrides old information.
+        alpha_decay (int): The rate at which the learning rate decays over time.
+        gamma (float): The discount factor that determines the importance of future rewards.
+        latex (bool): Whether to format the string representation in LaTeX style (default: True).
+    """
+
     def __init__(self, alpha: float, alpha_decay: int, gamma: float, latex: bool = True):
+        """
+        Initializes a QLearningHyperparameters instance.
+
+        Args:
+            alpha (float): The learning rate.
+            alpha_decay (int): The rate of learning rate decay.
+            gamma (float): The discount factor for future rewards.
+            latex (bool, optional): Whether to use LaTeX formatting for the string representation. Defaults to True.
+        """
         self.alpha = alpha
         self.alpha_decay = alpha_decay
         self.gamma = gamma
         self.latex = latex
-    
+
     def __str__(self):
+        """
+        Returns a formatted string representation of the hyperparameters in latex style, if self.latex is True.
+        """
         return "{} {}, {} {}, {} {}".format(
             '\\alpha =' if self.latex else 'Alpha:', self.alpha, 
             '\\alpha_\\text{decay} =' if self.latex else 'Alpha decay:', self.alpha_decay,
@@ -196,14 +219,43 @@ class QLearningHyperparameters:
 
 
 
-
 class QLearningPlotter:
-    def __init__(self, save_path: str, vertical: bool = False, domain_name: str = ""):
+    """
+    Plots the results of Q-Learning experiments, including rewards and errors, 
+    with support for multiple hyperparameter configurations.
+
+    Attributes:
+        save_path (str): The directory where the plots will be saved.
+        domain_name (str): The name of the domain or problem being analyzed (used as the plot title).
+    """
+    def __init__(self, save_path: str, domain_name: str = ""):
+        """
+        Initializes a QLearningPlotter instance.
+
+        Args:
+            save_path (str): The path to save the plot.
+            domain_name (str, optional): A descriptive name for the problem domain. Defaults to an empty string.
+        """
         self.save_path = save_path
-        self.vertical = vertical
         self.domain_name = domain_name
     
     def plot(self, rewards: list[list[float]], errors: list[list[float]], hyperparameters: list[QLearningHyperparameters]):
+        """
+        Generates and saves a plot visualizing rewards and errors for various hyperparameter configurations.
+
+        Args:
+            rewards (list[list[float]]): A list of reward sequences, where each inner list corresponds 
+                                         to a specific hyperparameter configuration.
+            errors (list[list[float]]): A list of error sequences, where each inner list corresponds 
+                                        to a specific hyperparameter configuration.
+            hyperparameters (list[QLearningHyperparameters]): A list of hyperparameter configurations 
+                                                              corresponding to the reward and error sequences.
+
+        Notes:
+            - The plot includes two subplots: one for errors and one for cumulative rewards.
+            - The legend is dynamically created based on the hyperparameter configurations.
+            - Results are saved as a PNG image in the specified save path.
+        """
         custom_palette = ["#640D5F", "#D91656", "#EB5B00", "#FFB200", "#2D728F", "#3E8914", "#FF00D3", "#32FF00", "#743500", "#7DFFFF", "#FBFF00", "#C300FF", "#00CDAA", "#FFA87E", "#331E23", "#FF0000", "#0047AB", "#8A2BE2", "#FFD700", "#228B22"]
         
         n_rows = 2
@@ -260,7 +312,32 @@ class QLearningPlotter:
 
 
 class QLearningHyperparameterExplorer:
-    def __init__(self, mdp: MDP, alphas: list[float], alphas_decays: list[int], gammas: list[float], epochs: int, out_path, domain_name: str):
+    """
+    Tests different combinations of Q-learning hyperparameters to determine which is the best one.
+
+    Attributes:
+        mdp (MDP): the MDP instance that wants to be solved.
+        alphas (list[float]): the list of learning rates that want to be tested.
+        alphas_decays (list[int]): the learning rates decrease that want to be tested.
+        gammas (list[float]): the list of discount factor for future rewards that wants to be tested.
+        epochs (int): the number of epochs for which the MDP will be trained.
+        out_path (str): the path where the generated files and the plot will be stored.
+        domain_name (str): the name of the MDP domain that is being trained.
+        __q_plotter (QLearningPlotter): an instance of a Q-learning plotter, that is responsible of plotting the different errors and rewards obtained during training with each combination of hyperparamters.
+    """
+    def __init__(self, mdp: MDP, alphas: list[float], alphas_decays: list[int], gammas: list[float], epochs: int, out_path: str, domain_name: str):
+        """
+        Initializes a QLearningHyperparameterExplorer instance.
+
+        Args:
+            mdp (MDP): the MDP instance that wants to be solved.
+            alphas (list[float]): the list of learning rates that want to be tested.
+            alphas_decays (list[int]): the learning rates decrease that want to be tested.
+            gammas (list[float]): the list of discount factor for future rewards that wants to be tested.
+            epochs (int): the number of epochs for which the MDP will be trained.
+            out_path (str): the path where the generated files and the plot will be stored.
+            domain_name (str): the name of the MDP domain that is being trained.
+        """
         self.mdp = mdp
         self.alphas = alphas
         self.alphas_decays = alphas_decays
@@ -276,10 +353,62 @@ class QLearningHyperparameterExplorer:
             
         self.out_path = out_path
         
-        self.__q_plotter = QLearningPlotter(out_path, vertical=True, domain_name=domain_name)
+        self.__q_plotter = QLearningPlotter(out_path, domain_name=domain_name)
         
         
+    
+    def _test_combination(self, alpha, alpha_decay, gamma) -> tuple[list[float], list[float], QLearningHyperparameters, float, int, float, int]:
+        """
+        Tests a specific combination of hyperparameters for Q-learning
+        
+        Args:   
+            alpha (float): The learning rate, which determines the impact of new information on the existing knowledge.
+            alpha_decay (float): The rate at which the learning rate decays over time.
+            gamma (float): The discount factor, representing the importance of future rewards.
+
+        Returns:
+            tuple: A tuple containing:
+                - reward (list[float]): The cumulative reward values recorded during training.
+                - error (list[float]): The mean squared error values recorded during training.
+                - hyperparameters (QLearningHyperparameters): A QLearningHyperparameters instance with the different hyperparameters tested
+                - max_reward_local (float): The maximum reward observed during training.
+                - max_reward_epoch_local (int): The epoch at which the maximum reward was observed.
+                - min_error_local (float): The minimum error observed during training.
+                - min_error_epoch_local (int): The epoch at which the minimum error was observed.
+        """
+        print(f"{os.getpid()}. Testing: Alpha = {alpha}, Alpha decay = {alpha_decay}, Gamma = {gamma}")
+        q_learner = QLearning(
+            self.mdp,
+            alpha=alpha,
+            gamma=gamma,
+            info_every=500000,
+            alpha_decay=alpha_decay  
+        )
+        _, _, reward, error = q_learner.train(num_steps=self.epochs)
+        
+        max_reward_local = np.max(reward)
+        max_reward_epoch_local = np.argmax(reward)
+        min_error_local = np.min(error)
+        min_error_epoch_local = np.argmin(error)
+        
+        return reward, error, QLearningHyperparameters(alpha, alpha_decay, gamma), max_reward_local, max_reward_epoch_local, min_error_local, min_error_epoch_local
+        
+    
     def test_hyperparameters(self):
+        """
+        Tests various combinations of hyperparameters for Q-Learning and evaluates their performance. It stores the
+        different errors and rewards obtained during training in case they want to be later used for other purposes.
+
+        This method:
+        - Iterates through all combinations of hyperparameters (alpha, alpha_decay, gamma).
+        - Uses multiprocessing to speed up the evaluation of each combination.
+        - Tracks and identifies the hyperparameter combination that produces:
+            - The maximum reward.
+            - The minimum error.
+
+        Returns:
+            None
+        """
         rewards = []
         errors = []
         hyperparameters = []
@@ -287,34 +416,32 @@ class QLearningHyperparameterExplorer:
         max_reward, max_reward_epoch, max_reward_hyper = -np.inf, 0, (self.alphas[0], self.alphas_decays[0], self.gammas[0])
         min_error, min_error_epoch, min_error_hyper = np.inf, 0, (self.alphas[0], self.alphas_decays[0], self.gammas[0])
         
-        for i, (alpha, alpha_decay, gamma) in enumerate(combinations, start=1):
-            print(f"Combination [{i} / {len(combinations)}]. Alpha: {alpha}. Alpha decay: {alpha_decay}. Gamma: {gamma}")
-            q_learner = QLearning(
-                self.mdp,
-                alpha=alpha,
-                gamma=gamma,
-                info_every=500000,
-                alpha_decay=alpha_decay  
-            )
+        self.mdp.compute_value_function()
+        
+        # Concurrent hyperparameter testing
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            concurrent_comb = {
+                executor.submit(self._test_combination, alpha, alpha_decay, gamma) : (alpha, alpha_decay, gamma) for alpha, alpha_decay, gamma in combinations
+            }
             
-            _, _, reward, error = q_learner.train(num_steps=self.epochs)
-            if np.max(reward) > max_reward:
-                max_reward = np.max(reward)
-                max_reward_epoch = np.argmax(reward)
-                max_reward_hyper = (alpha, alpha_decay, gamma)
-            
-            if np.min(error) < min_error:
-                min_error = np.min(error)
-                min_error_epoch = np.argmin(error)
-                min_error_hyper = (alpha, alpha_decay, gamma)
+            for exec in concurrent.futures.as_completed(concurrent_comb):
+                reward, error, hyperparam, max_reward_local, max_reward_epoch_local, min_error_local, min_error_epoch_local = exec.result()
+
+                if max_reward_local > max_reward:
+                    max_reward = max_reward_local
+                    max_reward_epoch = max_reward_epoch_local
+                    max_reward_hyper = hyperparam
+                    
+                if min_error_local < min_error:
+                    min_error = min_error_local
+                    min_error_epoch = min_error_epoch_local
+                    min_error_hyper = hyperparam
                 
-            
-            rewards.append(reward)
-            errors.append(error)
-            hyperparameters.append(QLearningHyperparameters(alpha, alpha_decay, gamma))
+                rewards.append(reward)
+                errors.append(error)
+                hyperparameters.append(hyperparam)
         
-        
-        
+        print("Storing infromation...")
         self.__store_data(hyperparameters, "hyperparamters.pkl")
         self.__store_data(errors, "errors.pkl")
         self.__store_data(rewards, "rewards.pkl")

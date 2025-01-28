@@ -1,2 +1,2 @@
-Min error: -inf at epoch 0. Hyperparameters: (0.15, 0, 1)
-Max reward: inf at epoch 0. Hyperparameters: (0.15, 0, 1)
+Min error: 91.81051672794395 at epoch 1999556. Hyperparameters: (0.01, 0, 1)
+Max reward: -27.0 at epoch 1999973. Hyperparameters: (0.01, 0, 1)
