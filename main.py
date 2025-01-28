@@ -1,4 +1,4 @@
-from domains.grid_world import GridWorldMDP, GridWorldPlotter
+from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP
 from domains.minigrid_env import MinigridMDP, MinigridActions
 from algorithms import QLearning, QLearningPlotter, QLearningHyperparameters, QLearningHyperparameterExplorer
 import matplotlib.pyplot as plt
@@ -9,47 +9,58 @@ from minigrid.manual_control import ManualControl
 
 if __name__ == "__main__":
     grid_size = 5
-    minigrid_mdp = MinigridMDP(
-        grid_size=grid_size,
-        map=Maps.CHALLENGE_DOOR,
-        allowed_actions=[
-            MinigridActions.ROTATE_LEFT,
-            MinigridActions.ROTATE_RIGHT,
-            MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE,
-            MinigridActions.DONE
-        ],
-        properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]}
+    gridworld_lmdp = GridWorldLMDP(
+        grid_size=3
     )
     
-    training_epochs = 2000000
-    hyperparameters = QLearningHyperparameters(
-        alpha = 0.15,
-        alpha_decay=0,
-        gamma=1
-    )
-    epsilon = 0.7
-    q_learner = QLearning(
-        minigrid_mdp,
-        alpha=hyperparameters.alpha,
-        gamma=hyperparameters.gamma,
-        epsilon=epsilon,
-        info_every=100000,
-        epsilon_decay=0.999,
-        alpha_decay=hyperparameters.alpha_decay
-    )
-    _, policies, reward, errors = q_learner.train(num_steps=training_epochs, multiple_actions=False, multiple_policies=False)
+    print("P")
+    print(gridworld_lmdp.P)
+    
+    print("R")
+    print(gridworld_lmdp.R)
+    z = gridworld_lmdp.power_iteration()
+
+    # minigrid_mdp = MinigridMDP(
+    #     grid_size=grid_size,
+    #     map=Maps.CHALLENGE_DOOR,
+    #     allowed_actions=[
+    #         MinigridActions.ROTATE_LEFT,
+    #         MinigridActions.ROTATE_RIGHT,
+    #         MinigridActions.FORWARD,
+    #         MinigridActions.PICKUP,
+    #         MinigridActions.DROP,
+    #         MinigridActions.TOGGLE,
+    #         MinigridActions.DONE
+    #     ],
+    #     properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]}
+    # )
+    
+    # training_epochs = 2000000
+    # hyperparameters = QLearningHyperparameters(
+    #     alpha = 0.15,
+    #     alpha_decay=0,
+    #     gamma=1
+    # )
+    # epsilon = 0.7
+    # q_learner = QLearning(
+    #     minigrid_mdp,
+    #     alpha=hyperparameters.alpha,
+    #     gamma=hyperparameters.gamma,
+    #     epsilon=epsilon,
+    #     info_every=100000,
+    #     epsilon_decay=0.999,
+    #     alpha_decay=hyperparameters.alpha_decay
+    # )
+    # _, policies, reward, errors = q_learner.train(num_steps=training_epochs, multiple_actions=False, multiple_policies=False)
     
         
-    minigrid_mdp.visualize_policy(
-        policies=policies,
-        save_gif=True,
-        num_times=10,
-        save_path="assets/door_gif_last.gif"
+    # minigrid_mdp.visualize_policy(
+    #     policies=policies,
+    #     save_gif=True,
+    #     num_times=10,
+    #     save_path="assets/door_gif_last.gif"
     
-    )
+    # )
     # manual_control = ManualControl(minigrid_mdp.minigrid_env, seed=42)
     # manual_control.start()
     # grid_size = 4
@@ -60,6 +71,15 @@ if __name__ == "__main__":
     #     map=Maps.CLIFF,
     #     deterministic=True
     # )
+    
+    # plotter = GridWorldPlotter(
+    #     gridworld_mdp
+    #     )
+    # gridworld_mdp.compute_value_function()
+    # plotter.plot_grid_world(show_value_function=True, policy=gridworld_mdp.policy)
+    
+    
+    # print(gridworld_mdp.policy)
     
     # minigrid_mdp = MinigridMDP(
     #     grid_size=grid_size,

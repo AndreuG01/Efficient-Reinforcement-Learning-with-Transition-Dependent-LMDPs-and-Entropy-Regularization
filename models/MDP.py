@@ -61,13 +61,13 @@ class MDP(ABC):
     
     
     
-    def generate_P(self, pos: State, move: Callable, grid: CustomGrid):
+    def generate_P(self, pos: dict[int, list], move: Callable, grid: CustomGrid):
         """
         Generates the transition probability matrix (P) for the grid world, based on the dynamics of the environment
         (deterministic or stochastic).
 
         Args:
-        - pos (State): The current state representation, containing information about all possible states grouped by their type.
+        - pos (dict[int, list]): The different positions of the grid
         - move (Callable): A function that determines the next state based on the current state and action.
         The function signature should be `move(state: State, action: int) -> tuple[next_state: State, reward: float, done: bool]`.
         - grid (CustomGrid): The grid environment for which the transition matrix is being generated.

@@ -3,6 +3,7 @@
 # (0, 0) is the top left corner
 
 from models.MDP import MDP
+from models.LMDP import LMDP
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -58,7 +59,6 @@ class GridWorldMDP(MDP):
         
         self.grid = CustomGrid(map=map, grid_size=grid_size)
         self.num_states = self.grid.get_num_states()
-        self.num_actions = len(self.OFFSETS)
         
         
         start_pos = self.grid.start_pos
@@ -66,8 +66,8 @@ class GridWorldMDP(MDP):
         super().__init__(
             self.num_states,
             num_terminal_states=self.grid.get_num_terminal_states(),
-            num_actions=4,
-            s0=self.grid.positions[CellType.NORMAL].index(State(start_pos[0], start_pos[1]))
+            allowed_actions=[i for i in range(len(self.OFFSETS))],
+            s0=self.grid.positions[CellType.NORMAL].index(State(*start_pos))
         )
         
         self.generate_P(self.grid.positions, self.move, self.grid)
@@ -98,7 +98,7 @@ class GridWorldMDP(MDP):
         return next_state, in_bounds, self.grid.is_terminal(next_state)
 
 
-    def _generate_R(self):
+    def _generate_R(self) -> None:
         """
         Generates the reward matrix (R) for the grid world, setting the default reward to -1 for all actions.
         """
@@ -111,6 +111,73 @@ class GridWorldMDP(MDP):
                 if tmp_state in pos[CellType.CLIFF]:
                     self.R[pos[CellType.NORMAL].index(tmp_state)] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.int32)
 
+
+
+class GridWorldLMDP(LMDP):
+    
+    OFFSETS = {
+        0: (0, -1),  # UP
+        1: (1, 0),   # RIGHT
+        2: (0, 1),   # DOWN
+        3: (-1, 0)   # LEFT
+    }
+    
+    def __init__(self, grid_size: int = 3, map: list[str] = None) -> None:
+        self.grid = CustomGrid(map=map, grid_size=grid_size)
+        self.num_sates = self.grid.get_num_states()
+        
+        start_pos = self.grid.start_pos
+        
+        super().__init__(
+            self.num_sates,
+            num_terminal_states=self.grid.get_num_terminal_states(),
+            s0=self.grid.positions[CellType.NORMAL].index(State(*start_pos))
+        )
+        
+        self.allowed_actions = [i for i in range(len(self.OFFSETS))] # It is not that the LMDP has actions, but to determine the transition probabilities, we need to know how the agent moves through the environment
+        
+        self.generate_P(self.grid.positions, self.move, self.grid, self.allowed_actions)
+        self._generate_R()
+    
+    
+    # TODO: the same as GridWorldMDP. Perhaps could be unified somehow.
+    def move(self, state: State, action: int) -> tuple[State, bool, bool]:
+        """
+        Computes the next position after performing an action, and returns whether the move is valid and whether the agent has reached a terminal state.
+
+        Args:
+        - pos (tuple[int, int]): The current position of the agent.
+        - action (int): The action taken (0: up, 1: right, 2: down, 3: left).
+
+        Returns:
+        - tuple[tuple[int, int], bool, bool]: The next position, whether the move is valid, and whether the position is terminal.
+        """
+        y = state.y
+        x = state.x
+        dy, dx = self.OFFSETS[action]
+        next_state = State(y + dy, x + dx)
+        
+        in_bounds = self.grid.is_valid(next_state)
+        if not in_bounds: next_state = state
+        
+        # if next_pos in self.grid.positions[self.CLIFF]: next_pos = self.start_pos
+
+        return next_state, in_bounds, self.grid.is_terminal(next_state)
+    
+    
+    # TODO: same as GridWorldMDP. Perhaps could be unified somehow.
+    def _generate_R(self) -> None:
+        """
+        Generates the reward matrix (R) for the grid world, setting the default reward to -1 for all actions.
+        """
+        pos = self.grid.positions
+        for j in range(self.grid.size_x):
+            for i in range(self.grid.size_y):
+                tmp_state = State(i, j)
+                if tmp_state in pos[CellType.NORMAL]:
+                    self.R[pos[CellType.NORMAL].index(tmp_state)] = -1
+                if tmp_state in pos[CellType.CLIFF]:
+                    self.R[pos[CellType.NORMAL].index(tmp_state)] = -10
 
 
 class GridWorldPlotter:
@@ -138,7 +205,7 @@ class GridWorldPlotter:
     CLIFF_COLOR = "#3F043C"
     POLICY_COLOR = "#FF1010"
 
-    def __init__(self, gridworld: GridWorldMDP, figsize: tuple[int, int] = (5, 5), name: str = None):
+    def __init__(self, gridworld: GridWorldMDP, figsize: tuple[int, int] = (5, 5), name: str = ""):
         """
         Initializes the GridWorldPlotter with the provided GridWorldMDP instance, figure size, and output directory.
 
