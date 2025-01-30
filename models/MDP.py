@@ -151,6 +151,7 @@ class MDP(ABC):
             delta = 0
             for s in range(self.num_non_terminal_states):
                 v = V[s]
+                # TODO: Matrix multiplications
                 action_rewards = [
                     sum(self.P[s, a, s_next] * (self.R[s, a] + self.gamma * V[s_next])
                         for s_next in range(self.num_states))

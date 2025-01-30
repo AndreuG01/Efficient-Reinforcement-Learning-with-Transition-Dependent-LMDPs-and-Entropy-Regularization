@@ -79,6 +79,7 @@ class QLearning:
         Returns:
             int: The chosen action.
         """
+        # TODO: this is epsilon greedy. Implemenent something such as softmax, which is more fairly comparable to that of an LMDP. Read notion document.
         if np.random.rand() < self.epsilon:
             return np.random.choice(self.mdp.num_actions)
         return np.argmax(self.Q[state, :])
