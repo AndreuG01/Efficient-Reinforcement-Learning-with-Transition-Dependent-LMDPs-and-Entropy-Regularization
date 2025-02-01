@@ -10,12 +10,11 @@ class MDP(ABC):
     """
     A class representing a Markov Decision Process (MDP).
 
-    The MDP is defined by a 5-tuple: (S, A, T, R, gamma) where:
+    The MDP is defined by a 4-tuple: (S, A, P, R) where:
     - S: A finite set of states (num_states)
     - A: A finite set of actions (num_actions)
     - P: A state transition probability function P(s' | s, a)
     - R: A reward function R(s, a)
-    - gamma: A discount factor (gamma)
 
     Attributes:
     - num_states (int): The total number of states in the MDP.
@@ -26,6 +25,7 @@ class MDP(ABC):
     - gamma (float): The discount factor (must be between 0 and 1).
     - P (np.ndarray): The state transition probability matrix.
     - R (np.ndarray): The reward matrix for each state-action pair.
+    #TODO: complete when code is finished
     """
 
     def __init__(self, num_states: int, num_terminal_states: int, allowed_actions: list[int], gamma: int = 1, s0: int = 0) -> None:
@@ -63,7 +63,7 @@ class MDP(ABC):
     
     def generate_P(self, pos: dict[int, list], move: Callable, grid: CustomGrid):
         """
-        Generates the transition probability matrix (P) for the grid world, based on the dynamics of the environment
+        Generates the transition probability matrix (P) for the MDP, based on the dynamics of the environment
         (deterministic or stochastic).
 
         Args:
@@ -101,7 +101,6 @@ class MDP(ABC):
     
     
     
-    @abstractmethod
     def _generate_R(self):
         raise NotImplementedError("Implement in the subclass.")
     

@@ -1,5 +1,5 @@
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP
-from domains.minigrid_env import MinigridMDP, MinigridActions
+from domains.minigrid_env import MinigridMDP, MinigridActions, MinigridLMDP
 from algorithms import QLearning, QLearningPlotter, QLearningHyperparameters, QLearningHyperparameterExplorer
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,38 +11,41 @@ if __name__ == "__main__":
     grid_size = 10
     gridworld_lmdp = GridWorldLMDP(
         grid_size=grid_size,
-        map=Maps.CLIFF
+        map=Maps.CHALLENGE_DOOR
     )
     
-    # print("P")
-    # print(gridworld_lmdp.P)
+    embedded_mdp = gridworld_lmdp.to_MDP()
     
-    # print("R")
+    
+    # # print("P")
+    # # print(gridworld_lmdp.P)
+    
+    # # print("R")
+    # # print(gridworld_lmdp.R)
+    
     # print(gridworld_lmdp.R)
+    # gridworld_lmdp.compute_value_function()
+    # print(gridworld_lmdp.policy)
+    # print(gridworld_lmdp.policy_multiple_states)
+    # plotter = GridWorldPlotter(
+    #     gridworld_lmdp,
+    #     figsize=(7, 5),
+    #     name="LMDP",
+    # )
+    # # gridworld_mdp.compute_value_function()
     
-    print(gridworld_lmdp.R)
-    gridworld_lmdp.compute_value_function()
-    print(gridworld_lmdp.policy)
-    print(gridworld_lmdp.policy_multiple_states)
-    plotter = GridWorldPlotter(
-        gridworld_lmdp,
-        figsize=(7, 5),
-        name="LMDP",
-    )
-    # gridworld_mdp.compute_value_function()
-    
-    plotter.plot_grid_world(
-        show_value_function=True,
-        savefig=False,
-        multiple_actions=True,
-        save_title="gridworld_power_iteration_policy.png"
-    )
+    # plotter.plot_grid_world(
+    #     show_value_function=True,
+    #     savefig=False,
+    #     multiple_actions=True,
+    #     save_title="gridworld_power_iteration_policy.png"
+    # )
     
     
 
-    # minigrid_mdp = MinigridMDP(
+    # minigrid_lmdp = MinigridLMDP(
     #     grid_size=grid_size,
-    #     # map=Maps.CHALLENGE_DOOR,
+    #     map=Maps.CHALLENGE_DOOR,
     #     allowed_actions=[
     #         MinigridActions.ROTATE_LEFT,
     #         MinigridActions.ROTATE_RIGHT,
@@ -53,6 +56,13 @@ if __name__ == "__main__":
     #         MinigridActions.DONE
     #     ],
     #     properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]}
+    # )
+    
+    # minigrid_lmdp.to_MDP()
+    
+    # minigrid_lmdp.visualize_policy(
+    #     save_gif=True,
+    #     save_path="assets/minigrid_lmdp.gif"
     # )
     
     # training_epochs = 2000000
