@@ -128,7 +128,7 @@ class MDP(ABC):
             next_state >= self.num_non_terminal_states
         )
 
-    def value_iteration(self, epsilon=1e-5) -> tuple[np.ndarray, ValueIterationStats]:
+    def value_iteration_inefficient(self, epsilon=1e-5) -> tuple[np.ndarray, ValueIterationStats]:
         """
         Perform value iteration to compute the optimal value function.
         From Sutton and Barto, page 83 from my references PDF #TODO: remove in a future.
@@ -151,7 +151,6 @@ class MDP(ABC):
             delta = 0
             for s in range(self.num_non_terminal_states):
                 v = V[s]
-                # TODO: Matrix multiplications
                 action_rewards = [
                     sum(self.P[s, a, s_next] * (self.R[s, a] + self.gamma * V[s_next])
                         for s_next in range(self.num_states))
@@ -171,6 +170,42 @@ class MDP(ABC):
         elapsed_time = time.time() - start_time
         
         return V, ValueIterationStats(elapsed_time, rewards, iterations, deltas, self.num_states)
+    
+    
+    def value_iteration(self, epsilon=1e-5) -> tuple[np.ndarray, ValueIterationStats]:
+        """
+        Perform value iteration to compute the optimal value function.
+        Efficiently implemented with matrix operations
+        From Sutton and Barto, page 83 from my references PDF #TODO: remove in a future.
+
+        Args:
+        - epsilon (float, optional): The threshold for stopping the iteration (default is 1e-5).
+
+        Returns:
+        - V (np.ndarray): The optimal value function for each state.
+        - ValueIterationStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
+        """
+        V = np.zeros(self.num_states)
+        iterations = 0
+        start_time = time.time()
+        deltas = []
+
+        while True:
+            delta = 0
+            expected_values = np.tensordot(self.P, V, axes=((2), (0))) # num_non_teminal X num_actions
+            
+            Q = self.R + self.gamma * np.concatenate((expected_values, self.R[self.num_non_terminal_states:, :])) # num_states X num_actions
+            
+            V_new =  np.max(Q, axis=1)
+            delta = np.max(np.abs(V_new - V))
+            V = V_new
+            
+            if delta < epsilon:
+                break
+
+        elapsed_time = time.time() - start_time
+        
+        return V, ValueIterationStats(elapsed_time, [], iterations, deltas, self.num_states)
     
     
     def compute_value_function(self):
@@ -194,6 +229,7 @@ class MDP(ABC):
         Returns:
         - policy (np.ndarray): The optimal policy, where each element corresponds to the optimal action for a state.
         """
+        # TODO: change to matrix operation
         policy = np.zeros(self.num_states, dtype=object)
         for s in range(self.num_non_terminal_states):  # Skip terminal states
             # Find the action that maximizes the expected utility

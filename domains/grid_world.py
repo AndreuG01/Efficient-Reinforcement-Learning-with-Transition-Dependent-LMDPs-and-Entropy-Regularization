@@ -179,6 +179,20 @@ class GridWorldLMDP(LMDP):
                 if tmp_state in pos[CellType.CLIFF]:
                     self.R[pos[CellType.NORMAL].index(tmp_state)] = -10
 
+    
+    def policy_to_action(self, state: int, next_state: list[int]) -> list[int]:
+        origin_x = self.grid.state_index_mapper[state].x
+        origin_y = self.grid.state_index_mapper[state].y
+        actions = []
+        for next_s in next_state:
+            for action in range(len(self.OFFSETS)):
+                dy, dx = self.OFFSETS[action]
+                x = self.grid.state_index_mapper[next_s].x
+                y = self.grid.state_index_mapper[next_s].y
+                if (origin_x + dx == x) and (origin_y + dy == y):
+                    actions.append(action)
+        
+        return actions
 
 class GridWorldPlotter:
     """
@@ -205,7 +219,7 @@ class GridWorldPlotter:
     CLIFF_COLOR = "#3F043C"
     POLICY_COLOR = "#FF1010"
 
-    def __init__(self, gridworld: GridWorldMDP, figsize: tuple[int, int] = (5, 5), name: str = ""):
+    def __init__(self, gridworld: GridWorldMDP | GridWorldLMDP, figsize: tuple[int, int] = (5, 5), name: str = ""):
         """
         Initializes the GridWorldPlotter with the provided GridWorldMDP instance, figure size, and output directory.
 
@@ -217,6 +231,7 @@ class GridWorldPlotter:
         Creates the necessary directories for saving output if they do not exist.
         """
         self.gridworld = gridworld
+        self.is_mdp = isinstance(self.gridworld, MDP)
         self.__figsize = figsize
         self.__out_path = os.path.join("assets", name)
         if not os.path.exists(self.__out_path): os.makedirs(self.__out_path)
@@ -237,7 +252,10 @@ class GridWorldPlotter:
         grid_positions = self.gridworld.grid.positions
         
         if policy is None:
-            policy = self.gridworld.policy if not multiple_actions else self.gridworld.policy_multiple_actions
+            if self.is_mdp:
+                policy = self.gridworld.policy if not multiple_actions else self.gridworld.policy_multiple_actions
+            else:
+                policy = self.gridworld.policy if not multiple_actions else self.gridworld.policy_multiple_states
         else:
             print("WARNING: multiple actions in the policy found but `multiple_actions` parameter not set appropriately. Changing...")
             multiple_actions = isinstance(policy[0], list)
@@ -289,7 +307,12 @@ class GridWorldPlotter:
 
         # Add policy arrows
         for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
-            actions = policy[idx] if multiple_actions else [policy[idx]]
+            if self.is_mdp:
+                actions = policy[idx] if multiple_actions else [policy[idx]]
+            else:
+                next_state = policy[idx] if multiple_actions else [policy[idx]]
+                actions = self.gridworld.policy_to_action(idx, next_state)
+                
             y = pos.y
             x = pos.x
             for action in actions:

@@ -39,18 +39,79 @@ class LMDP(ABC):
     @abstractmethod
     def _generate_R(self):
         raise NotImplementedError("Implement in the subclass.")
-
     
-    def power_iteration(self, iterations=100):
+    
+    def transition(self, state: int) -> tuple[int, float, bool]:
+        next_state = np.random.choice(self.num_states, p=self.P[state])
+        
+        return (
+            next_state,
+            self.R[next_state],
+            next_state >= self.num_non_terminal_states
+        )
+    
+    
+    def get_optimal_policy(self, z: np.ndarray, multiple_states: bool = False) -> np.ndarray:
+        
+        policy = np.zeros(self.num_states, dtype=object)
+        normalization_term = np.sum(self.P @ self.z)
+        
+        probs = self.P * z / normalization_term
+        
+        if multiple_states:
+            for i in range(probs.shape[0]):        
+                policy[i] = [j for j in range(len(probs[i, :])) if probs[i, j] == np.max(probs[i, :])]  
+        else:
+            policy = probs.argmax(axis=1)
+        
+        return policy
+        
+    
+    @abstractmethod
+    def policy_to_action(self, state: int, next_state: list[int]) -> list[int]:
+        # LMDPs do not have actions. However, to be able to plot the policies, or interact with the environment, we need to convert the transitions into certain actions
+        # (as long as the problem is deterministic)
+        raise NotImplementedError("Implement in the subclass")
+    
+    
+    def power_iteration(self, epsilon=1e-20):
         G = np.diag(np.exp(self.R[:self.num_non_terminal_states]) / self.lmbda)
-        z = np.ones((self.num_states, 1))
+        z = np.ones(self.num_states)
+        epochs = 0
+        while True:
+            delta = 0
+            z_new = G @ self.P @ z
+            # print(z_new)
+            z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
+            
+            delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z))
+    
+            z = z_new
+            
+            if delta < epsilon:
+                break
+            epochs += 1
+            
+        print(epochs)
         
-        print(f"GPz: {G.shape}, {self.P.shape}, {z.shape}")
+        self.z = z
         
-        for i in range(iterations):
-            z = G @ self.P @ z
-            z = np.concatenate((z, np.ones((1, self.num_terminal_states))))
-            print(f"Iteration {i}:\n{z}")
-        
-        print(f"V\n{np.log(z) * self.lmbda}")
         return z
+
+    def get_value_function(self, z: np.ndarray = None):
+        if z is None:
+            z = self.z
+        return np.log(z) * self.lmbda
+    
+    
+    def compute_value_function(self):
+        if not hasattr(self, "z"):
+            print("Will compute power iteration")
+            self.power_iteration()
+        
+        self.V = self.get_value_function()
+        
+        self.policy = self.get_optimal_policy(self.z)
+        self.policy_multiple_states = self.get_optimal_policy(self.z, multiple_states=True)
+        
+        

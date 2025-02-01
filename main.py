@@ -4,25 +4,45 @@ from algorithms import QLearning, QLearningPlotter, QLearningHyperparameters, QL
 import matplotlib.pyplot as plt
 import numpy as np
 from utils.maps import Maps
-
+from utils.benchmarks import benchmark_value_iteration
 from minigrid.manual_control import ManualControl
 
 if __name__ == "__main__":
-    grid_size = 5
+    grid_size = 10
     gridworld_lmdp = GridWorldLMDP(
-        grid_size=3
+        grid_size=grid_size,
+        map=Maps.CLIFF
     )
     
-    print("P")
-    print(gridworld_lmdp.P)
+    # print("P")
+    # print(gridworld_lmdp.P)
     
-    print("R")
+    # print("R")
+    # print(gridworld_lmdp.R)
+    
     print(gridworld_lmdp.R)
-    z = gridworld_lmdp.power_iteration()
+    gridworld_lmdp.compute_value_function()
+    print(gridworld_lmdp.policy)
+    print(gridworld_lmdp.policy_multiple_states)
+    plotter = GridWorldPlotter(
+        gridworld_lmdp,
+        figsize=(7, 5),
+        name="LMDP",
+    )
+    # gridworld_mdp.compute_value_function()
+    
+    plotter.plot_grid_world(
+        show_value_function=True,
+        savefig=False,
+        multiple_actions=True,
+        save_title="gridworld_power_iteration_policy.png"
+    )
+    
+    
 
     # minigrid_mdp = MinigridMDP(
     #     grid_size=grid_size,
-    #     map=Maps.CHALLENGE_DOOR,
+    #     # map=Maps.CHALLENGE_DOOR,
     #     allowed_actions=[
     #         MinigridActions.ROTATE_LEFT,
     #         MinigridActions.ROTATE_RIGHT,
@@ -66,17 +86,8 @@ if __name__ == "__main__":
     # grid_size = 4
     # name = f"cliff"
     
-    # gridworld_mdp = GridWorldMDP(
-    #     grid_size=grid_size,
-    #     map=Maps.CLIFF,
-    #     deterministic=True
-    # )
+    # benchmark_value_iteration()
     
-    # plotter = GridWorldPlotter(
-    #     gridworld_mdp
-    #     )
-    # gridworld_mdp.compute_value_function()
-    # plotter.plot_grid_world(show_value_function=True, policy=gridworld_mdp.policy)
     
     
     # print(gridworld_mdp.policy)
@@ -108,19 +119,7 @@ if __name__ == "__main__":
     
     
         
-    # plotter = GridWorldPlotter(
-    #     gridworld_mdp,
-    #     figsize=(7, 5),
-    #     name=name,
-    # )
-    # # gridworld_mdp.compute_value_function()
     
-    # # plotter.plot_grid_world(
-    # #     show_value_function=True,
-    # #     savefig=True,
-    # #     multiple_actions=True,
-    # #     save_title="gridworld_value_iteration_policy.png"
-    # # )
     
     # # plotter.plot_stats(savefig=False)
     
