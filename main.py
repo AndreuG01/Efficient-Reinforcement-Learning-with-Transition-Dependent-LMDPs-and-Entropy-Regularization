@@ -8,101 +8,88 @@ from utils.benchmarks import benchmark_value_iteration
 from minigrid.manual_control import ManualControl
 
 if __name__ == "__main__":
-    grid_size = 3
-    map = Maps.WALL_TEST
+    grid_size = 2
+    # map = Maps.WALL_TEST
     # map = None
-    gridworld_lmdp = GridWorldLMDP(
-        grid_size=grid_size,
-        map=map
-    )
-    
-    gridworld_lmdp.compute_value_function()
-    lmdp_plotter = GridWorldPlotter(
-        gridworld_lmdp,
-        figsize=(7, 5),
-    )
-    
-    lmdp_plotter.plot_grid_world(
-        savefig=True,
-        save_title="LMDP Gridworld Policy",
-        show_value_function=True,
-        multiple_actions=False,
-    )
-    
-    
-    embedded_mdp = GridWorldMDP(
-        grid_size=grid_size,
-        mdp=gridworld_lmdp.to_MDP(),
-        deterministic=False,
-        map=map
-    )
-    
-    embedded_mdp.compute_value_function()
-    
-    plotter = GridWorldPlotter(
-        embedded_mdp,
-        figsize=(7, 5),
-    )
-    
-    plotter.plot_grid_world(
-        savefig=True,
-        save_title="Embedded MDP Gridworld Policy Probs colors",
-        show_value_function=True,
-        multiple_actions=False,
-        show_prob=True,
-        prob_size=3.5,
-        color_probs=True
-    )
-
-    
-    
-    
-    
-    
-    
-    # # embedded_gridworld_mdp.compute_value_function()
-    # # print(embedded_gridworld_mdp.V)
-    
-    # plotter.plot_grid_world(
-    #     show_value_function=True,
-    #     savefig=False
-    # )
-    
-    # # print("P")
-    # # print(gridworld_lmdp.P)
-    
-    # # print("R")
-    # # print(gridworld_lmdp.R)
-    
-    # print(gridworld_lmdp.R)
-    # gridworld_lmdp.compute_value_function()
-    # print(gridworld_lmdp.policy)
-    # print(gridworld_lmdp.policy_multiple_states)
-    # # gridworld_mdp.compute_value_function()
-    
-    # plotter.plot_grid_world(
-    #     show_value_function=True,
-    #     savefig=False,
-    #     multiple_actions=True,
-    #     save_title="gridworld_power_iteration_policy.png"
-    # )
-    
-    
-
-    # minigrid_lmdp = MinigridLMDP(
+    # gridworld_lmdp = GridWorldLMDP(
     #     grid_size=grid_size,
-    #     map=Maps.CHALLENGE_DOOR,
-    #     allowed_actions=[
-    #         MinigridActions.ROTATE_LEFT,
-    #         MinigridActions.ROTATE_RIGHT,
-    #         MinigridActions.FORWARD,
-    #         MinigridActions.PICKUP,
-    #         MinigridActions.DROP,
-    #         MinigridActions.TOGGLE,
-    #         MinigridActions.DONE
-    #     ],
-    #     properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]}
+    #     map=map
     # )
+    
+    # gridworld_lmdp.compute_value_function()
+    # lmdp_plotter = GridWorldPlotter(
+    #     gridworld_lmdp,
+    #     figsize=(7, 5),
+    # )
+    
+    # lmdp_plotter.plot_grid_world(
+    #     savefig=True,
+    #     save_title="LMDP Gridworld Policy",
+    #     show_value_function=True,
+    #     multiple_actions=False,
+    # )
+    
+    
+    # embedded_mdp = GridWorldMDP(
+    #     grid_size=grid_size,
+    #     mdp=gridworld_lmdp.to_MDP(),
+    #     deterministic=False,
+    #     map=map
+    # )
+    
+    # embedded_mdp.compute_value_function()
+    
+    # plotter = GridWorldPlotter(
+    #     embedded_mdp,
+    #     figsize=(7, 5),
+    # )
+    
+    # plotter.plot_grid_world(
+    #     savefig=False,
+    #     save_title="Embedded MDP Gridworld Policy Probs colors",
+    #     show_value_function=True,
+    #     multiple_actions=False,
+    #     show_prob=True,
+    #     prob_size=3.5,
+    #     color_probs=True
+    # )
+
+    
+    
+    
+
+    minigrid_lmdp = MinigridLMDP(
+        grid_size=grid_size,
+        map=Maps.CHALLENGE_DOOR,
+        allowed_actions=[
+            MinigridActions.ROTATE_LEFT,
+            MinigridActions.ROTATE_RIGHT,
+            MinigridActions.FORWARD,
+            MinigridActions.PICKUP,
+            MinigridActions.TOGGLE,
+            # MinigridActions.DROP,
+            # MinigridActions.DONE
+        ],
+        properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]}
+    )
+    embedded_mdp = minigrid_lmdp.to_MDP()
+    print("EMBEDDED NUM ACTIONS", embedded_mdp.num_actions)
+    
+    minigrid_mdp = MinigridMDP(
+        grid_size=grid_size,
+        map=Maps.CHALLENGE_DOOR,
+        allowed_actions=[
+            i for i in range(embedded_mdp.num_actions)
+            # MinigridActions.DONE
+        ],
+        properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]},
+        mdp=embedded_mdp,
+        deterministic=False
+    )
+    minigrid_mdp.visualize_policy(
+        save_gif=True,
+        save_path="assets/embedded_mdp.gif"
+    )
     
     # minigrid_lmdp.to_MDP()
     

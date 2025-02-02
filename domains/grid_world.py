@@ -9,7 +9,6 @@ from models.LMDP import LMDP
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.lines import Line2D
 import os
 from .grid import CustomGrid, CellType
 from utils.state import State
@@ -79,6 +78,7 @@ class GridWorldMDP(MDP):
             self.generate_P(self.grid.positions, self.move, self.grid)
             self._generate_R()
         else:
+            # Useful when wanting to create a GridWorldMDP from an embedding of an LMDP into an MDP
             super().__init__(
                 num_states=mdp.num_states,
                 num_terminal_states=mdp.num_terminal_states,
@@ -338,8 +338,6 @@ class GridWorldPlotter:
 
         # Add policy arrows
         prob_cmap = plt.get_cmap("Greens")
-        text_cmap = plt.get_cmap("binary")
-        text_normalizer = mcolors.Normalize(np.min(self.gridworld.V), np.max(self.gridworld.V))
         for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
             if self.is_mdp:
                 actions = policy[idx] if multiple_actions else [policy[idx]]
@@ -352,8 +350,8 @@ class GridWorldPlotter:
                 # We need to get the probability distribution of transitioning to the next states
                 probs = self.gridworld.P[idx, actions[0], :]
                 action_probs = self.__get_action_probs(pos, probs)
-                ax.plot([y - 0.5, y + 0.5], [x - 0.5, x + 0.5], color="black", linewidth=0.5)
-                ax.plot([y - 0.5, y + 0.5], [x + 0.5, x - 0.5], color="black", linewidth=0.5)
+                ax.plot([y - 0.5, y + 0.5], [x - 0.5, x + 0.5], color="black", linewidth=0.2)
+                ax.plot([y - 0.5, y + 0.5], [x + 0.5, x - 0.5], color="black", linewidth=0.2)
                 quadrants = {0: [(y + 0.5, x - 0.5), (y, x), (y - 0.5, x - 0.5)],
                             1: [(y + 0.5, x + 0.5), (y, x), (y + 0.5, x - 0.5)],
                             2: [(y - 0.5, x + 0.5), (y, x), (y + 0.5, x + 0.5)],
@@ -391,7 +389,7 @@ class GridWorldPlotter:
         ax.set_yticks(np.arange(-0.5, grid.shape[0], 1))
         ax.set_xticklabels([])
         ax.set_yticklabels([])
-        ax.grid(color="gray", linestyle="-", linewidth=0.5)
+        ax.grid(color="black", linestyle="-", linewidth=1)
 
         if savefig:
             if save_title is None:

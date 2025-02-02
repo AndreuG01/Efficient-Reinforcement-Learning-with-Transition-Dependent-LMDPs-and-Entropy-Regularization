@@ -140,7 +140,7 @@ class LMDP(ABC):
         return policy
         
     
-    def policy_to_action(self, state: int, next_state: list[int]) -> list[int]:
+    def transition_action(self, state: int, next_state: list[int]) -> list[int]:
         # LMDPs do not have actions. However, to be able to plot the policies, or interact with the environment, we need to convert the transitions into certain actions
         # (as long as the problem is deterministic)
         raise NotImplementedError("Implement in the subclass")
@@ -233,15 +233,15 @@ class LMDP(ABC):
         
         mdp.R[:self.num_non_terminal_states, :] = reward_non_terminal
         
-        np.random.seed(123) # TODO: remove when developing has finished.
+        # np.random.seed(123) # TODO: remove when developing has finished.
         
         # Define the transition probability matrix of the MDP.
         for s in range(self.num_non_terminal_states):
             non_zero_positions = np.where(control[s, :] != 0)[0]
-            probs = control[s, non_zero_positions]
-            for a in range(num_actions):
-                # probs = np.roll(probs, -a)
+            probs = control[s, non_zero_positions].flatten()
+            for i, a in enumerate(range(num_actions), start=1):
                 mdp.P[s, a, non_zero_positions] = probs
+                # probs = np.roll(probs, shift=1, axis=0)
                 probs = np.random.permutation(probs)
         
         
