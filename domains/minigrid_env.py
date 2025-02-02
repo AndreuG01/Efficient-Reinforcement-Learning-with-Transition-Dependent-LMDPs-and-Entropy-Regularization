@@ -356,9 +356,9 @@ class MinigridMDP(MDP):
         if not hasattr(self, "V") and policies is None:
             print(f"Computing value function...")
             self.compute_value_function()
-            self.minigrid_env.visualize_policy([[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.minigrid_env.visualize_policy([[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, mdp=True)
         else:
-            self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, mdp=True)
 
 
 
