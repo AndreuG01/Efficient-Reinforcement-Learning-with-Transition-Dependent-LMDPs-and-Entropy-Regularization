@@ -100,7 +100,6 @@ class MDP(ABC):
                     self.P[state, action, next_state] += 0.3
     
     
-    
     def _generate_R(self):
         raise NotImplementedError("Implement in the subclass.")
     
@@ -171,7 +170,7 @@ class MDP(ABC):
         return V, ValueIterationStats(elapsed_time, rewards, iterations, deltas, self.num_states)
     
     
-    def value_iteration(self, epsilon=1e-5) -> tuple[np.ndarray, ValueIterationStats]:
+    def value_iteration(self, epsilon=1e-10) -> tuple[np.ndarray, ValueIterationStats]:
         """
         Perform value iteration to compute the optimal value function.
         Efficiently implemented with matrix operations
@@ -196,11 +195,14 @@ class MDP(ABC):
             Q = self.R + self.gamma * np.concatenate((expected_values, self.R[self.num_non_terminal_states:, :])) # num_states X num_actions
             
             V_new =  np.max(Q, axis=1)
-            delta = np.max(np.abs(V_new - V))
-            V = V_new
-            
+            delta = np.mean(np.abs(V_new - V))
+            if iterations % 100 == 0:
+                print(np.where(V_new != V))
+                print(f"Iter: {iterations}. Delta: {delta}")
             if delta < epsilon:
                 break
+            V = V_new
+            iterations += 1
 
         elapsed_time = time.time() - start_time
         
@@ -214,7 +216,7 @@ class MDP(ABC):
         self.V, self.stats = self.value_iteration()
         
         self.policy = self.get_optimal_policy(self.V)
-        self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True)
+        # self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True)
     
     
 

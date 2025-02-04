@@ -1,5 +1,6 @@
-from utils.state import State
-from itertools import product
+from utils.state import State, Object
+from itertools import product, combinations, permutations
+import copy
 
 class CellType:
     """
@@ -20,8 +21,6 @@ class CellType:
     START = 2
     GOAL = 3
     CLIFF = 4
-    DOOR = 5
-    KEY = 6
     # ... --> can be extended in the future to acount for more wall types
 
 class CustomGrid:
@@ -45,12 +44,10 @@ class CustomGrid:
         "#": CellType.WALL,
         "S": CellType.START,
         "G": CellType.GOAL,
-        "C": CellType.CLIFF,
-        "D": CellType.DOOR,
-        "K": CellType.KEY
+        "C": CellType.CLIFF
     }
 
-    def __init__(self, map: list[str] = None, grid_size: int = 3, properties: dict[str, list] = None):
+    def __init__(self, map: list[str] = None, objects = list[Object], grid_size: int = 3, properties: dict[str, list] = None):
         """
         Initializes the grid with either a predefined map or generates a simple grid.
 
@@ -63,22 +60,141 @@ class CustomGrid:
         
         self.positions = {k: [] for k in self.POSITIONS_CHAR.values()}
         self.state_properties = {} if properties is None else properties
+        self.objects = objects if objects is not None else []
+        
+        for id, object in enumerate(self.objects):
+            object.id = id
+        
             
+        self.__extend_properties()
         
         if self.map is None:
             self.generate_simple_grid(grid_size=grid_size)
         else:
             self.load_from_map()
+            
+
+        self.layout_combinations = self._get_layout_combinations()
+
+        count = 0
+        
+        
+        self.layout_combinations = self._get_layout_combinations()
+        self.positions[CellType.NORMAL] = self._expand_state(CellType.NORMAL)
+        # exit()
+        self.positions[CellType.WALL] = self._expand_state(CellType.WALL)
+        self.positions[CellType.START] = self._expand_state(CellType.START)
+        self.positions[CellType.GOAL] = self._expand_state(CellType.GOAL)
+        
+    
+        
+        # self.positions[CellType.WALL] = [State(state.y, state.x, layout=layout, **dict(zip(list(self.state_properties.keys()), values))) for state in self.positions[CellType.WALL] for values in self._get_property_combinations() for layout in self.layout_combinations]
+        # self.positions[CellType.START] = [State(state.y, state.x, layout=layout, **dict(zip(list(self.state_properties.keys()), values))) for state in self.positions[CellType.START] for values in self._get_property_combinations() for layout in self.layout_combinations]
+        # self.positions[CellType.GOAL] = [State(state.y, state.x, layout=layout, **dict(zip(list(self.state_properties.keys()), values))) for state in self.positions[CellType.GOAL] for values in self._get_property_combinations() for layout in self.layout_combinations]
+        # for layout, property in zip(self.properties_combinations, self.layout_combinations):
+            
+        print(self.get_num_states())
+        # for idx, state in enumerate(self.positions[CellType.NORMAL]):
+        #     state.layout = self.layout_combinations[idx % len(self.layout_combinations)]
+        
+        
         
         self.generate_state_index_mapper()
     
-    def _generate_states(self, x: int, y: int) -> list[State]:
+    
+    def _expand_state(self, type):
+        tmp = []
+        for state in self.positions[type]:
+            for values, layout in product(self._get_property_combinations(), self.layout_combinations):
+                # if not self.__validate_comb(layout, dict(zip(list(self.state_properties.keys()), values))): continue
+                # print(f"x={state.x}, y={state.y}, {layout}, properties={dict(zip(list(self.state_properties.keys()), values))}")
+                tmp.append(State(state.y, state.x, layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
+        return tmp
+        
+        
+    def __validate_comb(self, layout, properties):
+        
+        for k, object in layout.items():
+            if object is not None and object.type == "key" and str(object) in properties.keys():
+                
+                return not properties[str(object)]
+    
+        return True
+    
+
+    def _get_layout_combinations(self):
+        if len(self.objects) == 0: return [None]
+        key_objects = [obj for obj in self.objects if obj.type == "key"]
+        door_objects = [obj for obj in self.objects if obj.type == "door"]
+        valid_positions = list(set([(state.x, state.y) for state in self.positions[CellType.NORMAL]]))
+
+        # Get door positions and remove them from valid positions
+        door_positions = {(obj.y, obj.x) for obj in door_objects}
+        valid_positions = [pos for pos in valid_positions if pos not in door_positions]
+
+        # Initialize first placement with the original positions of objects
+        first_placement = {pos: None for pos in valid_positions}
+        
+        for obj in door_objects:
+            first_placement[(obj.y, obj.x)] = obj  # Keep doors fixed
+        
+        for key_obj in key_objects:
+            first_placement[(key_obj.y, key_obj.x)] = key_obj  # Place keys at their initial positions
+
+        all_placements = [first_placement]  # First placement is the initial state
+
+        # Generate all possible ways to place all keys (n keys)
+        for key_positions in permutations(valid_positions, len(key_objects)):
+            placement = {pos: None for pos in valid_positions}
+            
+            # Place doors
+            for obj in door_objects:
+                placement[(obj.y, obj.x)] = obj
+            
+            # Place keys
+            for key_obj, pos in zip(key_objects, key_positions):
+                key_obj.y, key_obj.x = pos  # Swap coordinates
+                placement[pos] = key_obj
+            
+            all_placements.append(placement)
+
+        # Generate all possible ways to place n-1 keys
+        for r in [len(key_objects) - 1]:  # Only need n-1 cases
+            for key_subset in combinations(key_objects, r):
+                for key_positions in permutations(valid_positions, r):
+                    placement = {pos: None for pos in valid_positions}
+                    
+                    # Place doors
+                    for obj in door_objects:
+                        placement[(obj.y, obj.x)] = obj
+                    
+                    # Place n-1 keys
+                    for key_obj, pos in zip(key_subset, key_positions):
+                        key_obj.y, key_obj.x = pos  # Swap coordinates
+                        placement[pos] = key_obj
+                    
+                    all_placements.append(placement)
+
+        return all_placements
+
+
+    def __extend_properties(self):
+        for object in self.objects:
+            self.state_properties[f"{object.color}_{object.type}_{object.id}"] = [False, True]
+
+    def _get_property_combinations(self):
         property_keys = list(self.state_properties.keys())
         property_values = [self.state_properties[key] for key in property_keys]
         combinations = product(*property_values)
         
-        return [State(x, y, **dict(zip(property_keys, values))) for values in combinations]
+        return combinations
+    
+    
+    def _generate_states(self, x: int, y: int) -> list[State]:
+        property_combinations = self._get_property_combinations()
         
+        return [State(x, y, layout=None, properties=None)]
+        # return [State(x, y, layout=None, **dict(zip(list(self.state_properties.keys()), values))) for values in property_combinations]
 
     def generate_simple_grid(self, grid_size: int):
         """
@@ -100,7 +216,7 @@ class CustomGrid:
                 elif (i, j) != self.goal_pos[0]:
                     self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
                 
-        self.positions[CellType.START].append(State(self.start_pos[0], self.start_pos[1], **{k: v[0] for k, v in self.state_properties.items()}))
+        self.positions[CellType.START].append(State(self.start_pos[0], self.start_pos[1], layout=None, **{k: v[0] for k, v in self.state_properties.items()}))
         self.positions[CellType.GOAL] = self._generate_states(self.goal_pos[0][0], self.goal_pos[0][1])
         
         
@@ -118,8 +234,8 @@ class CustomGrid:
             for i, cell in enumerate(row):
                 if cell == self.char_positions[CellType.START]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
                 if cell == self.char_positions[CellType.CLIFF]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
-                if cell == self.char_positions[CellType.KEY]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
-                if cell == self.char_positions[CellType.DOOR]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
+                # if cell == self.char_positions[CellType.KEY]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
+                # if cell == self.char_positions[CellType.DOOR]: self.positions[CellType.NORMAL].extend(self._generate_states(i, j))
                 self.positions[self.POSITIONS_CHAR[cell]].extend(self._generate_states(i, j))
         
         start_state = self.positions[CellType.START][0]
@@ -129,6 +245,37 @@ class CustomGrid:
         self.size_x = len(self.map)
         self.size_y = len(self.map[0])
     
+    
+    def get_active_state_object(self, x: int, y: int) -> Object | None:
+        
+        for k, v in self.positions.items():
+            for idx, state in enumerate(v):
+                if state.x == x and state.y == y and state.object is not None and state.object.active:
+                    return self.positions[k][idx].object
+        # for pos in list(self.positions.values()):
+        #     for state in pos:
+        #         if state.x == x and state.y == y:
+        #             if state.object is not None and state.object.active:
+        #                 return state.object
+        return None
+    
+    def set_state_object_visibility(self, x: int, y: int, object: Object, visibility) -> None:
+        states = self.__get_states_at_pos(x, y)
+        # for k, v in (self.positions.items()):
+        for idx, state in enumerate(states):
+            if state.x == x and state.y == y:
+                if state.object is not None and state.object == object:
+                    state.object.active = visibility
+                    # self.positions[k][idx].object.active = not object.active
+
+    
+    def __get_states_at_pos(self, x: int, y: int) -> list[State]:
+        target_states = []
+        for state_type, states in self.positions.items():
+            for idx, state in enumerate(states):
+                if state.x == x and state.y == y:
+                    target_states.append(state)
+        return target_states
     
     def get_num_states(self) -> int:
         """
@@ -161,6 +308,55 @@ class CustomGrid:
         for count, pos in enumerate(self.positions[CellType.NORMAL] + self.positions[CellType.GOAL]):
             self.state_index_mapper[count] = pos
     
+    
+    def state_has_key(self, state: State) -> bool:
+        # Check if a state has any key picked
+        keys_picked = []
+        for k, v in state.properties.items():
+            if "key" in k:
+                keys_picked.append(v)
+        return any(keys_picked)
+    
+        
+        
+    
+    
+    def state_has_key_color(self, state: State, color: str) -> bool:
+        keys_picked = []
+        for k, v in state.properties.items():
+            if f"{color}_key" in k:
+                keys_picked.append(v)
+        return any(keys_picked)
+    
+    
+    def remove_object(self, x: int, y: int) -> Object:
+        return_obj = None
+        for idx, state in enumerate(self.positions[CellType.NORMAL]):
+            if state.x == x and state.y == y:
+                assert state.object is not None
+                self.positions[CellType.NORMAL][idx].object = None
+                return_obj = state.object
+        return return_obj
+            
+    def add_object(self, x: int, y: int, object: Object) -> None:
+        for idx, state in enumerate(self.positions[CellType.NORMAL]):
+            if state.x == y and state.y == x:
+                self.positions[CellType.NORMAL][idx].object = object
+                
+            
+    def get_carrying_object(self, state: State) -> set[Object]:
+        
+        carrying_elems = [k for k, v in state.properties.items() if "key" in k and v ]
+        if len(carrying_elems) == 0:
+            return None
+        
+        carrying_elems = carrying_elems[0].split("_")
+            
+        for curr_obj in self.objects:
+            if curr_obj.color == carrying_elems[0] and curr_obj.type == carrying_elems[1] and curr_obj.id == int(carrying_elems[2]):
+                return curr_obj
+        
+        
     
     def is_valid(self, state: State) -> bool:
         """
@@ -197,7 +393,7 @@ class CustomGrid:
         Returns:
         - bool: True if the position is a key, False otherwise.
         """
-        return state in self.positions[CellType.KEY]
+        return state.object is not None and state.object.type == "key"
     
     
     def is_door(self, state: State) -> bool:
@@ -210,7 +406,10 @@ class CustomGrid:
         Returns:
         - bool: True if the position is a door, False otherwise.
         """
-        return state in self.positions[CellType.DOOR]
+        return state.object is not None and state.object.type == "door"
+    
+    def is_normal(self, state: State) -> bool:
+        return state in self.positions[CellType.NORMAL] and state not in self.positions[CellType.CLIFF]
     
     
     def print_grid(self):

@@ -55,41 +55,67 @@ if __name__ == "__main__":
     # )
 
     
-    
-    
-
-    minigrid_lmdp = MinigridLMDP(
-        grid_size=grid_size,
+    minigrid_mdp = MinigridMDP(
         map=Maps.CHALLENGE_DOOR,
         allowed_actions=[
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
             MinigridActions.PICKUP,
+            MinigridActions.DROP,
             MinigridActions.TOGGLE,
-            # MinigridActions.DROP,
-            # MinigridActions.DONE
         ],
-        properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]}
+        objects=Maps.CHALLENGE_DOOR_OBJECTS,
     )
-    embedded_mdp = minigrid_lmdp.to_MDP()
-    print("EMBEDDED NUM ACTIONS", embedded_mdp.num_actions)
     
-    minigrid_mdp = MinigridMDP(
-        grid_size=grid_size,
-        map=Maps.CHALLENGE_DOOR,
-        allowed_actions=[
-            i for i in range(embedded_mdp.num_actions)
-            # MinigridActions.DONE
-        ],
-        properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]},
-        mdp=embedded_mdp,
-        deterministic=False
-    )
-    minigrid_mdp.visualize_policy(
-        save_gif=True,
-        save_path="assets/embedded_mdp.gif"
-    )
+    # print(np.where(minigrid_mdp.P[4, :, :] != 0))
+    # for i in range(minigrid_mdp.P.shape[0]):
+    #     print(i)
+    #     print(np.where(minigrid_mdp.P[i, :, :] != 0))
+    # print(minigrid_mdp.num_non_terminal_states)
+    # print(np.where(minigrid_mdp.R[:minigrid_mdp.num_non_terminal_states, :] >= 0))
+    # print(np.where(minigrid_mdp.R[minigrid_mdp.num_non_terminal_states:, :] < 0))
+    # for i in range(minigrid_mdp.P.shape[0]):
+    #     print(np.sum(minigrid_mdp.P[i, :, :], axis=1))
+    minigrid_mdp.visualize_policy()
+    # manual_control = ManualControl(minigrid_mdp.minigrid_env, seed=42)
+    # manual_control.start()
+
+    
+    
+
+    # minigrid_lmdp = MinigridLMDP(
+    #     grid_size=grid_size,
+    #     map=Maps.CHALLENGE_DOOR,
+    #     allowed_actions=[
+    #         MinigridActions.ROTATE_LEFT,
+    #         MinigridActions.ROTATE_RIGHT,
+    #         MinigridActions.FORWARD,
+    #         MinigridActions.PICKUP,
+    #         MinigridActions.TOGGLE,
+    #         # MinigridActions.DROP,
+    #         # MinigridActions.DONE
+    #     ],
+    #     properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]}
+    # )
+    # embedded_mdp = minigrid_lmdp.to_MDP()
+    # print("EMBEDDED NUM ACTIONS", embedded_mdp.num_actions)
+    
+    # minigrid_mdp = MinigridMDP(
+    #     grid_size=grid_size,
+    #     map=Maps.CHALLENGE_DOOR,
+    #     allowed_actions=[
+    #         i for i in range(embedded_mdp.num_actions)
+    #         # MinigridActions.DONE
+    #     ],
+    #     properties={"orientation": [i for i in range(4)], "blue_door": [False, True], "blue_key": [False, True]},
+    #     mdp=embedded_mdp,
+    #     deterministic=False
+    # )
+    # minigrid_mdp.visualize_policy(
+    #     save_gif=True,
+    #     save_path="assets/embedded_mdp.gif"
+    # )
     
     # minigrid_lmdp.to_MDP()
     

@@ -1,3 +1,5 @@
+from .state import Object
+
 class Maps:
     SIMPLE_TEST = [
     "####",
@@ -75,21 +77,38 @@ class Maps:
         "#######"
     ]
     
+    SIMPLE_DOOR_OBJECTS = [Object(2, 2, "blue", "door", 0), Object(2, 1, "blue", "key", 0)]
     SIMPLE_DOOR = [
         "#####",
         "#S###",
-        "#KDG#",
+        "#  G#",
         "#####",
         "#####",
     ]
     
+    CHALLENGE_DOOR_OBJECTS = [Object(6, 2, "blue", "key", 0), Object(4, 6, "blue", "door", 0)]
     CHALLENGE_DOOR = [
         "########",
         "#S  # G#",
         "#   # C#",
         "#   #  #",
-        "#   ##D#",
+        "#   ## #",
         "# C  C #",
-        "#CK    #",
+        "#C     #",
         "########",
     ]
+    
+    DOUBLE_DOOR_OBJECTS = [Object(3, 1, "green", "key", 0), Object(3, 3, "green", "door", 0), Object(4, 2, "blue", "key", 1), Object(2, 3, "blue", "door", 1)]
+    DOUBLE_DOOR = [
+        "########",
+        "#S#G####",
+        "# # ####",
+        "#   ####",
+        "## #####",
+        "########",
+        "########",
+        "########",
+    ]
+    
+    
+    
