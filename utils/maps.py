@@ -86,10 +86,10 @@ class Maps:
         "#####",
     ]
     
-    CHALLENGE_DOOR_OBJECTS = [Object(6, 2, "blue", "key", 0), Object(4, 6, "blue", "door", 0)]
+    CHALLENGE_DOOR_OBJECTS = [Object(6, 2, "red", "key", 0), Object(4, 6, "blue", "door", 0), Object(1, 4, "red", "door", 0)]
     CHALLENGE_DOOR = [
         "########",
-        "#S  # G#",
+        "#S    G#",
         "#   # C#",
         "#   #  #",
         "#   ## #",
@@ -100,25 +100,21 @@ class Maps:
     
     DOUBLE_DOOR_OBJECTS = [Object(3, 1, "green", "key", 0), Object(3, 3, "green", "door", 0), Object(4, 2, "blue", "key", 1), Object(2, 3, "blue", "door", 1)]
     DOUBLE_DOOR = [
-        "########",
-        "#S#G####",
-        "# # ####",
-        "#   ####",
-        "## #####",
-        "########",
-        "########",
-        "########",
+        "#####",
+        "#S#G#",
+        "# # #",
+        "#   #",
+        "## ##",
+        "#####"
     ]
-    DOUBLE_KEY_OBJECTS = [Object(4, 1, "green", "key", 0), Object(4, 2, "blue", "key", 1), Object(2, 3, "blue", "door", 1)]
+    DOUBLE_KEY_OBJECTS = [Object(4, 1, "green", "key", 0), Object(4, 2, "blue", "key", 1), Object(2, 3, "green", "door", 1)]
     DOUBLE_KEY = [
-        "########",
-        "#S#G####",
-        "# # ####",
-        "#   ####",
-        "#  #####",
-        "########",
-        "########",
-        "########",
+        "#####",
+        "#S#G#",
+        "# # #",
+        "#   #",
+        "#  ##",
+        "#####",
     ]
     
     

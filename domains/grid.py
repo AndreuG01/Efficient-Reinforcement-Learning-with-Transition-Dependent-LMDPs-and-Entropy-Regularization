@@ -76,7 +76,6 @@ class CustomGrid:
 
         self.layout_combinations = self._get_layout_combinations()
 
-        count = 0
         
         
         self.layout_combinations = self._get_layout_combinations()

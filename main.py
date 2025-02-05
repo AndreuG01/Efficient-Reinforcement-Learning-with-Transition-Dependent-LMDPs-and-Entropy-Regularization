@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # print(np.where(minigrid_mdp.R[minigrid_mdp.num_non_terminal_states:, :] < 0))
     # for i in range(minigrid_mdp.P.shape[0]):
     #     print(np.sum(minigrid_mdp.P[i, :, :], axis=1))
-    minigrid_mdp.visualize_policy(save_gif=True, save_path="assets/many_states.gif", num_times=1)
+    minigrid_mdp.visualize_policy(save_gif=True, save_path="assets/many_states3.gif", num_times=1)
     # manual_control = ManualControl(minigrid_mdp.minigrid_env, seed=42)
     # manual_control.start()
 

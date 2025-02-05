@@ -196,9 +196,11 @@ class MDP(ABC):
             
             V_new =  np.max(Q, axis=1)
             delta = np.mean(np.abs(V_new - V))
-            # if iterations % 10 == 0:
-            print(np.where(V_new != V))
-            print(f"Iter: {iterations}. Delta: {delta}")
+            
+            
+            if iterations % 10 == 0:
+                print(f"Iter: {iterations}. Delta: {delta}")
+            
             if delta < epsilon:
                 break
             V = V_new
@@ -230,21 +232,30 @@ class MDP(ABC):
         Returns:
         - policy (np.ndarray): The optimal policy, where each element corresponds to the optimal action for a state.
         """
-        # TODO: change to matrix operation
-        policy = np.zeros(self.num_states, dtype=object)
-        for s in range(self.num_non_terminal_states):  # Skip terminal states
-            # Find the action that maximizes the expected utility
-            vals = [
-                sum(self.P[s, a, s_next] * (self.R[s, a] + self.gamma * V[s_next])
-                    for s_next in range(self.num_states))
-                for a in range(self.num_actions)
-            ]
-            if multiple_actions:
-                policy[s] = [i for i in range(len(vals)) if vals[i] == np.max(vals)]
-            else:
-                policy[s] = np.argmax(vals)
-            
+        # # TODO: change to matrix operation
+        expected_utilities = self.R[:self.num_non_terminal_states] + \
+                     self.gamma * np.einsum("saj,j->sa", self.P[:self.num_non_terminal_states], V)
+        if multiple_actions:
+            max_values = np.max(expected_utilities, axis=1, keepdims=True)
+            policy = (expected_utilities == max_values).astype(int)  # Binary mask for optimal actions
+        else:
+            policy = np.argmax(expected_utilities, axis=1)
+
         return policy
+        # policy = np.zeros(self.num_states, dtype=object)
+        # for s in range(self.num_non_terminal_states):  # Skip terminal states
+        #     # Find the action that maximizes the expected utility
+        #     vals = [
+        #         sum(self.P[s, a, s_next] * (self.R[s, a] + self.gamma * V[s_next])
+        #             for s_next in range(self.num_states))
+        #         for a in range(self.num_actions)
+        #     ]
+        #     if multiple_actions:
+        #         policy[s] = [i for i in range(len(vals)) if vals[i] == np.max(vals)]
+        #     else:
+        #         policy[s] = np.argmax(vals)
+            
+        # return policy
 
     def print_rewards(self):
         """

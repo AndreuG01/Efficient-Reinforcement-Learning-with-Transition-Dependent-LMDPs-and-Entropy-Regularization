@@ -343,7 +343,7 @@ class MinigridMDP(MDP):
             dy, dx = self.OFFSETS[orientation]
             new_y = y + dy
             new_x = x + dx
-            if (new_x, new_y) in curr_layout: next_object = curr_layout[(new_x, new_y)]
+            if curr_layout is not None and (new_x, new_y) in curr_layout: next_object = curr_layout[(new_x, new_y)]
             else: next_object = None
             
             if next_object is not None and next_object.type == "key" and not state.properties[f"{next_object.color}_key_{next_object.id}"]:
@@ -368,7 +368,7 @@ class MinigridMDP(MDP):
             dy, dx = self.OFFSETS[orientation]
             new_y = y + dy
             new_x = x + dx
-            if (new_x, new_y) in curr_layout: next_object = curr_layout[(new_x, new_y)]
+            if curr_layout is not None and (new_x, new_y) in curr_layout: next_object = curr_layout[(new_x, new_y)]
             else:
                 next_object = None
                 return next_state, True, False
@@ -388,7 +388,7 @@ class MinigridMDP(MDP):
             new_y = y + dy
             new_x = x + dx
             
-            if (new_x, new_y) in curr_layout: next_object = curr_layout[(new_x, new_y)]
+            if curr_layout is not None and (new_x, new_y) in curr_layout: next_object = curr_layout[(new_x, new_y)]
             else: next_object = None
             
             if next_object is not None and next_object.type == "door" and self.minigrid_env.custom_grid.state_has_key_color(state, next_object.color):
@@ -400,15 +400,18 @@ class MinigridMDP(MDP):
             dy, dx = self.OFFSETS[orientation]
             new_y = y + dy
             new_x = x + dx
-            if (new_x, new_y) in curr_layout:
+            if curr_layout is not None and (new_x, new_y) in curr_layout:
                 next_object = curr_layout[(new_x, new_y)]
             else:
                 next_object = None
                 return next_state, True, False
-           
-            if next_object is None and self.minigrid_env.custom_grid.state_has_key(state) and self.minigrid_env.custom_grid.is_normal(State(new_y, new_x, curr_layout, **state.properties)) and not any([object is not None and "key" in object.type for object in list(curr_layout.values())]):
             
+            carrying_object = self.minigrid_env.custom_grid.get_carrying_object(state)
+           
+            if next_object is None and carrying_object is not None and self.minigrid_env.custom_grid.state_has_key(state) and self.minigrid_env.custom_grid.is_normal(State(new_y, new_x, curr_layout, **state.properties)) and not any([object is not None and str(object) == str(carrying_object) for object in list(curr_layout.values())]):
+                # print("Can drop")
                 carrying_object = self.minigrid_env.custom_grid.get_carrying_object(state)
+                # print(carrying_object)
                 next_state.layout[(new_x, new_y)] = carrying_object
                 # self.minigrid_env.custom_grid.set_state_object_visibility(new_x, new_y, carrying_object, True)
             
