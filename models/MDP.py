@@ -196,9 +196,9 @@ class MDP(ABC):
             
             V_new =  np.max(Q, axis=1)
             delta = np.mean(np.abs(V_new - V))
-            if iterations % 100 == 0:
-                print(np.where(V_new != V))
-                print(f"Iter: {iterations}. Delta: {delta}")
+            # if iterations % 10 == 0:
+            print(np.where(V_new != V))
+            print(f"Iter: {iterations}. Delta: {delta}")
             if delta < epsilon:
                 break
             V = V_new

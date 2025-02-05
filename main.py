@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     
     minigrid_mdp = MinigridMDP(
-        map=Maps.CHALLENGE_DOOR,
+        map=Maps.DOUBLE_DOOR,
         allowed_actions=[
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
@@ -65,7 +65,7 @@ if __name__ == "__main__":
             MinigridActions.DROP,
             MinigridActions.TOGGLE,
         ],
-        objects=Maps.CHALLENGE_DOOR_OBJECTS,
+        objects=Maps.DOUBLE_DOOR_OBJECTS,
     )
     
     # print(np.where(minigrid_mdp.P[4, :, :] != 0))
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # print(np.where(minigrid_mdp.R[minigrid_mdp.num_non_terminal_states:, :] < 0))
     # for i in range(minigrid_mdp.P.shape[0]):
     #     print(np.sum(minigrid_mdp.P[i, :, :], axis=1))
-    minigrid_mdp.visualize_policy()
+    minigrid_mdp.visualize_policy(save_gif=True, save_path="assets/many_states.gif", num_times=1)
     # manual_control = ManualControl(minigrid_mdp.minigrid_env, seed=42)
     # manual_control.start()
 

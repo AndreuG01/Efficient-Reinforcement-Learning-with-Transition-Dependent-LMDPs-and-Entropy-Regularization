@@ -124,9 +124,9 @@ class CustomGrid:
 
     def _get_layout_combinations(self):
         if len(self.objects) == 0: return [None]
-        key_objects = [obj for obj in self.objects if obj.type == "key"]
+        key_objects = [copy.deepcopy(obj) for obj in self.objects if obj.type == "key"]
         door_objects = [obj for obj in self.objects if obj.type == "door"]
-        valid_positions = list(set([(state.x, state.y) for state in self.positions[CellType.NORMAL]]))
+        valid_positions = list(set([(state.x, state.y) for state in self.positions[CellType.NORMAL] if state not in self.positions[CellType.CLIFF] and state not in self.positions[CellType.START]]))
 
         # Get door positions and remove them from valid positions
         door_positions = {(obj.y, obj.x) for obj in door_objects}
@@ -153,7 +153,8 @@ class CustomGrid:
             
             # Place keys
             for key_obj, pos in zip(key_objects, key_positions):
-                key_obj.y, key_obj.x = pos  # Swap coordinates
+                # key_obj = copy.deepcopy(key_obj)
+                # key_obj.y, key_obj.x = pos  # Swap coordinates
                 placement[pos] = key_obj
             
             all_placements.append(placement)
@@ -170,7 +171,8 @@ class CustomGrid:
                     
                     # Place n-1 keys
                     for key_obj, pos in zip(key_subset, key_positions):
-                        key_obj.y, key_obj.x = pos  # Swap coordinates
+                        # key_obj = copy.deepcopy(key_obj)
+                        # key_obj.y, key_obj.x = pos  # Swap coordinates
                         placement[pos] = key_obj
                     
                     all_placements.append(placement)
