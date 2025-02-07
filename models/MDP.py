@@ -100,7 +100,8 @@ class MDP(ABC):
                     else:
                         next_state = pos[CellType.NORMAL].index(next_state)
                     self.P[state, action, next_state] += 0.3
-    
+        
+        print(f"Generated matrix P with {self.P.size:,} elements")
     
     def _generate_R(self):
         raise NotImplementedError("Implement in the subclass.")

@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from domains.grid import CellType, CustomGrid
 from .MDP import MDP
+from tqdm import tqdm
 
 class LMDP(ABC):
     """
@@ -55,23 +56,26 @@ class LMDP(ABC):
         - grid (CustomGrid): The grid environment for which the transition matrix is being generated.
         - actions (list[int]): List of possible actions that can be taken in the environment (NOTE THAT THE LMDP DOES NOT HAVE ACTIONS INTO ACOUNT)
         """
-        for state in range(self.num_non_terminal_states):
+        for state in tqdm(range(self.num_non_terminal_states), desc="Generating transition matrix P", total=self.num_non_terminal_states):
             for action in actions:
-                if grid.state_index_mapper[state] in pos[CellType.CLIFF]:
+                if grid.is_cliff(grid.state_index_mapper[state]):
                     next_state = self.s0
                 else:
-                    next_state, _, _ = move(pos[CellType.NORMAL][state], action)
+                    next_state, _, terminal = move(pos[state], action)
                     # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
-                    if next_state in pos[CellType.GOAL]:
-                        next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
+                    if terminal:
+                        next_state = grid.terminal_state_idx(next_state)
                     else:
-                        next_state = pos[CellType.NORMAL].index(next_state)
+                        next_state = pos.index(next_state)
 
                 # TODO: add the equivalent to the deterministic in MDP, which would be a modifier of the transition probability
                 self.P[state, next_state] += 1 / len(actions)
                 
     
         assert all([np.isclose(np.sum(self.P[i, :]), 1) for i in range(self.P.shape[0])]), "Transition probabilities are not properly defined. They do not add up to 1 in every row"
+        
+        
+        print(f"Generated matrix P with {self.P.size:,} elements")
     
     
     def _generate_R(self):
@@ -146,7 +150,7 @@ class LMDP(ABC):
         raise NotImplementedError("Implement in the subclass")
     
     
-    def power_iteration(self, epsilon=1e-20) -> np.ndarray:
+    def power_iteration(self, epsilon=0.62) -> np.ndarray:
         """
         Perform power iteration to compute the value function approximation.
 
@@ -159,6 +163,8 @@ class LMDP(ABC):
         G = np.diag(np.exp(self.R[:self.num_non_terminal_states]) / self.lmbda)
         z = np.ones(self.num_states)
         
+        iterations = 0
+        
         while True:
             delta = 0
             z_new = G @ self.P @ z
@@ -169,9 +175,12 @@ class LMDP(ABC):
     
             z = z_new
             
+            if iterations % 10 == 0:
+                print(f"Iter: {iterations}. Delta: {delta}")
+            
             if delta < epsilon:
                 break
-            
+            iterations += 1
         
         self.z = z
         
