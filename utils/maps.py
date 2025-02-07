@@ -98,7 +98,7 @@ class Maps:
         "########",
     ]
     
-    DOUBLE_DOOR_OBJECTS = [Object(3, 1, "green", "key", 0), Object(3, 3, "green", "door", 0), Object(4, 2, "blue", "key", 1), Object(2, 3, "blue", "door", 1)]
+    DOUBLE_DOOR_OBJECTS = [Object(3, 1, "green", "key", 0), Object(3, 2, "green", "door", 0), Object(2, 1, "red", "key", 1), Object(2, 3, "blue", "door", 1), Object(4, 2, "blue", "key", 1)]
     DOUBLE_DOOR = [
         "#####",
         "#S#G#",
@@ -107,7 +107,7 @@ class Maps:
         "## ##",
         "#####"
     ]
-    DOUBLE_KEY_OBJECTS = [Object(4, 1, "green", "key", 0), Object(4, 2, "blue", "key", 1), Object(2, 3, "green", "door", 1)]
+    DOUBLE_KEY_OBJECTS = [Object(4, 1, "yellow", "key", 0), Object(4, 2, "yellow", "key", 1), Object(2, 3, "yellow", "door", 1)]
     DOUBLE_KEY = [
         "#####",
         "#S#G#",

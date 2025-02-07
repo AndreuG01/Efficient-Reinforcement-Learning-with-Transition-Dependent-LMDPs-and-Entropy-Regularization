@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from domains.grid import CellType, CustomGrid
 from collections.abc import Callable
 from utils.state import State
+from tqdm import tqdm
 
 class MDP(ABC):
     """
@@ -61,7 +62,7 @@ class MDP(ABC):
     
     
     
-    def generate_P(self, pos: dict[int, list], move: Callable, grid: CustomGrid):
+    def generate_P(self, pos: list[State], move: Callable, grid: CustomGrid):
         """
         Generates the transition probability matrix (P) for the MDP, based on the dynamics of the environment
         (deterministic or stochastic).
@@ -73,17 +74,18 @@ class MDP(ABC):
         - grid (CustomGrid): The grid environment for which the transition matrix is being generated.
         """
         
-        for state in range(self.num_non_terminal_states):
+        for state in tqdm(range(self.num_non_terminal_states), desc="Generating transition matrix P", total=self.num_non_terminal_states):
             for action in self.__alowed_actions:
-                if grid.state_index_mapper[state] in pos[CellType.CLIFF]:
+                # print(state, action)
+                if grid.is_cliff(grid.state_index_mapper[state]):
                     next_state = self.s0
                 else:
-                    next_state, _, _ = move(pos[CellType.NORMAL][state], action)
+                    next_state, _, terminal = move(pos[state], action)
                     # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
-                    if next_state in pos[CellType.GOAL]:
-                        next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
+                    if terminal:
+                        next_state = grid.terminal_state_idx(next_state)
                     else:
-                        next_state = pos[CellType.NORMAL].index(next_state)
+                        next_state = pos.index(next_state)
 
                 if self.deterministic:
                     self.P[state, action, next_state] = 1
@@ -92,8 +94,8 @@ class MDP(ABC):
                     # Stochastic policy. With 70% take the correct action, with 30% take a random action
                     self.P[state, action, next_state] = 0.7
                     rand_action = np.random.choice([a for a in self.__alowed_actions if a != action])
-                    next_state, _, _ = move(pos[CellType.NORMAL][state], rand_action)
-                    if next_state in pos[CellType.GOAL]:
+                    next_state, _, terminal = move(pos[CellType.NORMAL][state], rand_action)
+                    if terminal:
                         next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
                     else:
                         next_state = pos[CellType.NORMAL].index(next_state)

@@ -8,7 +8,6 @@ class Object:
         self.color = color
         self.type = type
         self.id = id
-        self.active = False
     
     def __str__(self):
         return f"{self.color}_{self.type}_{self.id}"
