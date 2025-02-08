@@ -54,30 +54,56 @@ if __name__ == "__main__":
     #     color_probs=True
     # )
 
+    grid_size = 30
     
-    minigrid_mdp = MinigridLMDP(
-        map=Maps.DOUBLE_KEY,
+    minigrid_lmdp = MinigridLMDP(
+        grid_size=grid_size,
+        # map=Maps.DOUBLE_KEY,
         allowed_actions=[
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE,
+            # MinigridActions.PICKUP,
+            # MinigridActions.DROP,
+            # MinigridActions.TOGGLE,
         ],
-        objects=Maps.DOUBLE_KEY_OBJECTS,
+        # objects=Maps.DOUBLE_KEY_OBJECTS, 
+        sparse_optimization=True
     )
     
+    # minigrid_lmdp.visualize_policy(save_gif=True, save_path="assets/embedded_mdp.gif", num_times=1)
+    
+    embedded_mdp = minigrid_lmdp.to_MDP()
+    
+
+    # minigrid_mdp = MinigridMDP(
+    #     grid_size=grid_size,
+    #     map=Maps.DOUBLE_DOOR,
+    #     allowed_actions=[
+    #         MinigridActions.ROTATE_LEFT,
+    #         MinigridActions.ROTATE_RIGHT,
+    #         MinigridActions.FORWARD,
+    #         MinigridActions.PICKUP,
+    #         MinigridActions.DROP,
+    #         MinigridActions.TOGGLE,
+    #     ],
+    #     objects=Maps.DOUBLE_DOOR_OBJECTS, 
+    #     mdp=embedded_mdp,
+    #     deterministic=False
+    # )
+    
+    
+        
     # print(np.where(minigrid_mdp.P[4, :, :] != 0))
     # for i in range(minigrid_mdp.P.shape[0]):
     #     # print(i)
-    #     print(np.where(minigrid_mdp.P[i, :, :] != 0))
+    #     print(np.where(minigrid_mdp.P[i, :] != 0))
     # print(minigrid_mdp.num_non_terminal_states)
     # print(np.where(minigrid_mdp.R[:minigrid_mdp.num_non_terminal_states, :] >= 0))
     # print(np.where(minigrid_mdp.R[minigrid_mdp.num_non_terminal_states:, :] < 0))
     # for i in range(minigrid_mdp.P.shape[0]):
     #     print(np.sum(minigrid_mdp.P[i, :, :], axis=1))
-    minigrid_mdp.visualize_policy(save_gif=True, save_path="assets/many_states4_lmdp.gif", num_times=1)
+    # minigrid_mdp.visualize_policy(save_gif=True, save_path="assets/embedded_mdp.gif", num_times=1)
     # manual_control = ManualControl(minigrid_mdp.minigrid_env, seed=42)
     # manual_control.start()
 

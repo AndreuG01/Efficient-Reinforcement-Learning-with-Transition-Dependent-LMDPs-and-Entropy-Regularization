@@ -79,7 +79,7 @@ class CustomMinigridEnv(MiniGridEnv):
         mission_space = MissionSpace(mission_func=self._gen_mission)
         self.max_steps = max_steps
         if max_steps is None:
-            max_steps = 70
+            max_steps = self.custom_grid.get_num_states()
 
         super().__init__(
             mission_space=mission_space,
@@ -284,7 +284,8 @@ class MinigridMDP(MDP):
                 num_states=mdp.num_states,
                 num_terminal_states=mdp.num_terminal_states,
                 allowed_actions=[i for i in range(self.num_actions)],
-                s0=mdp.s0
+                s0=mdp.s0,
+                gamma=0.8
             )
             
             self.P = mdp.P
@@ -378,14 +379,19 @@ class MinigridMDP(MDP):
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.int32)
 
 
-    def transition_action(self, state, next_state):
-        curr_state = self.minigrid_env.custom_grid.state_index_mapper[state]
+
+    def transition_action(self, state_idx, next_state_idx):
+        curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
         for action in self.allowed_actions:
             move_state, _, _ = self.move(curr_state, action)
-            # move_idx = next([k for k, v in self.minigrid_env.custom_grid.state_index_mapper.items() if v == move_state])
-            if move_state == self.minigrid_env.custom_grid.state_index_mapper[next_state]:
-                return action
-        
+            next_state = self.minigrid_env.custom_grid.state_index_mapper[next_state_idx]
+            if type(next_state) == State:
+                if move_state == next_state:
+                    return action
+            else:
+                if move_state.y == next_state[0] and move_state.x == next_state[1]:
+                    return action
+                
         return 0
 
 
@@ -416,7 +422,8 @@ class MinigridLMDP(LMDP):
         map: list[str] = None,
         allowed_actions: list[int] = None,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
-        objects: list[Object] = None
+        objects: list[Object] = None,
+        sparse_optimization = True
     ):
         
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
@@ -432,7 +439,8 @@ class MinigridLMDP(LMDP):
             self.num_states,
             num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
             s0=0,
-            lmbda=0.5
+            lmbda=1,
+            sparse_optimization=sparse_optimization
         )
 
         self.generate_P(self.minigrid_env.custom_grid.states, self.move, self.minigrid_env.custom_grid, self.allowed_actions)

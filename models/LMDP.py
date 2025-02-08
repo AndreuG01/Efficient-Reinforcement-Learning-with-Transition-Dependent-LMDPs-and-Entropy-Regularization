@@ -4,6 +4,8 @@ from collections.abc import Callable
 from domains.grid import CellType, CustomGrid
 from .MDP import MDP
 from tqdm import tqdm
+from scipy.sparse import csr_matrix
+from sys import getsizeof
 
 class LMDP(ABC):
     """
@@ -24,7 +26,7 @@ class LMDP(ABC):
     - R (np.ndarray): The reward matrix for each state-action pair.
     # TODO: complete when code is finished
     """
-    def __init__(self, num_states: int, num_terminal_states: int, lmbda: int = 1, s0: int = 1) -> None:
+    def __init__(self, num_states: int, num_terminal_states: int, lmbda: int = 1, s0: int = 1, sparse_optimization: bool = True) -> None:
         """
         Initialize the LMDP with the given parameters.
         
@@ -39,8 +41,9 @@ class LMDP(ABC):
         self.num_non_terminal_states = self.num_states - self.num_terminal_states
         self.s0 = s0
         self.lmbda = lmbda
+        self.sparse_optimization = sparse_optimization
         
-        self.P = np.zeros((self.num_non_terminal_states, self.num_states))
+        self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states))
         self.R = np.zeros(self.num_states)
         
     
@@ -76,6 +79,11 @@ class LMDP(ABC):
         
         
         print(f"Generated matrix P with {self.P.size:,} elements")
+        if self.sparse_optimization:
+            print("Converting P into sparse matrix...")
+            print(f"Memory usage before conversion: {getsizeof(self.P):,} bytes")
+            self.P = csr_matrix(self.P)
+            print(f"Memory usage after conversion: {getsizeof(self.P):,} bytes")
     
     
     def _generate_R(self):
@@ -113,9 +121,15 @@ class LMDP(ABC):
         Returns:
         - control (np.ndarray): The controlled transition probability matrix
         """
+        if type(self.P) == csr_matrix:
+            # TODO: keep working with sparse matrices here.
+            self.P = self.P.toarray()
+        
         control = self.P * z
         control = control / np.sum(control, axis=1).reshape(-1, 1)
         
+        # print(f"Control elements: {control.size}. Non zero: {np.count_nonzero(control)}")
+                
         assert all(np.isclose(np.sum(control, axis=1), 1))
         
         return control
@@ -160,23 +174,31 @@ class LMDP(ABC):
         Returns:
         - z (np.ndarray): Converged transformed value function vector.
         """
-        G = np.diag(np.exp(self.R[:self.num_non_terminal_states]) / self.lmbda)
+        G = np.diag(np.exp(self.R[:self.num_non_terminal_states] / self.lmbda))
         z = np.ones(self.num_states)
         
         iterations = 0
+        print(f"Power iteration...")
+        if self.sparse_optimization:
+            if type(self.P) != csr_matrix: self.P = csr_matrix(self.P)
+            print("G is csr_matrix")
+            G = csr_matrix(G)
+                
+        iterations = 0
+        delta = 0
         
         while True:
-            delta = 0
             z_new = G @ self.P @ z
             # print(z_new)
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
             
+            
             delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z))
-    
             z = z_new
             
-            if iterations % 10 == 0:
+            if iterations % 100 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
+            
             
             if delta < epsilon:
                 break
@@ -198,7 +220,8 @@ class LMDP(ABC):
         """
         if z is None:
             z = self.z
-        return np.log(z) * self.lmbda
+        return np.log(z + 1e-100) * self.lmbda
+        # return np.log(z) * self.lmbda
     
     
     def compute_value_function(self):
@@ -212,7 +235,7 @@ class LMDP(ABC):
         self.V = self.get_value_function()
         
         self.policy = self.get_optimal_policy(self.z)
-        self.policy_multiple_states = self.get_optimal_policy(self.z, multiple_states=True)
+        # self.policy_multiple_states = self.get_optimal_policy(self.z, multiple_states=True)
         
     
     def to_MDP(self) -> MDP:
@@ -222,9 +245,9 @@ class LMDP(ABC):
         Returns:
         - mdp (MDP): The converted Markov Decision Process.
         """
-        epsilon = 1e-10 # To avoid division by 0 when dividing the control by P.
+        epsilon = 1e-100 # To avoid division by 0 when dividing the control by P.
         control = self.get_control(self.power_iteration())
-        
+        print(f"Computing the MDP embedding of this LMDP...")
         # The minimum number of actions that can be done to achieve the same behaviour in an MDP.
         num_actions = np.max(np.sum(control > 0, axis=1))
         
@@ -232,6 +255,7 @@ class LMDP(ABC):
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             allowed_actions=[i for i in range(num_actions)],
+            # gamma=0.99
         )
         
         # Define the reward function of the MDP.
@@ -245,7 +269,7 @@ class LMDP(ABC):
         # np.random.seed(123) # TODO: remove when developing has finished.
         
         # Define the transition probability matrix of the MDP.
-        for s in range(self.num_non_terminal_states):
+        for s in tqdm(range(self.num_non_terminal_states), desc="Generating transition matrix P", total=self.num_non_terminal_states):
             non_zero_positions = np.where(control[s, :] != 0)[0]
             probs = control[s, non_zero_positions].flatten()
             for i, a in enumerate(range(num_actions), start=1):

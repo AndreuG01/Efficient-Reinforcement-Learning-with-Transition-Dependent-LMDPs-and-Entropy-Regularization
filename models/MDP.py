@@ -201,7 +201,7 @@ class MDP(ABC):
             delta = np.mean(np.abs(V_new - V))
             
             
-            if iterations % 10 == 0:
+            if iterations % 100 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
             
             if delta < epsilon:
@@ -221,7 +221,7 @@ class MDP(ABC):
         self.V, self.stats = self.value_iteration()
         
         self.policy = self.get_optimal_policy(self.V)
-        # self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True)
+        self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True)
     
     
 
