@@ -4,11 +4,11 @@ from algorithms import QLearning, QLearningPlotter, QLearningHyperparameters, QL
 import matplotlib.pyplot as plt
 import numpy as np
 from utils.maps import Maps
-from utils.benchmarks import benchmark_value_iteration
+from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p
 from minigrid.manual_control import ManualControl
 
 if __name__ == "__main__":
-    grid_size = 2
+    benchmark_parallel_p()
     # map = Maps.WALL_TEST
     # map = None
     # gridworld_lmdp = GridWorldLMDP(
@@ -54,28 +54,27 @@ if __name__ == "__main__":
     #     color_probs=True
     # )
 
-    grid_size = 30
+    # grid_size = 55
     
-    minigrid_lmdp = MinigridLMDP(
-        grid_size=grid_size,
-        # map=Maps.DOUBLE_KEY,
-        allowed_actions=[
-            MinigridActions.ROTATE_LEFT,
-            MinigridActions.ROTATE_RIGHT,
-            MinigridActions.FORWARD,
-            # MinigridActions.PICKUP,
-            # MinigridActions.DROP,
-            # MinigridActions.TOGGLE,
-        ],
-        # objects=Maps.DOUBLE_KEY_OBJECTS, 
-        sparse_optimization=True
-    )
+    # minigrid_lmdp = MinigridLMDP(
+    #     grid_size=grid_size,
+    #     # map=Maps.DOUBLE_DOOR,
+    #     allowed_actions=[
+    #         MinigridActions.ROTATE_LEFT,
+    #         MinigridActions.ROTATE_RIGHT,
+    #         MinigridActions.FORWARD,
+    #         MinigridActions.PICKUP,
+    #         MinigridActions.DROP,
+    #         MinigridActions.TOGGLE,
+    #     ],
+    #     # objects=Maps.DOUBLE_DOOR_OBJECTS, 
+    #     sparse_optimization=True
+    # )
     
-    # minigrid_lmdp.visualize_policy(save_gif=True, save_path="assets/embedded_mdp.gif", num_times=1)
+    # minigrid_lmdp.visualize_policy(save_gif=True, save_path="assets/original_lmdp.gif", num_times=1)
     
-    embedded_mdp = minigrid_lmdp.to_MDP()
+    # embedded_mdp = minigrid_lmdp.to_MDP()
     
-
     # minigrid_mdp = MinigridMDP(
     #     grid_size=grid_size,
     #     map=Maps.DOUBLE_DOOR,
@@ -91,6 +90,7 @@ if __name__ == "__main__":
     #     mdp=embedded_mdp,
     #     deterministic=False
     # )
+    # minigrid_mdp.visualize_policy(save_gif=True, save_path="assets/embeddings/embedded_mdp.gif", num_times=1)
     
     
         
@@ -103,7 +103,6 @@ if __name__ == "__main__":
     # print(np.where(minigrid_mdp.R[minigrid_mdp.num_non_terminal_states:, :] < 0))
     # for i in range(minigrid_mdp.P.shape[0]):
     #     print(np.sum(minigrid_mdp.P[i, :, :], axis=1))
-    # minigrid_mdp.visualize_policy(save_gif=True, save_path="assets/embedded_mdp.gif", num_times=1)
     # manual_control = ManualControl(minigrid_mdp.minigrid_env, seed=42)
     # manual_control.start()
 

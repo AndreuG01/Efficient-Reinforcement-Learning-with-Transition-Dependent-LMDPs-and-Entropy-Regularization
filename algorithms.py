@@ -7,6 +7,7 @@ import random
 import os
 import pickle
 import concurrent.futures
+from custom_palette import CustomPalette
 
 
 class QLearning:
@@ -257,7 +258,7 @@ class QLearningPlotter:
             - The legend is dynamically created based on the hyperparameter configurations.
             - Results are saved as a PNG image in the specified save path.
         """
-        custom_palette = ["#640D5F", "#D91656", "#EB5B00", "#FFB200", "#2D728F", "#3E8914", "#FF00D3", "#32FF00", "#743500", "#7DFFFF", "#FBFF00", "#C300FF", "#00CDAA", "#FFA87E", "#331E23", "#FF0000", "#0047AB", "#8A2BE2", "#FFD700", "#228B22"]
+        custom_palette = CustomPalette()
         
         n_rows = 2
         n_cols = 3

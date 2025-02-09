@@ -6,6 +6,9 @@ from .MDP import MDP
 from tqdm import tqdm
 from scipy.sparse import csr_matrix
 from sys import getsizeof
+from utils.state import State
+from joblib import Parallel, delayed, cpu_count
+import time
 
 class LMDP(ABC):
     """
@@ -48,7 +51,7 @@ class LMDP(ABC):
         
     
     
-    def generate_P(self, pos: dict[int, list], move: Callable, grid: CustomGrid, actions: list[int]):
+    def generate_P(self, pos: dict[int, list], move: Callable, grid: CustomGrid, actions: list[int], num_threads: int = 10, benchmark: bool = False) -> float:
         """
         Generates the transition probability matrix (P) for the LMDP, based on the dynamics of the environment.
 
@@ -59,7 +62,9 @@ class LMDP(ABC):
         - grid (CustomGrid): The grid environment for which the transition matrix is being generated.
         - actions (list[int]): List of possible actions that can be taken in the environment (NOTE THAT THE LMDP DOES NOT HAVE ACTIONS INTO ACOUNT)
         """
-        for state in tqdm(range(self.num_non_terminal_states), desc="Generating transition matrix P", total=self.num_non_terminal_states):
+        
+        def process_state(state: int) -> list[float]:
+            row_updates = []
             for action in actions:
                 if grid.is_cliff(grid.state_index_mapper[state]):
                     next_state = self.s0
@@ -70,9 +75,28 @@ class LMDP(ABC):
                         next_state = grid.terminal_state_idx(next_state)
                     else:
                         next_state = pos.index(next_state)
+                
+                row_updates.append((state, next_state, 1 / len(actions)))
+            
+            return row_updates
+        
+        total_time = 0
+        if benchmark:
+            start_time = time.time()
+        results = Parallel(n_jobs=min(num_threads, cpu_count()))(
+            delayed(process_state)(state) for state in tqdm(range(self.num_non_terminal_states), 
+                                                         desc="Generating transition matrix P", 
+                                                         total=self.num_non_terminal_states)
+        )
+        
 
-                # TODO: add the equivalent to the deterministic in MDP, which would be a modifier of the transition probability
-                self.P[state, next_state] += 1 / len(actions)
+        for row_updates in results:
+            for state_idx, next_state_idx, prob in row_updates:
+                self.P[state_idx, next_state_idx] += prob
+        
+        if benchmark:
+            end_time = time.time()
+            total_time = end_time - start_time
                 
     
         assert all([np.isclose(np.sum(self.P[i, :]), 1) for i in range(self.P.shape[0])]), "Transition probabilities are not properly defined. They do not add up to 1 in every row"
@@ -84,6 +108,8 @@ class LMDP(ABC):
             print(f"Memory usage before conversion: {getsizeof(self.P):,} bytes")
             self.P = csr_matrix(self.P)
             print(f"Memory usage after conversion: {getsizeof(self.P):,} bytes")
+        
+        return total_time
     
     
     def _generate_R(self):
@@ -129,7 +155,6 @@ class LMDP(ABC):
         control = control / np.sum(control, axis=1).reshape(-1, 1)
         
         # print(f"Control elements: {control.size}. Non zero: {np.count_nonzero(control)}")
-                
         assert all(np.isclose(np.sum(control, axis=1), 1))
         
         return control
@@ -164,7 +189,7 @@ class LMDP(ABC):
         raise NotImplementedError("Implement in the subclass")
     
     
-    def power_iteration(self, epsilon=0.62) -> np.ndarray:
+    def power_iteration(self, epsilon=1e-10) -> np.ndarray:
         """
         Perform power iteration to compute the value function approximation.
 
@@ -220,8 +245,12 @@ class LMDP(ABC):
         """
         if z is None:
             z = self.z
-        return np.log(z + 1e-100) * self.lmbda
-        # return np.log(z) * self.lmbda
+        
+        result = np.zeros_like(z)
+        mask = z > 1e-100
+        result[mask] = np.log(z[mask]) * self.lmbda
+        
+        return result
     
     
     def compute_value_function(self):
@@ -250,16 +279,23 @@ class LMDP(ABC):
         print(f"Computing the MDP embedding of this LMDP...")
         # The minimum number of actions that can be done to achieve the same behaviour in an MDP.
         num_actions = np.max(np.sum(control > 0, axis=1))
+        print(control)
+        print("ALLOWED ACTIONS:", num_actions)
         
         mdp = MDP(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             allowed_actions=[i for i in range(num_actions)],
-            # gamma=0.99
+            gamma=0.99
         )
         
         # Define the reward function of the MDP.
         kl_term =  np.sum(control * np.log(control / (self.P + epsilon) + epsilon), axis=1) # TODO: maybe improve to avoid adding epsilon, and only modifying what is really necessary
+        # print(kl_term.shape)
+        # kl_term = np.zeros_like(control)
+        # mask = control > epsilon
+        # kl_term[mask] = control[mask] * np.log(control[mask] / self.P[mask])
+        # kl_term = np.sum(kl_term, axis=1)
         
         reward_non_terminal = self.R[:self.num_non_terminal_states] - self.lmbda * kl_term
         reward_non_terminal = np.tile(reward_non_terminal.reshape(-1, 1), (1, num_actions))

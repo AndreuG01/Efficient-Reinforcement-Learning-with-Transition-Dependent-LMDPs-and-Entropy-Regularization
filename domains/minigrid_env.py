@@ -79,7 +79,8 @@ class CustomMinigridEnv(MiniGridEnv):
         mission_space = MissionSpace(mission_func=self._gen_mission)
         self.max_steps = max_steps
         if max_steps is None:
-            max_steps = self.custom_grid.get_num_states()
+            max_steps = 200
+            # max_steps = self.custom_grid.get_num_states() // 3
 
         super().__init__(
             mission_space=mission_space,
@@ -181,6 +182,8 @@ class CustomMinigridEnv(MiniGridEnv):
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, policy[state_idx], :])
                             # We need to get the action that leads to the next state
                             action = model.transition_action(state_idx, next_state)
+                            # print(f"Action chosen at move {actions}: {action}")
+                            # print(f"Next_state idx {next_state}, {np.where(model.P[state_idx, policy[state_idx], :] != 0)}, {model.P[state_idx, policy[state_idx], np.where(model.P[state_idx, policy[state_idx], :] != 0)[0]]}")
                             
                     else:
                         next_state = policy[state_idx]
@@ -258,8 +261,10 @@ class MinigridMDP(MDP):
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
-        self.num_actions = len(allowed_actions)
-        self.allowed_actions = allowed_actions
+        
+        if allowed_actions:
+            self.num_actions = len(allowed_actions)
+            self.allowed_actions = allowed_actions
         
         
         start_pos = self.minigrid_env.custom_grid.start_pos
@@ -272,7 +277,7 @@ class MinigridMDP(MDP):
                 num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
                 allowed_actions=allowed_actions,
                 s0=0,
-                gamma=0.8
+                # gamma=0.8
             )
 
             self.generate_P(self.minigrid_env.custom_grid.states, self.move, self.minigrid_env.custom_grid)
@@ -280,12 +285,14 @@ class MinigridMDP(MDP):
             print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
         else:
             # Useful when wanting to create a MinigridMDP from an embedding of an LMDP into an MDP
+            # self.num_actions = mdp.num_actions
+            # self.allowed_actions = [i for i in range(self.num_actions)]
             super().__init__(
                 num_states=mdp.num_states,
                 num_terminal_states=mdp.num_terminal_states,
-                allowed_actions=[i for i in range(self.num_actions)],
+                allowed_actions=self.allowed_actions,
                 s0=mdp.s0,
-                gamma=0.8
+                gamma=mdp.gamma
             )
             
             self.P = mdp.P
@@ -397,7 +404,7 @@ class MinigridMDP(MDP):
 
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
         assert not save_gif or save_path is not None, "Must specify save path"
-        if not hasattr(self, "V") and policies is None:
+        if not hasattr(self, "V") or self.V is None and policies is None:
             print(f"Computing value function...")
             self.compute_value_function()
             # print([a for a in self.policy])
@@ -423,7 +430,9 @@ class MinigridLMDP(LMDP):
         allowed_actions: list[int] = None,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
         objects: list[Object] = None,
-        sparse_optimization = True
+        sparse_optimization: bool = True,
+        benchmark_p: bool = False,
+        threads: int = 1
     ):
         
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
@@ -439,11 +448,18 @@ class MinigridLMDP(LMDP):
             self.num_states,
             num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
             s0=0,
-            lmbda=1,
+            # lmbda=0.99,
             sparse_optimization=sparse_optimization
         )
 
-        self.generate_P(self.minigrid_env.custom_grid.states, self.move, self.minigrid_env.custom_grid, self.allowed_actions)
+        self.p_time = self.generate_P(
+            self.minigrid_env.custom_grid.states,
+            self.move,
+            self.minigrid_env.custom_grid,
+            self.allowed_actions,
+            benchmark=benchmark_p,
+            num_threads=threads
+        )
         self._generate_R()
         print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
                 
