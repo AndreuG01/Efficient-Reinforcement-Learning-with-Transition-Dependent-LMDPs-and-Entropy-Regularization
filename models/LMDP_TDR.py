@@ -1,42 +1,15 @@
 import numpy as np
+from scipy.sparse import csr_matrix
 from collections.abc import Callable
 from domains.grid import CustomGrid
-from .MDP import MDP
-from tqdm import tqdm
-from scipy.sparse import csr_matrix
 from sys import getsizeof
 from joblib import Parallel, delayed, cpu_count
 import time
+from tqdm import tqdm
+from .MDP import MDP
 
-class LMDP:
-    """
-    A class representing a Linear Markov Decision Process (LMDP).
-    
-    The LMDP is defined by a 3-tuple: (S, P, R) where:
-    - S: A finite set of states (num_states)
-    - P: A state transition probability function P(s'| s)
-    - R: A reward function R(s)
-    
-    Attributes:
-    - num_states (int): The total number of states in the MDP.
-    - num_terminal_states (int): The number of terminal states.
-    - num_non_terminal_states (int): The number of non-terminal states.
-    - s0 (int): The initial state index.
-    - gamma (float): The temperature parameter
-    - P (np.ndarray): The state transition probability matrix.
-    - R (np.ndarray): The reward matrix for each state-action pair.
-    # TODO: complete when code is finished
-    """
+class LMDP_TDR:
     def __init__(self, num_states: int, num_terminal_states: int, lmbda: int = 1, s0: int = 0, sparse_optimization: bool = True) -> None:
-        """
-        Initialize the LMDP with the given parameters.
-        
-        Args:
-        - num_states (int): Total number of states in the LMDP.
-        - num_terminal_states (int): Number of terminal states in the LMDP.
-        - lmbda (int): Regularization factor for KL divergence (default is 1).
-        - s0 (int): Initial state index (default is 1).
-        """
         self.num_states = num_states
         self.num_terminal_states = num_terminal_states
         self.num_non_terminal_states = self.num_states - self.num_terminal_states
@@ -45,8 +18,7 @@ class LMDP:
         self.sparse_optimization = sparse_optimization
         
         self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states))
-        self.R = np.zeros(self.num_states)
-        
+        self.R = np.zeros((self.num_non_terminal_states, self.num_states))
     
     
     def generate_P(self, pos: dict[int, list], move: Callable, grid: CustomGrid, actions: list[int], num_threads: int = 10, benchmark: bool = False) -> float:
@@ -115,17 +87,6 @@ class LMDP:
     
     
     def transition(self, state: int) -> tuple[int, float, bool]:
-        """
-        Simulate a state transition given the current state.
-
-        Args:
-        - state (int): The current state.
-
-        Returns:
-        - next_state (int): The state reached after the transition.
-        - reward (float): The reward obtained for the transition.
-        - terminal (bool): True if the next state is a terminal state, False otherwise.
-        """
         next_state = np.random.choice(self.num_states, p=self.P[state])
         
         return (
@@ -133,23 +94,12 @@ class LMDP:
             self.R[next_state],
             next_state >= self.num_non_terminal_states
         )
-        
     
-    def get_control(self, z: np.ndarray) ->np.ndarray:
-        """
-        Compute the controlled transition probability matrix based on the value function approximation.
-
-        Args:
-        - z (np.ndarray): The transfomed value function vector.
-
-        Returns:
-        - control (np.ndarray): The controlled transition probability matrix
-        """
-        if type(self.P) == csr_matrix:
-            # TODO: keep working with sparse matrices here.
-            self.P = self.P.toarray()
+    
+    def get_control(self, z: np.ndarray, o: np.ndarray) ->np.ndarray:
+        # TODO: sparse matrix optimization
         
-        control = self.P * z
+        control = self.P * o * z
         control = control / np.sum(control, axis=1).reshape(-1, 1)
         
         # print(f"Control elements: {control.size}. Non zero: {np.count_nonzero(control)}")
@@ -157,26 +107,20 @@ class LMDP:
         
         return control
         
+        
+    
     
     def get_optimal_policy(self, z: np.ndarray, multiple_states: bool = False) -> np.ndarray:
-        """
-        Compute the optimal policy based on the control matrix.
-
-        Args:
-        - z (np.ndarray): The transfomed value function vector.
-        - multiple_states (bool): Whether to allow multiple optimal states (default is False).
-
-        Returns:
-        - policy (np.ndarray): The optimal policy.
-        """
         policy = np.zeros(self.num_states, dtype=object)
-        probs = self.get_control(z)
+        o = np.exp(self.R / self.lmbda)
+        probs = self.get_control(z, o)
         
         if multiple_states:
             for i in range(probs.shape[0]):        
                 policy[i] = [j for j in range(len(probs[i, :])) if probs[i, j] == np.max(probs[i, :])]  
         else:
             policy = probs.argmax(axis=1)
+        
         
         return policy
         
@@ -185,62 +129,43 @@ class LMDP:
         # LMDPs do not have actions. However, to be able to plot the policies, or interact with the environment, we need to convert the transitions into certain actions
         # (as long as the problem is deterministic)
         raise NotImplementedError("Implement in the subclass")
-    
+
     
     def power_iteration(self, epsilon=1e-10) -> np.ndarray:
-        """
-        Perform power iteration to compute the value function approximation.
-
-        Args:
-        - epsilon (float): Convergence threshold (default is 1e-20).
-
-        Returns:
-        - z (np.ndarray): Converged transformed value function vector.
-        """
-        G = np.diag(np.exp(self.R[:self.num_non_terminal_states] / self.lmbda))
+        
+        o = np.exp(self.R / self.lmbda)
+        G = self.P * o
+        
         z = np.ones(self.num_states)
         
-        iterations = 0
-        print(f"Power iteration...")
-        if self.sparse_optimization:
-            if type(self.P) != csr_matrix: self.P = csr_matrix(self.P)
-            print("G is csr_matrix")
-            G = csr_matrix(G)
-                
+        
         iterations = 0
         delta = 0
         
         while True:
-            z_new = G @ self.P @ z
-            # print(z_new)
+            
+            z_new = G @ z
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
             
             
             delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z))
             z = z_new
             
-            if iterations % 100 == 0:
+            if iterations % 1 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
-            
-            
+        
+        
             if delta < epsilon:
                 break
+            
             iterations += 1
         
         self.z = z
         
         return z
-
+        
+    
     def get_value_function(self, z: np.ndarray = None) -> np.ndarray:
-        """
-        Compute the value function from the z vector.
-
-        Args:
-        - z (np.ndarray, optional): Value function vector. If None, uses self.z.
-
-        Returns:
-        - (np.ndarray): Computed value function.
-        """
         if z is None:
             z = self.z
         
@@ -252,9 +177,6 @@ class LMDP:
     
     
     def compute_value_function(self):
-        """
-        Compute the value function and derive the optimal policy.
-        """
         if not hasattr(self, "z"):
             print("Will compute power iteration")
             self.power_iteration()
@@ -266,56 +188,4 @@ class LMDP:
         
     
     def to_MDP(self) -> MDP:
-        """
-        Convert the LMDP to an equivalent MDP.
-
-        Returns:
-        - mdp (MDP): The converted Markov Decision Process.
-        """
-        epsilon = 1e-100 # To avoid division by 0 when dividing the control by P.
-        control = self.get_control(self.power_iteration())
-        print(f"Computing the MDP embedding of this LMDP...")
-        # The minimum number of actions that can be done to achieve the same behaviour in an MDP.
-        num_actions = np.max(np.sum(control > 0, axis=1))
-        print(control)
-        print("ALLOWED ACTIONS:", num_actions)
-        
-        mdp = MDP(
-            num_states=self.num_states,
-            num_terminal_states=self.num_terminal_states,
-            allowed_actions=[i for i in range(num_actions)],
-            gamma=0.99
-        )
-        
-        # Define the reward function of the MDP.
-        kl_term =  np.sum(control * np.log(control / (self.P + epsilon) + epsilon), axis=1) # TODO: maybe improve to avoid adding epsilon, and only modifying what is really necessary
-        # print(kl_term.shape)
-        # kl_term = np.zeros_like(control)
-        # mask = control > epsilon
-        # kl_term[mask] = control[mask] * np.log(control[mask] / self.P[mask])
-        # kl_term = np.sum(kl_term, axis=1)
-        
-        reward_non_terminal = self.R[:self.num_non_terminal_states] - self.lmbda * kl_term
-        reward_non_terminal = np.tile(reward_non_terminal.reshape(-1, 1), (1, num_actions))
-        
-        mdp.R[:self.num_non_terminal_states, :] = reward_non_terminal
-        
-        # np.random.seed(123) # TODO: remove when developing has finished.
-        
-        # Define the transition probability matrix of the MDP.
-        for s in tqdm(range(self.num_non_terminal_states), desc="Generating transition matrix P", total=self.num_non_terminal_states):
-            non_zero_positions = np.where(control[s, :] != 0)[0]
-            probs = control[s, non_zero_positions].flatten()
-            for i, a in enumerate(range(num_actions), start=1):
-                mdp.P[s, a, non_zero_positions] = probs
-                # probs = np.roll(probs, shift=1, axis=0)
-                probs = np.random.permutation(probs)
-        
-        
-        V_lmdp = self.get_value_function(self.power_iteration())
-        mdp.compute_value_function()
-        V_mdp = mdp.V
-        
-        print("Error", np.mean(np.square(V_lmdp - V_mdp)))
-        
-        return mdp
+        raise NotImplementedError("Not implemented yet")

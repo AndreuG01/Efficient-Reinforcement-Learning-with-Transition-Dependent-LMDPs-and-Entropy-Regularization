@@ -1,5 +1,5 @@
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP
-from domains.minigrid_env import MinigridMDP, MinigridActions, MinigridLMDP
+from domains.minigrid_env import MinigridMDP, MinigridActions, MinigridLMDP, MinigridLMDP_TDR
 from algorithms import QLearning, QLearningPlotter, QLearningHyperparameters, QLearningHyperparameterExplorer
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,7 +8,7 @@ from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p
 from minigrid.manual_control import ManualControl
 
 if __name__ == "__main__":
-    benchmark_parallel_p()
+    # benchmark_parallel_p()
     # map = Maps.WALL_TEST
     # map = None
     # gridworld_lmdp = GridWorldLMDP(
@@ -54,24 +54,29 @@ if __name__ == "__main__":
     #     color_probs=True
     # )
 
-    # grid_size = 55
+    grid_size = 3
     
-    # minigrid_lmdp = MinigridLMDP(
-    #     grid_size=grid_size,
-    #     # map=Maps.DOUBLE_DOOR,
-    #     allowed_actions=[
-    #         MinigridActions.ROTATE_LEFT,
-    #         MinigridActions.ROTATE_RIGHT,
-    #         MinigridActions.FORWARD,
-    #         MinigridActions.PICKUP,
-    #         MinigridActions.DROP,
-    #         MinigridActions.TOGGLE,
-    #     ],
-    #     # objects=Maps.DOUBLE_DOOR_OBJECTS, 
-    #     sparse_optimization=True
-    # )
+    minigrid_lmdp = MinigridLMDP_TDR(
+        grid_size=grid_size,
+        map=Maps.CHALLENGE_DOOR,
+        allowed_actions=[
+            MinigridActions.ROTATE_LEFT,
+            MinigridActions.ROTATE_RIGHT,
+            MinigridActions.FORWARD,
+            MinigridActions.PICKUP,
+            MinigridActions.DROP,
+            MinigridActions.TOGGLE,
+        ],
+        objects=Maps.CHALLENGE_DOOR_OBJECTS, 
+        sparse_optimization=False,
+        threads=4
+    )
     
-    # minigrid_lmdp.visualize_policy(save_gif=True, save_path="assets/original_lmdp.gif", num_times=1)
+    # minigrid_lmdp.compute_value_function()
+    minigrid_lmdp.visualize_policy()
+
+    
+    # minigrid_lmdp.visualize_policy(save_gif=False, save_path="assets/original_lmdp.gif")
     
     # embedded_mdp = minigrid_lmdp.to_MDP()
     

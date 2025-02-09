@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from minigrid.core.constants import COLOR_NAMES
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import Door, Goal, Key, Wall, Lava
@@ -9,6 +8,7 @@ from minigrid.minigrid_env import MiniGridEnv
 from .grid import CustomGrid, CellType
 from models.MDP import MDP
 from models.LMDP import LMDP
+from models.LMDP_TDR import LMDP_TDR
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from utils.state import State, Object
@@ -550,6 +550,179 @@ class MinigridLMDP(LMDP):
                 self.R[state] = -10
             else:
                 self.R[state] = -1
+
+
+
+    def transition_action(self, state_idx, next_state_idx):
+        curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
+        for action in self.allowed_actions:
+            move_state, _, _ = self.move(curr_state, action)
+            next_state = self.minigrid_env.custom_grid.state_index_mapper[next_state_idx]
+            if type(next_state) == State:
+                if move_state == next_state:
+                    return action
+            else:
+                if move_state.y == next_state[0] and move_state.x == next_state[1]:
+                    return action
+                
+        return 0
+    
+    
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
+        assert not save_gif or save_path is not None, "Must specify save path"
+        if not hasattr(self, "V") and policies is None:
+            print(f"Computing value function...")
+            self.compute_value_function()
+            self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
+        else:
+            assert policies is not None
+            self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
+
+
+class MinigridLMDP_TDR(LMDP_TDR):
+    
+    OFFSETS = {
+        0: (1, 0),   # RIGHT
+        1: (0, 1),   # DOWN
+        2: (-1, 0),  # LEFT
+        3: (0, -1)   # UP
+    }
+    
+    def __init__(
+        self,
+        grid_size: int = 3,
+        map: list[str] = None,
+        allowed_actions: list[int] = None,
+        properties: dict[str, list] = {"orientation": [i for i in range(4)]},
+        objects: list[Object] = None,
+        sparse_optimization: bool = True,
+        benchmark_p: bool = False,
+        threads: int = 1
+    ):
+        
+        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        
+        self.num_states = self.minigrid_env.custom_grid.get_num_states()
+        self.num_actions = len(allowed_actions)
+        self.allowed_actions = allowed_actions
+        
+        start_pos = self.minigrid_env.custom_grid.start_pos
+        
+        
+        super().__init__(
+            self.num_states,
+            num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
+            s0=0,
+            # lmbda=0.99,
+            sparse_optimization=sparse_optimization
+        )
+
+        self.p_time = self.generate_P(
+            self.minigrid_env.custom_grid.states,
+            self.move,
+            self.minigrid_env.custom_grid,
+            self.allowed_actions,
+            benchmark=benchmark_p,
+            num_threads=threads
+        )
+        self._generate_R()
+        print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
+                
+    
+    # TODO: same as MinigridMDP
+    def move(self, state: State, action: int):
+        orientation = state.properties["orientation"]
+        y, x, curr_layout = state.y, state.x, state.layout
+        
+        next_state = State(y, x, layout=deepcopy(state.layout), **state.properties)
+        
+        if action in [MinigridActions.ROTATE_LEFT, MinigridActions.ROTATE_RIGHT]:
+            next_state.properties["orientation"] = (orientation + (1 if action == MinigridActions.ROTATE_RIGHT else -1)) % 4
+            
+            return next_state, True, False
+        
+        dy, dx = self.OFFSETS[orientation]
+        new_y, new_x = y + dy, x + dx
+        next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
+        
+        if action == MinigridActions.FORWARD:
+            if next_object is not None and next_object.type == "key":
+                # If there is a key in the next state, the agent remains at the same state.
+                in_bounds = True
+            
+            elif next_object is not None and next_object.type == "door" and not state.properties[f"{next_object.color}_door_{next_object.id}"]:
+                # If in the next state there is a door and it is not opened, the agent remains where it is
+                in_bounds = True
+            
+            else:
+                # The agent moves as usually
+                next_state.y = y + dy
+                next_state.x = x + dx
+                in_bounds = self.minigrid_env.custom_grid.is_valid(next_state)
+                if not in_bounds: next_state = state
+        
+            return next_state, in_bounds, self.minigrid_env.custom_grid.is_terminal(next_state)
+
+        elif action == MinigridActions.PICKUP:
+            # If the agent is facing a key, it gets it. Otherwise, it remains at the same state
+            if not curr_layout: return next_state, True, False
+            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
+            agent_has_key = len(layout_keys) == self.minigrid_env.custom_grid.get_num_keys() - 1
+            if next_object is not None and next_object.type == "key" and not agent_has_key:
+                # print("pickup")
+                next_state.layout[(new_x, new_y)] = None
+            
+            return next_state, True, False
+            
+        elif action == MinigridActions.TOGGLE:
+            # If the agent is facing a door for which it has the key:
+            #   - If the door is closed: it opens it.
+            #   - If the door is opened: it closes it.
+            # If the agent does not have the key, it remains where it is.
+            if not curr_layout: return next_state, True, False
+            missing_key = [obj for obj in self.minigrid_env.custom_grid.objects if obj not in curr_layout.values()]
+            if len(missing_key) == 0:
+                return next_state, True, False
+            
+            missing_key: Object = missing_key[0]
+            
+            if next_object is not None and next_object.type == "door" and missing_key.color == next_object.color:
+                # print("toggle")
+                next_state.properties[f"{next_object.color}_door_{next_object.id}"] = not next_state.properties[f"{next_object.color}_door_{next_object.id}"]
+            return next_state, True, False
+        
+        elif action == MinigridActions.DROP:
+            # If the agent is wearing a key and the position towards which it is facing is an empty square, then the agent can drop the object
+            if not curr_layout: return next_state, True, False
+            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
+            agent_has_key = len(layout_keys) == self.minigrid_env.custom_grid.get_num_keys() - 1
+           
+            if next_object is None and agent_has_key and self.minigrid_env.custom_grid.is_normal(State(new_y, new_x, curr_layout, **state.properties)):
+                carrying_object = [obj for obj in self.minigrid_env.custom_grid.objects if obj.type == "key" and obj not in layout_keys][0]
+            
+                next_state.layout[(new_x, new_y)] = carrying_object
+            
+            return next_state, True, False
+        else:
+            # Drop and Done actions have no effect yet
+            return next_state, True, False
+
+                  
+    def _generate_R(self):
+        for state in range(self.num_non_terminal_states):
+            for action in range(self.num_actions):
+                state_repr = self.minigrid_env.custom_grid.states[state]
+                next_state, _, terminal = self.move(state_repr, action)
+                if terminal:
+                    next_state_idx = self.minigrid_env.custom_grid.terminal_state_idx(next_state)
+                else:
+                    next_state_idx = self.minigrid_env.custom_grid.states.index(next_state)
+                
+                if self.minigrid_env.custom_grid.is_cliff(state_repr):
+                    self.R[state, next_state_idx] = -10
+                else:
+                    
+                    self.R[state, next_state_idx] = -1
 
 
 

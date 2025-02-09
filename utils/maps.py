@@ -12,7 +12,7 @@ class Maps:
     "#####",
     "#S  #",
     "#   #",
-    "#  G#",
+    "# CG#",
     "#####"
     ]
 
@@ -86,13 +86,13 @@ class Maps:
         "#####",
     ]
     
-    CHALLENGE_DOOR_OBJECTS = [Object(6, 2, "red", "key", 0), Object(4, 6, "blue", "door", 0), Object(1, 4, "red", "door", 0)]
+    CHALLENGE_DOOR_OBJECTS = [Object(6, 2, "red", "key", 0), Object(1, 4, "red", "door", 0)]
     CHALLENGE_DOOR = [
         "########",
         "#S    G#",
         "#   # C#",
         "#   #  #",
-        "#   ## #",
+        "#   ####",
         "#CC    #",
         "#C     #",
         "########",
