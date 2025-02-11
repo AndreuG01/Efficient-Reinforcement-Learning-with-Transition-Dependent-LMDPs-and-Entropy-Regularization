@@ -190,6 +190,7 @@ class MDP(ABC):
         iterations = 0
         start_time = time.time()
         deltas = []
+        print(f"Value iteration...")
 
         while True:
             delta = 0
@@ -198,20 +199,22 @@ class MDP(ABC):
             Q = self.R + self.gamma * np.concatenate((expected_values, self.R[self.num_non_terminal_states:, :])) # num_states X num_actions
             
             V_new =  np.max(Q, axis=1)
-            delta = np.mean(np.abs(V_new - V))
-            
+            # delta = np.mean(np.abs(V_new - V))
+            delta = np.linalg.norm(V_new - V)
             
             if iterations % 100 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
             
             if delta < epsilon:
                 break
+            
             V = V_new
             iterations += 1
+            deltas.append(delta)
 
         elapsed_time = time.time() - start_time
         
-        return V, ValueIterationStats(elapsed_time, [], iterations, deltas, self.num_states)
+        return V, ValueIterationStats(elapsed_time, iterations, deltas, self.num_states)
     
     
     def compute_value_function(self):

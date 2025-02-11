@@ -2,11 +2,14 @@ from domains.grid_world import GridWorldMDP
 from domains.minigrid_env import MinigridMDP, MinigridLMDP
 from domains.minigrid_env import MinigridMDP, MinigridActions
 from utils.maps import Maps
+from utils.state import Object
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from joblib import cpu_count
 import numpy as np
 from custom_palette import CustomPalette
+from utils.stats import ValueIterationStats
+
 
 
 
@@ -100,5 +103,87 @@ def benchmark_parallel_p(savefig: bool = True):
     
     if savefig:
         plt.savefig("assets/benchmark/value_iteration.png", dpi=300)
+    else:
+        plt.show()
+        
+        
+def benchmark_lmdp2mdp_embedding(savefig: bool = True, grid_size: int = None, map: list[str] = None, objects: list[Object] = None, name: str = None):
+    
+    custom_palette = CustomPalette()
+    lmdp_color = custom_palette[3]
+    mdp_color = custom_palette[4]
+    
+    save_name = name
+    if not grid_size:
+        assert map and name, "Must provide a map and its name if no grid size is specified"
+    elif not map:
+        name = f"Simple grid ${grid_size}\\times{grid_size}$"
+        save_name = f"simple_grid_{grid_size}"
+    
+    
+    
+    minigrid_lmdp = MinigridLMDP(
+        grid_size=grid_size,
+        map=map,
+        allowed_actions=[
+            MinigridActions.ROTATE_LEFT,
+            MinigridActions.ROTATE_RIGHT,
+            MinigridActions.FORWARD,
+            MinigridActions.PICKUP,
+            MinigridActions.DROP,
+            MinigridActions.TOGGLE,
+        ],
+        objects=objects, 
+        sparse_optimization=True,
+        threads=6
+    )
+    
+    minigrid_lmdp.compute_value_function()
+    lmdp_v = minigrid_lmdp.V
+    
+    states_to_goal = minigrid_lmdp.states_to_goal()
+    
+    embedded_mdp = minigrid_lmdp.to_MDP()
+    mdp_v = embedded_mdp.V
+    error_all = np.mean(np.square(lmdp_v - mdp_v))
+    error_some = np.mean(np.square(lmdp_v[states_to_goal] - mdp_v[states_to_goal]))
+    
+    
+    fig1 = plt.figure(figsize=(10, 5))
+    plt.rcParams.update({
+        "text.usetex": True
+    })
+    plt.scatter(states_to_goal, lmdp_v[states_to_goal], label="States that lead to the goal faster", color=custom_palette[0], s=8, marker="x", zorder=3)
+    plt.plot([i for i in range(len(lmdp_v))], lmdp_v, label="LMDP", color=lmdp_color, linewidth=1)
+    plt.plot([i for i in range(len(mdp_v))], mdp_v, label="MDP", color=mdp_color, linewidth=1)
+    plt.suptitle(f"LMDP and its embedded MDP comparison. {name}", fontsize=14, fontweight="bold")
+    plt.title(f"MSE: {error_all:,.3e}\nMSE only with States that lead to the goal faster: {error_some:,.3e}", fontsize=10)
+    plt.xlabel("State")
+    plt.grid()
+    plt.ylabel("Value function")
+    plt.legend()    
+    
+    stats_lmdp: ValueIterationStats = minigrid_lmdp.stats
+    stats_mdp: ValueIterationStats = embedded_mdp.stats
+    
+    print("LMDP stats")
+    stats_lmdp.print_statistics()
+    
+    print("MDP stats")
+    stats_mdp.print_statistics()
+    
+    fig2 = plt.figure(figsize=(10, 5))
+    plt.suptitle(f"LMDP and its embedded MDP comparison. {name}. {minigrid_lmdp.num_states} states", fontsize=14, fontweight="bold")
+    plt.title(f"Value Iteration and Power Iteration convergence", fontsize=10)
+    plt.plot([i for i in range(len(stats_lmdp.deltas))], stats_lmdp.deltas, color=lmdp_color, label=rf"Power Iteration: ${stats_lmdp.time:2f}$ sec")
+    plt.plot([i for i in range(len(stats_mdp.deltas))], stats_mdp.deltas, color=mdp_color, label=rf"Value Iteration: ${stats_mdp.time:2f}$ sec")
+    plt.xlabel("Iteration")
+    plt.ylabel(r"$| V_k - V_{k-1}|$")
+    plt.grid()
+    plt.legend()
+    
+    if savefig:
+        fig1.savefig(f"assets/benchmark/value_function_comparison_{save_name}.png", dpi=300)
+        fig2.savefig(f"assets/benchmark/deltas_{save_name}.png", dpi=300)
     else:
         plt.show()

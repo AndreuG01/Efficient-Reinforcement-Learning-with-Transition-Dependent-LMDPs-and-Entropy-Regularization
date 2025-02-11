@@ -7,6 +7,7 @@ from scipy.sparse import csr_matrix
 from sys import getsizeof
 from joblib import Parallel, delayed, cpu_count
 import time
+from utils.stats import ValueIterationStats
 
 class LMDP:
     """
@@ -200,35 +201,38 @@ class LMDP:
         G = np.diag(np.exp(self.R[:self.num_non_terminal_states] / self.lmbda))
         z = np.ones(self.num_states)
         
-        iterations = 0
         print(f"Power iteration...")
         if self.sparse_optimization:
             if type(self.P) != csr_matrix: self.P = csr_matrix(self.P)
             G = csr_matrix(G)
                 
         iterations = 0
-        delta = 0
+        start_time = time.time()
+        deltas = []
         
         while True:
+            delta = 0
             z_new = G @ self.P @ z
-            # print(z_new)
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
             
             
             delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z))
-            z = z_new
             
             if iterations % 100 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
-            
-            
+
             if delta < epsilon:
                 break
+
+            z = z_new
             iterations += 1
+            deltas.append(delta)
+        
+        elapsed_time = time.time() - start_time
         
         self.z = z
         
-        return z
+        return z, ValueIterationStats(elapsed_time, iterations, deltas, self.num_states)
 
     def get_value_function(self, z: np.ndarray = None) -> np.ndarray:
         """
@@ -244,7 +248,8 @@ class LMDP:
             z = self.z
         
         result = np.zeros_like(z)
-        mask = z > 1e-100
+        # mask = z > 0
+        mask = z > 1e-300
         result[mask] = np.log(z[mask]) * self.lmbda
         
         return result
@@ -256,7 +261,7 @@ class LMDP:
         """
         if not hasattr(self, "z"):
             print("Will compute power iteration")
-            self.power_iteration()
+            _, self.stats = self.power_iteration()
         
         self.V = self.get_value_function()
         
@@ -272,18 +277,17 @@ class LMDP:
         - mdp (MDP): The converted Markov Decision Process.
         """
         epsilon = 1e-100 # To avoid division by 0 when dividing the control by P.
-        control = self.get_control(self.power_iteration())
+        z, _ = self.power_iteration()
+        control = self.get_control(z)
         print(f"Computing the MDP embedding of this LMDP...")
         # The minimum number of actions that can be done to achieve the same behaviour in an MDP.
         num_actions = np.max(np.sum(control > 0, axis=1))
-        print(control)
-        print("ALLOWED ACTIONS:", num_actions)
         
         mdp = MDP(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             allowed_actions=[i for i in range(num_actions)],
-            gamma=0.99
+            # gamma=0.9
         )
         
         # Define the reward function of the MDP.
@@ -311,7 +315,7 @@ class LMDP:
                 probs = np.random.permutation(probs)
         
         
-        V_lmdp = self.get_value_function(self.power_iteration())
+        V_lmdp = self.get_value_function(z)
         mdp.compute_value_function()
         V_mdp = mdp.V
         

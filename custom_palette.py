@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 class CustomPalette:
     ROYAL_PURPLE = "#640D5F"
     HOT_PINK = "#D91656"
@@ -33,3 +35,25 @@ class CustomPalette:
     def __getitem__(self, index):
         return self.__colors[index]
 
+
+    def plot(self, savefig: bool = False):
+        fig, ax = plt.subplots(figsize=(10, 2))
+        n_colors = len(self.__colors)
+        
+        for i, color in enumerate(self.__colors):
+            ax.add_patch(plt.Rectangle((i, 0), 1, 1, color=color))
+            ax.text(i + 0.5, 0.5, f"{i+1}", ha='center', va='center', fontsize=10, color='black', weight='bold')
+        
+        plt.xlim(0, n_colors)
+        plt.ylim(0, 1)
+        plt.xticks([])
+        plt.yticks([])
+        
+        if savefig:
+            plt.savefig("palette.png", dpi=300, bbox_inches="tight")
+        else:
+            plt.show()
+
+if __name__ == "__main__":
+    palette = CustomPalette()
+    palette.plot(savefig=True)

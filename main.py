@@ -4,8 +4,10 @@ from algorithms import QLearning, QLearningPlotter, QLearningHyperparameters, QL
 import matplotlib.pyplot as plt
 import numpy as np
 from utils.maps import Maps
-from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p
+from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, benchmark_lmdp2mdp_embedding
 from minigrid.manual_control import ManualControl
+from custom_palette import CustomPalette
+from utils.stats import ValueIterationStats
 
 if __name__ == "__main__":
     # benchmark_parallel_p()
@@ -54,25 +56,13 @@ if __name__ == "__main__":
     #     color_probs=True
     # )
 
-    grid_size = 30
+    for size in [10, 20, 30, 40, 45, 50]:
+        print(f"Grid size: {size}")
+        benchmark_lmdp2mdp_embedding(savefig=True, grid_size=size)
+    benchmark_lmdp2mdp_embedding(savefig=True, map=Maps.CLIFF, name="CLIFF")
     
-    minigrid_lmdp = MinigridLMDP_TDR(
-        # grid_size=grid_size,
-        map=Maps.CHALLENGE_DOOR,
-        allowed_actions=[
-            MinigridActions.ROTATE_LEFT,
-            MinigridActions.ROTATE_RIGHT,
-            MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE,
-        ],
-        objects=Maps.CHALLENGE_DOOR_OBJECTS, 
-        sparse_optimization=True,
-        threads=4
-    )
-        
-    minigrid_lmdp.visualize_policy(save_gif=False, save_path="assets/original_lmdp.gif")
+    
+    # minigrid_lmdp.visualize_policy(save_gif=False, save_path="assets/original_lmdp.gif")
     
     # embedded_mdp = minigrid_lmdp.to_MDP()
     

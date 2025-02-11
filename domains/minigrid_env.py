@@ -568,6 +568,23 @@ class MinigridLMDP(LMDP):
                     return action
                 
         return 0
+
+    
+    def states_to_goal(self) -> list[int]:
+        """
+        Returns the indices of the states that lead to the solution based on the derived policy
+        """
+        curr_state = self.minigrid_env.custom_grid.state_index_mapper[self.s0]
+        curr_state_idx = self.s0
+        states = [self.s0]
+        
+        while not self.minigrid_env.custom_grid.is_terminal(curr_state):        
+            curr_state_idx = self.policy[curr_state_idx]
+            curr_state = self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx]
+            states.append(curr_state_idx)
+        
+        return states
+        
     
     
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):

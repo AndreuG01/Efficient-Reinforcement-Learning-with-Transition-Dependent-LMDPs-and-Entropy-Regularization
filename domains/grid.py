@@ -299,7 +299,7 @@ class CustomGrid:
         return (state.y, state.x) not in self.positions[CellType.WALL]
 
 
-    def is_terminal(self, state: State) -> bool:
+    def is_terminal(self, state: State | tuple[int, int]) -> bool:
         """
         Checks if a position is a terminal state (i.e., a goal position).
 
@@ -309,13 +309,17 @@ class CustomGrid:
         Returns:
         - bool: True if the position is terminal, False otherwise.
         """
-        return (state.y, state.x) in self.goal_pos
+        if type(state) == State:
+            return (state.y, state.x) in self.goal_pos
+        else:
+            return (state[0], state[1]) in self.goal_pos
     
     
     def terminal_state_idx(self, state: State) -> int:
         y, x = state.y, state.x
         assert (y, x) in self.goal_pos
         return len(self.states) + self.goal_pos.index((y, x))
+    
     
     def is_key(self, state: State) -> bool:
         """
