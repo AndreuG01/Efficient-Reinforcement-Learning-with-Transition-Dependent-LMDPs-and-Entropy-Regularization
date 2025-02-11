@@ -204,7 +204,6 @@ class LMDP:
         print(f"Power iteration...")
         if self.sparse_optimization:
             if type(self.P) != csr_matrix: self.P = csr_matrix(self.P)
-            print("G is csr_matrix")
             G = csr_matrix(G)
                 
         iterations = 0
@@ -288,7 +287,7 @@ class LMDP:
         )
         
         # Define the reward function of the MDP.
-        kl_term =  np.sum(control * np.log(control / (self.P + epsilon) + epsilon), axis=1) # TODO: maybe improve to avoid adding epsilon, and only modifying what is really necessary
+        kl_term =  np.sum(control * np.log(control / (self.P + epsilon) + epsilon), axis=1) # TODO: add noise as Todorov
         # print(kl_term.shape)
         # kl_term = np.zeros_like(control)
         # mask = control > epsilon

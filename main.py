@@ -54,10 +54,10 @@ if __name__ == "__main__":
     #     color_probs=True
     # )
 
-    grid_size = 3
+    grid_size = 30
     
     minigrid_lmdp = MinigridLMDP_TDR(
-        grid_size=grid_size,
+        # grid_size=grid_size,
         map=Maps.CHALLENGE_DOOR,
         allowed_actions=[
             MinigridActions.ROTATE_LEFT,
@@ -68,15 +68,11 @@ if __name__ == "__main__":
             MinigridActions.TOGGLE,
         ],
         objects=Maps.CHALLENGE_DOOR_OBJECTS, 
-        sparse_optimization=False,
+        sparse_optimization=True,
         threads=4
     )
-    
-    # minigrid_lmdp.compute_value_function()
-    minigrid_lmdp.visualize_policy()
-
-    
-    # minigrid_lmdp.visualize_policy(save_gif=False, save_path="assets/original_lmdp.gif")
+        
+    minigrid_lmdp.visualize_policy(save_gif=False, save_path="assets/original_lmdp.gif")
     
     # embedded_mdp = minigrid_lmdp.to_MDP()
     

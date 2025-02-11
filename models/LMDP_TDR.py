@@ -96,12 +96,14 @@ class LMDP_TDR:
         )
     
     
-    def get_control(self, z: np.ndarray, o: np.ndarray) ->np.ndarray:
-        # TODO: sparse matrix optimization
+    def get_control(self, z: np.ndarray, o: np.ndarray | csr_matrix) ->np.ndarray:
         
-        control = self.P * o * z
+        if self.sparse_optimization:
+            control = self.P.multiply(o).multiply(z)
+        else:
+            control = self.P * o * z
+        
         control = control / np.sum(control, axis=1).reshape(-1, 1)
-        
         # print(f"Control elements: {control.size}. Non zero: {np.count_nonzero(control)}")
         assert all(np.isclose(np.sum(control, axis=1), 1))
         
@@ -110,18 +112,16 @@ class LMDP_TDR:
         
     
     
-    def get_optimal_policy(self, z: np.ndarray, multiple_states: bool = False) -> np.ndarray:
+    def get_optimal_policy(self, z: np.ndarray, o: np.ndarray | csr_matrix, multiple_states: bool = False) -> np.ndarray:
         policy = np.zeros(self.num_states, dtype=object)
-        o = np.exp(self.R / self.lmbda)
         probs = self.get_control(z, o)
         
         if multiple_states:
             for i in range(probs.shape[0]):        
                 policy[i] = [j for j in range(len(probs[i, :])) if probs[i, j] == np.max(probs[i, :])]  
         else:
-            policy = probs.argmax(axis=1)
-        
-        
+            policy = np.asarray(probs.argmax(axis=1)).squeeze()
+            
         return policy
         
     
@@ -132,28 +132,28 @@ class LMDP_TDR:
 
     
     def power_iteration(self, epsilon=1e-10) -> np.ndarray:
-        
-        o = np.exp(self.R / self.lmbda)
-        G = self.P * o
-        
+        if self.sparse_optimization:
+            self.o = np.exp(self.R.toarray() * self.lmbda) # TODO: I have problems when this is a sparse matrix
+            G = csr_matrix(self.P.multiply(self.o))
+            
+        else:
+            self.o = np.exp(self.R / self.lmbda)
+            G = self.P * self.o
+    
+    
         z = np.ones(self.num_states)
-        
-        
         iterations = 0
         delta = 0
         
         while True:
-            
             z_new = G @ z
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
-            
-            
+           
             delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z))
             z = z_new
             
-            if iterations % 1 == 0:
+            if iterations % 10 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
-        
         
             if delta < epsilon:
                 break
@@ -183,8 +183,8 @@ class LMDP_TDR:
         
         self.V = self.get_value_function()
         
-        self.policy = self.get_optimal_policy(self.z)
-        # self.policy_multiple_states = self.get_optimal_policy(self.z, multiple_states=True)
+        self.policy = self.get_optimal_policy(self.z, self.o)
+        # self.policy_multiple_states = self.get_optimal_policy(self.z, self.o, multiple_states=True)
         
     
     def to_MDP(self) -> MDP:

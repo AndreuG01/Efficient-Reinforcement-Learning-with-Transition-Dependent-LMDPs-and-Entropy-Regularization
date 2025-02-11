@@ -14,6 +14,8 @@ from PIL import Image, ImageDraw, ImageFont
 from utils.state import State, Object
 from tqdm import tqdm
 from collections.abc import Callable
+from scipy.sparse import csr_matrix
+from sys import getsizeof
 
 class MinigridActions:
     """
@@ -432,7 +434,7 @@ class MinigridLMDP(LMDP):
         objects: list[Object] = None,
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
-        threads: int = 1
+        threads: int = 4
     ):
         
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
@@ -597,7 +599,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
         objects: list[Object] = None,
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
-        threads: int = 1
+        threads: int = 4
     ):
         
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
@@ -724,6 +726,12 @@ class MinigridLMDP_TDR(LMDP_TDR):
                     
                     self.R[state, next_state_idx] = -1
 
+        # Matrix R is now sparese as well, so if sparse_optimization is activated, we convert it.
+        if self.sparse_optimization:
+            print("Converting R into sparse matrix...")
+            print(f"Memory usage before conversion: {getsizeof(self.R):,} bytes")
+            self.R = csr_matrix(self.R)
+            print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
 
 
     def transition_action(self, state_idx, next_state_idx):
