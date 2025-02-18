@@ -2,6 +2,9 @@ from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP
 from domains.minigrid_env import MinigridMDP, MinigridActions, MinigridLMDP, MinigridLMDP_TDR
 from algorithms import QLearning, QLearningPlotter, QLearningHyperparameters, QLearningHyperparameterExplorer
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from PIL import Image
+import os
 import numpy as np
 from utils.maps import Maps
 from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, benchmark_lmdp2mdp_embedding
@@ -81,6 +84,9 @@ if __name__ == "__main__":
         # threads=2
         # sparse_optimization=False
     )
+
+    # print(minigrid_mdp.P[:, :, 31])
+    
     minigrid_lmdp = MinigridLMDP(
         grid_size=2,
         map=Maps.DOUBLE_DOOR,
@@ -93,9 +99,10 @@ if __name__ == "__main__":
             MinigridActions.TOGGLE,
         ],
         objects=Maps.DOUBLE_DOOR_OBJECTS,
-        # threads=2
+        threads=4,
         sparse_optimization=True
     )
+    
     
     # print(minigrid_lmdp.num_states)
     # print(minigrid_mdp.num_states)
@@ -123,11 +130,49 @@ if __name__ == "__main__":
     #     V, _ = minigrid_mdp.value_iteration(max_iter=i)
     #     vs.append(V)
     
-    # for i, v in enumerate(vs, start=1):
-    #     policy = minigrid_mdp.get_optimal_policy(v)
-    #     minigrid_mdp.visualize_policy(policies=[[i, policy]], save_gif=True, save_path=f"assets/policy{i}.gif", num_times=1)
-    print(minigrid_mdp.minigrid_env.custom_grid.states[0])
-    minigrid_mdp.visualize_policy(save_gif=True, save_path=f"assets/mdp_policy.gif", num_times=1)
+    
+    minigrid_mdp.visualize_policy(save_gif=True, save_path=f"assets/mdppolicy.gif", num_times=1)
+    minigrid_lmdp.visualize_policy(save_gif=True, save_path=f"assets/lmdppolicy.gif", num_times=1)
+    # V, vs, _ = minigrid_mdp.value_iteration(max_iter=100)
+    # policy = minigrid_mdp.get_optimal_policy(V)
+    # # # state = minigrid_mdp.minigrid_env.custom_grid.state_index_mapper[2670]
+    # # # while True:
+    # # #     state, _, _ = minigrid_mdp.move(state, policy[minigrid_mdp.minigrid_env.custom_grid.states.index(state)])
+    # # #     print(f"State: {minigrid_mdp.minigrid_env.custom_grid.states.index(state)}")
+    # # # print(len(vs))
+
+
+
+    # frame_files = []
+    # for i, v in enumerate(vs):
+    #     fig, ax = plt.subplots(figsize=(10, 5))
+
+    #     ax.plot(np.arange(len(v)), v, color="blue")        
+    #     plt.ylim(-100, 0)
+    #     plt.title(f"Iteration {i}")
+    #     plt.grid()
+    #     plt.xlabel("States")
+    #     plt.ylabel("Value Function")
+    #     frame_file = f"assets/frame_{i}.png"
+    #     plt.savefig(frame_file, dpi=300)
+    #     frame_files.append(frame_file)
+        
+        
+    #     plt.close(fig)
+
+    # # Create a GIF using PIL
+    # frames = []
+    # for frame_file in frame_files:
+    #     frame = Image.open(frame_file)
+    #     frames.append(frame)
+
+    # # Save the frames as a GIF
+    # frames[0].save("assets/value_iteration_evolution_incorrect.gif", save_all=True, append_images=frames[1:], duration=250, loop=0)
+
+    # # Optionally, delete the temporary frame images to save space
+    # for frame_file in frame_files:
+    #     os.remove(frame_file)
+            
     
     
         
@@ -186,32 +231,6 @@ if __name__ == "__main__":
     #     save_path="assets/minigrid_lmdp.gif"
     # )
     
-    # training_epochs = 2000000
-    # hyperparameters = QLearningHyperparameters(
-    #     alpha = 0.15,
-    #     alpha_decay=0,
-    #     gamma=1
-    # )
-    # epsilon = 0.7
-    # q_learner = QLearning(
-    #     minigrid_mdp,
-    #     alpha=hyperparameters.alpha,
-    #     gamma=hyperparameters.gamma,
-    #     epsilon=epsilon,
-    #     info_every=100000,
-    #     epsilon_decay=0.999,
-    #     alpha_decay=hyperparameters.alpha_decay
-    # )
-    # _, policies, reward, errors = q_learner.train(num_steps=training_epochs, multiple_actions=False, multiple_policies=False)
-    
-        
-    # minigrid_mdp.visualize_policy(
-    #     policies=policies,
-    #     save_gif=True,
-    #     num_times=10,
-    #     save_path="assets/door_gif_last.gif"
-    
-    # )
     # manual_control = ManualControl(minigrid_mdp.minigrid_env, seed=42)
     # manual_control.start()
     # grid_size = 4

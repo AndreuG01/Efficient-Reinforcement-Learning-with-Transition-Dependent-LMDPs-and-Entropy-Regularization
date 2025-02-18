@@ -31,11 +31,11 @@ class State:
     def __init__(self, y: int, x: int, layout: Dict[Tuple[int, int], Object], **properties):
         self.y = y
         self.x = x
+        self.layout = layout if layout is not None else {}  # Ensure layout is always a dictionary
         self.properties = properties
-        self.layout = layout
-    
+
     def __repr__(self):
-        return f"State(x={self.x}, y={self.y}, {self.layout}, properties={self.properties})"
+        return f"State(x={self.x}, y={self.y}, layout={self.layout}, properties={self.properties})"
 
     def __eq__(self, other):
         if not isinstance(other, State):

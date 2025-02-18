@@ -259,14 +259,15 @@ class MinigridMDP(MDP):
     ):
         
         self.deterministic = deterministic
-        
-        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
-        
-        self.num_states = self.minigrid_env.custom_grid.get_num_states()
-        
         if allowed_actions:
             self.num_actions = len(allowed_actions)
             self.allowed_actions = allowed_actions
+        
+        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        self.remove_unreachable_states()
+        
+        self.num_states = self.minigrid_env.custom_grid.get_num_states()
+        
         print(f"MDP with {self.num_actions} actions. Allowed actions: {self.allowed_actions}")
         
         
@@ -300,7 +301,35 @@ class MinigridMDP(MDP):
             
             self.P = mdp.P
             self.R = mdp.R
-                
+    
+    # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
+    def remove_unreachable_states(self):
+        print("Going to remove unreachable states")
+        
+        reachable_states = set()
+        queue = list(self.minigrid_env.custom_grid.terminal_states)
+
+        for terminal_state in queue:
+            reachable_states.add(terminal_state)
+
+        while queue:
+            current_state = queue.pop(0)
+            for action in self.allowed_actions:
+                next_state, _, _ = self.move(current_state, action)
+                if next_state not in reachable_states:
+                    reachable_states.add(next_state)
+                    queue.append(next_state)
+
+        states = [state for state in self.minigrid_env.custom_grid.states if state in reachable_states]
+        terminal_states = [state for state in self.minigrid_env.custom_grid.terminal_states if state in reachable_states]
+
+        removed_states = len(self.minigrid_env.custom_grid.states) - len(states)
+        print(f"Removing {removed_states} states")
+
+        self.minigrid_env.custom_grid.states = states
+        self.minigrid_env.custom_grid.terminal_states = terminal_states
+        self.minigrid_env.custom_grid.generate_state_index_mapper()
+        
     
     def move(self, state: State, action: int):
         orientation = state.properties["orientation"]
@@ -383,14 +412,10 @@ class MinigridMDP(MDP):
     def _generate_R(self):
         for state in range(self.num_non_terminal_states):
             state_repr = self.minigrid_env.custom_grid.states[state]
-            has_key, key = self.minigrid_env.custom_grid.is_key(state_repr)
             if self.minigrid_env.custom_grid.is_cliff(state_repr):
-                self.R[state, :] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.float64)
-            # elif has_key and key.color == "green":
-            #     self.R[state, :] = np.full(shape=self.num_actions, fill_value=-20, dtype=np.float64)
-            
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-100, dtype=np.float64)
             else:
-                self.R[state, :] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.float64)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.float64)
 
 
 
@@ -415,7 +440,6 @@ class MinigridMDP(MDP):
         # if not hasattr(self, "V") or self.V is None and policies is None:
             print(f"Computing value function...")
             self.compute_value_function()
-            # print([a for a in self.policy])
             self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
         else:
             self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
@@ -443,11 +467,13 @@ class MinigridLMDP(LMDP):
         threads: int = 4
     ):
         
-        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
-        
-        self.num_states = self.minigrid_env.custom_grid.get_num_states()
         self.num_actions = len(allowed_actions)
         self.allowed_actions = allowed_actions
+        
+        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        self.remove_unreachable_states()
+        
+        self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
         start_pos = self.minigrid_env.custom_grid.start_pos
         
@@ -470,6 +496,34 @@ class MinigridLMDP(LMDP):
         self._generate_R()
         print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
                 
+    # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
+    def remove_unreachable_states(self):
+        print("Going to remove unreachable states")
+        
+        reachable_states = set()
+        queue = list(self.minigrid_env.custom_grid.terminal_states)
+
+        for terminal_state in queue:
+            reachable_states.add(terminal_state)
+
+        while queue:
+            current_state = queue.pop(0)
+            for action in self.allowed_actions:
+                next_state, _, _ = self.move(current_state, action)
+                if next_state not in reachable_states:
+                    reachable_states.add(next_state)
+                    queue.append(next_state)
+
+        states = [state for state in self.minigrid_env.custom_grid.states if state in reachable_states]
+        terminal_states = [state for state in self.minigrid_env.custom_grid.terminal_states if state in reachable_states]
+
+        removed_states = len(self.minigrid_env.custom_grid.states) - len(states)
+        print(f"Removing {removed_states} states")
+
+        self.minigrid_env.custom_grid.states = states
+        self.minigrid_env.custom_grid.terminal_states = terminal_states
+        self.minigrid_env.custom_grid.generate_state_index_mapper()
+
     
     # TODO: same as MinigridMDP
     def move(self, state: State, action: int):
@@ -624,11 +678,15 @@ class MinigridLMDP_TDR(LMDP_TDR):
         threads: int = 4
     ):
         
-        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
-        
-        self.num_states = self.minigrid_env.custom_grid.get_num_states()
         self.num_actions = len(allowed_actions)
         self.allowed_actions = allowed_actions
+        
+        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        self.remove_unreachable_states()
+        
+        
+        
+        self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
         start_pos = self.minigrid_env.custom_grid.start_pos
         
@@ -651,7 +709,29 @@ class MinigridLMDP_TDR(LMDP_TDR):
         )
         self._generate_R()
         print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
-                
+    
+    
+    # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
+    def remove_unreachable_states(self):
+        print("Going to remove unreachable states")
+        reachable_states = set()
+        queue = []
+        for terminal_state in self.minigrid_env.custom_grid.terminal_states:
+            reachable_states.add(terminal_state)
+            queue.append(terminal_state)
+        
+        while queue:
+            current_state = queue.pop(0)
+            for action in self.allowed_actions:
+                next_state, _, _ = self.move(current_state, action)
+                if next_state not in reachable_states:
+                    reachable_states.add(next_state)
+                    queue.append(next_state)
+        
+        states = list(reachable_states - set(self.minigrid_env.custom_grid.terminal_states))
+        print(f"Removing {len(self.minigrid_env.custom_grid.states) - len(states)} states")
+        self.minigrid_env.custom_grid.states = states
+        self.minigrid_env.custom_grid.generate_state_index_mapper()   
     
     # TODO: same as MinigridMDP
     def move(self, state: State, action: int):

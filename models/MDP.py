@@ -189,34 +189,34 @@ class MDP(ABC):
         - ValueIterationStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
         """
         V = np.zeros(self.num_states)
+        Q = np.zeros((self.num_states, self.num_actions))
         iterations = 0
         start_time = time.time()
         deltas = []
         print(f"Value iteration...")
+        Vs = []
 
         while True:
             delta = 0
             expected_values = self.P @ V
-            
-            Q = self.R + self.gamma * np.concatenate((expected_values, self.R[self.num_non_terminal_states:, :])) # num_states X num_actions
-            
-            V_new =  np.max(Q, axis=1)
+            Q = self.R + self.gamma * np.concatenate((expected_values, self.R[:self.num_terminal_states, :])) # num_states X num_actions
+    
+            V_new =  Q.max(axis=1)
+            Vs.append(V_new)
             # delta = np.mean(np.abs(V_new - V))
             delta = np.linalg.norm(V - V_new, np.inf)
             
-            print(f"V max: {np.max(V)} ({np.argmax(V)}), V min: {np.min(V)} ({np.argmin(V)})")
-            print(f"V_new max: {np.max(V_new)} ({np.argmax(V_new)}), V_new min: {np.min(V_new)} ({np.argmin(V_new)})")
+            # print(f"V max: {np.max(V)} ({np.argmax(V)}), V min: {np.min(V)} ({np.argmin(V)})")
+            # print(f"V_new max: {np.max(V_new)} ({np.argmax(V_new)}), V_new min: {np.min(V_new)} ({np.argmin(V_new)})")
             if iterations % 100 == 0:
-                for i, elem in enumerate(V_new - V):
-                    if elem != 0:
-                        print(f"State {i}, difference: {elem} {self.minigrid_env.custom_grid.state_index_mapper[i]}")
+                # for i, elem in enumerate(V_new - V):
+                #     if elem != 0:
+                #         print(f"State {i}, difference: {elem} {self.minigrid_env.custom_grid.state_index_mapper[i]}")
                 print(f"Iter: {iterations}. Delta: {delta}")
                 print("V: ", V)
                 print("V new: ", V_new)
-                if iterations == 2300:
-                    exit()
             
-            if delta < epsilon:
+            if max_iter is None and delta < epsilon:
                 break
             
             if iterations == max_iter:
@@ -229,6 +229,7 @@ class MDP(ABC):
         elapsed_time = time.time() - start_time
         print(f"Converged in {iterations} iterations")
         return V, ValueIterationStats(elapsed_time, iterations, deltas, self.num_states)
+        # return V, Vs, ValueIterationStats(elapsed_time, iterations, deltas, self.num_states)
     
     
     def compute_value_function(self):

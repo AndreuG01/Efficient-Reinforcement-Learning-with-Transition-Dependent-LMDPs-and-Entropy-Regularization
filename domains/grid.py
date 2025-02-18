@@ -87,9 +87,15 @@ class CustomGrid:
         for pos in self.positions[CellType.NORMAL]:
             for values, layout in product(self._get_property_combinations(), self.layout_combinations):
                 # TODO: a state where there is a key at the same position as the agent is not valid
-                obj = layout[(pos[1], pos[0])]
-                if obj is not None and obj.type == "key": continue
-                states.append(State(pos[0], pos[1], layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
+
+                # if obj is not None and obj.type == "key": continue
+                
+                curr_dict = dict(zip(list(self.state_properties.keys()), values))
+
+                # if obj is not None and obj.type == "door" and not curr_dict[str(obj)]: continue
+                # if (pos[1] == 1 and pos[0] == 1) and (layout[(2, 1)] is not None and layout[(3, 1)] is None and layout[(1, 1)] is None and layout[(4, 2)] is None and layout[(3, 3)] is None and layout[(3, 2)] is None and layout[(4, 1)] is None): continue
+                # if not curr_dict["blue_door_0"] and (pos[1] == 3 and pos[0] == 3) and (layout[(2, 1)] is None and layout[(3, 1)] is None and layout[(1, 1)] is None and layout[(4, 2)] is None and layout[(3, 3)] is None and layout[(3, 2)] is not None and layout[(4, 1)] is None) and str(layout[(3, 2)]) == "blue_key_1": continue
+                states.append(State(pos[0], pos[1], layout=layout, **curr_dict))
         
         for pos in self.positions[CellType.GOAL]:
             for values, layout in product(self._get_property_combinations(), self.layout_combinations):
@@ -97,7 +103,13 @@ class CustomGrid:
                 # obj = layout[(pos[0], pos[1])]
                 # if obj is not None and obj.type == "key": continue
                 terminal_states.append(State(pos[0], pos[1], layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
+        
+        
+        
+        
         return states, terminal_states
+
+
     
         
 
