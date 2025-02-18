@@ -54,6 +54,7 @@ class MDP(ABC):
         self.num_actions = len(self.__alowed_actions)
         self.s0 = s0
         self.gamma = gamma
+        print(f"Gamma {gamma}")
         
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
@@ -62,7 +63,7 @@ class MDP(ABC):
     
     
     
-    def generate_P(self, pos: list[State], move: Callable, grid: CustomGrid):
+    def generate_P(self, move: Callable, grid: CustomGrid):
         """
         Generates the transition probability matrix (P) for the MDP, based on the dynamics of the environment
         (deterministic or stochastic).
@@ -73,7 +74,9 @@ class MDP(ABC):
         The function signature should be `move(state: State, action: int) -> tuple[next_state: State, reward: float, done: bool]`.
         - grid (CustomGrid): The grid environment for which the transition matrix is being generated.
         """
-        
+        pos = grid.states
+        terminal_pos = grid.terminal_states
+        print(f"Allowed actions {self.__alowed_actions}")
         for state in tqdm(range(self.num_non_terminal_states), desc="Generating transition matrix P", total=self.num_non_terminal_states):
             for action in self.__alowed_actions:
                 # print(state, action)
@@ -83,23 +86,23 @@ class MDP(ABC):
                     next_state, _, terminal = move(pos[state], action)
                     # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
                     if terminal:
-                        next_state = grid.terminal_state_idx(next_state)
+                        next_state = len(pos) + terminal_pos.index(next_state)
                     else:
                         next_state = pos.index(next_state)
 
-                if self.deterministic:
-                    self.P[state, action, next_state] = 1
-                else:
-                    # TODO: not tested for minigrid
-                    # Stochastic policy. With 70% take the correct action, with 30% take a random action
-                    self.P[state, action, next_state] = 0.7
-                    rand_action = np.random.choice([a for a in self.__alowed_actions if a != action])
-                    next_state, _, terminal = move(pos[CellType.NORMAL][state], rand_action)
-                    if terminal:
-                        next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
-                    else:
-                        next_state = pos[CellType.NORMAL].index(next_state)
-                    self.P[state, action, next_state] += 0.3
+                self.P[state, action, next_state] = 1
+                # if self.deterministic:
+                # else:
+                #     # TODO: not tested for minigrid
+                #     # Stochastic policy. With 70% take the correct action, with 30% take a random action
+                #     self.P[state, action, next_state] = 0.7
+                #     rand_action = np.random.choice([a for a in self.__alowed_actions if a != action])
+                #     next_state, _, terminal = move(pos[CellType.NORMAL][state], rand_action)
+                #     if terminal:
+                #         next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
+                #     else:
+                #         next_state = pos[CellType.NORMAL].index(next_state)
+                #     self.P[state, action, next_state] += 0.3
         
         print(f"Generated matrix P with {self.P.size:,} elements")
     
@@ -161,7 +164,6 @@ class MDP(ABC):
                 V[s] = best_action_reward
                 cumulative_reward += best_action_reward
                 delta = max(delta, abs(v - V[s]))
-            
             rewards.append(cumulative_reward)
             deltas.append(delta)
             iterations += 1
@@ -173,7 +175,7 @@ class MDP(ABC):
         return V, ValueIterationStats(elapsed_time, rewards, iterations, deltas, self.num_states)
     
     
-    def value_iteration(self, epsilon=1e-10) -> tuple[np.ndarray, ValueIterationStats]:
+    def value_iteration(self, epsilon=1e-10, max_iter: int = None) -> tuple[np.ndarray, ValueIterationStats]:
         """
         Perform value iteration to compute the optimal value function.
         Efficiently implemented with matrix operations
@@ -194,18 +196,30 @@ class MDP(ABC):
 
         while True:
             delta = 0
-            expected_values = np.tensordot(self.P, V, axes=((2), (0))) # num_non_teminal X num_actions
+            expected_values = self.P @ V
             
             Q = self.R + self.gamma * np.concatenate((expected_values, self.R[self.num_non_terminal_states:, :])) # num_states X num_actions
             
             V_new =  np.max(Q, axis=1)
             # delta = np.mean(np.abs(V_new - V))
-            delta = np.linalg.norm(V_new - V)
+            delta = np.linalg.norm(V - V_new, np.inf)
             
+            print(f"V max: {np.max(V)} ({np.argmax(V)}), V min: {np.min(V)} ({np.argmin(V)})")
+            print(f"V_new max: {np.max(V_new)} ({np.argmax(V_new)}), V_new min: {np.min(V_new)} ({np.argmin(V_new)})")
             if iterations % 100 == 0:
+                for i, elem in enumerate(V_new - V):
+                    if elem != 0:
+                        print(f"State {i}, difference: {elem} {self.minigrid_env.custom_grid.state_index_mapper[i]}")
                 print(f"Iter: {iterations}. Delta: {delta}")
+                print("V: ", V)
+                print("V new: ", V_new)
+                if iterations == 2300:
+                    exit()
             
             if delta < epsilon:
+                break
+            
+            if iterations == max_iter:
                 break
             
             V = V_new
@@ -213,7 +227,7 @@ class MDP(ABC):
             deltas.append(delta)
 
         elapsed_time = time.time() - start_time
-        
+        print(f"Converged in {iterations} iterations")
         return V, ValueIterationStats(elapsed_time, iterations, deltas, self.num_states)
     
     

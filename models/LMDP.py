@@ -50,7 +50,7 @@ class LMDP:
         
     
     
-    def generate_P(self, pos: dict[int, list], move: Callable, grid: CustomGrid, actions: list[int], num_threads: int = 10, benchmark: bool = False) -> float:
+    def generate_P(self, move: Callable, grid: CustomGrid, actions: list[int], num_threads: int = 10, benchmark: bool = False) -> float:
         """
         Generates the transition probability matrix (P) for the LMDP, based on the dynamics of the environment.
 
@@ -61,6 +61,8 @@ class LMDP:
         - grid (CustomGrid): The grid environment for which the transition matrix is being generated.
         - actions (list[int]): List of possible actions that can be taken in the environment (NOTE THAT THE LMDP DOES NOT HAVE ACTIONS INTO ACOUNT)
         """
+        pos = grid.states
+        terminal_pos = grid.terminal_states
         
         def process_state(state: int) -> list[float]:
             row_updates = []
@@ -71,7 +73,7 @@ class LMDP:
                     next_state, _, terminal = move(pos[state], action)
                     # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
                     if terminal:
-                        next_state = grid.terminal_state_idx(next_state)
+                        next_state = len(pos) + terminal_pos.index(next_state)
                     else:
                         next_state = pos.index(next_state)
                 
@@ -216,7 +218,7 @@ class LMDP:
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
             
             
-            delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z))
+            delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z), ord=np.inf)
             
             if iterations % 100 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
@@ -231,7 +233,7 @@ class LMDP:
         elapsed_time = time.time() - start_time
         
         self.z = z
-        
+        print(f"Converged in {iterations} iterations")
         return z, ValueIterationStats(elapsed_time, iterations, deltas, self.num_states)
 
     def get_value_function(self, z: np.ndarray = None) -> np.ndarray:

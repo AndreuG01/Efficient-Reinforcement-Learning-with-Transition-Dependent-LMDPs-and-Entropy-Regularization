@@ -76,20 +76,30 @@ class CustomGrid:
         self.layout_combinations = self._get_layout_combinations()
         
         
-        self.states = self._generate_states()
+        self.states, self.terminal_states = self._generate_states()
         
         self.generate_state_index_mapper()
     
     
     def _generate_states(self):
         states = []
-        
+        terminal_states = []
         for pos in self.positions[CellType.NORMAL]:
             for values, layout in product(self._get_property_combinations(), self.layout_combinations):
+                # TODO: a state where there is a key at the same position as the agent is not valid
+                obj = layout[(pos[1], pos[0])]
+                if obj is not None and obj.type == "key": continue
                 states.append(State(pos[0], pos[1], layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
         
-        return states
+        for pos in self.positions[CellType.GOAL]:
+            for values, layout in product(self._get_property_combinations(), self.layout_combinations):
+                # TODO: a state where there is a key at the same position as the agent is not valid
+                # obj = layout[(pos[0], pos[1])]
+                # if obj is not None and obj.type == "key": continue
+                terminal_states.append(State(pos[0], pos[1], layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
+        return states, terminal_states
     
+        
 
     def _get_layout_combinations(self):
         if len(self.objects) == 0: return [None]
@@ -211,7 +221,7 @@ class CustomGrid:
         Returns:
         - int: Total number of states.
         """
-        return len(self.states) + len(self.positions[CellType.GOAL])
+        return len(self.states) + len(self.terminal_states)
     
     
     def get_num_terminal_states(self):
@@ -221,7 +231,7 @@ class CustomGrid:
         Returns:
         - int: Number of terminal states.
         """
-        return len(self.positions[CellType.GOAL])
+        return len(self.terminal_states)
     
     
     def generate_state_index_mapper(self) -> dict[int, tuple[int, int]]:
@@ -233,57 +243,9 @@ class CustomGrid:
         """
        # TODO: maybe this is not useful anymore 
         self.state_index_mapper = {} # Maps the state index to the position in the grid.
-        for count, pos in enumerate(self.states + self.positions[CellType.GOAL]):
+        for count, pos in enumerate(self.states + self.terminal_states):
             self.state_index_mapper[count] = pos
     
-    
-    def state_has_key(self, state: State) -> bool:
-        # Check if a state has any key picked
-        keys_picked = []
-        for k, v in state.properties.items():
-            if "key" in k:
-                keys_picked.append(v)
-        return any(keys_picked)
-    
-        
-        
-    
-    
-    def state_has_key_color(self, state: State, color: str) -> bool:
-        keys_picked = []
-        for k, v in state.properties.items():
-            if f"{color}_key" in k:
-                keys_picked.append(v)
-        return any(keys_picked)
-    
-    
-    def remove_object(self, x: int, y: int) -> Object:
-        return_obj = None
-        for idx, state in enumerate(self.positions[CellType.NORMAL]):
-            if state.x == x and state.y == y:
-                assert state.object is not None
-                self.positions[CellType.NORMAL][idx].object = None
-                return_obj = state.object
-        return return_obj
-            
-    def add_object(self, x: int, y: int, object: Object) -> None:
-        for idx, state in enumerate(self.positions[CellType.NORMAL]):
-            if state.x == y and state.y == x:
-                self.positions[CellType.NORMAL][idx].object = object
-                
-            
-    def get_carrying_object(self, state: State) -> set[Object]:
-        
-        carrying_elems = [k for k, v in state.properties.items() if "key" in k and v ]
-        if len(carrying_elems) == 0:
-            return None
-        
-        carrying_elems = carrying_elems[0].split("_")
-            
-        for curr_obj in self.objects:
-            if curr_obj.color == carrying_elems[0] and curr_obj.type == carrying_elems[1] and curr_obj.id == int(carrying_elems[2]):
-                return curr_obj
-        
         
     
     def is_valid(self, state: State) -> bool:
@@ -299,7 +261,7 @@ class CustomGrid:
         return (state.y, state.x) not in self.positions[CellType.WALL]
 
 
-    def is_terminal(self, state: State | tuple[int, int]) -> bool:
+    def is_terminal(self, state: State) -> bool:
         """
         Checks if a position is a terminal state (i.e., a goal position).
 
@@ -309,16 +271,13 @@ class CustomGrid:
         Returns:
         - bool: True if the position is terminal, False otherwise.
         """
-        if type(state) == State:
-            return (state.y, state.x) in self.goal_pos
-        else:
-            return (state[0], state[1]) in self.goal_pos
+        return state in self.terminal_states
     
     
-    def terminal_state_idx(self, state: State) -> int:
-        y, x = state.y, state.x
-        assert (y, x) in self.goal_pos
-        return len(self.states) + self.goal_pos.index((y, x))
+    # def terminal_state_idx(self, state: State) -> int:
+    #     y, x = state.y, state.x
+    #     assert (y, x) in self.goal_pos
+    #     return len(self.states) + self.goal_pos.index((y, x))
     
     
     def is_key(self, state: State) -> bool:
@@ -331,7 +290,10 @@ class CustomGrid:
         Returns:
         - bool: True if the position is a key, False otherwise.
         """
-        return state.object is not None and state.object.type == "key"
+        for pos, obj in state.layout.items():
+            if obj is not None and obj.type == "key" and (pos[0] == state.x and pos[1] == state.y):
+                return True, obj
+        return False, None
     
     
     def is_door(self, state: State) -> bool:

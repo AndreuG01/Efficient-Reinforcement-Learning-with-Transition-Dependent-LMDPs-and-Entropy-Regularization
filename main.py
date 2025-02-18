@@ -56,32 +56,78 @@ if __name__ == "__main__":
     #     color_probs=True
     # )
 
-    for size in [10, 20, 30, 40, 45, 50]:
-        print(f"Grid size: {size}")
-        benchmark_lmdp2mdp_embedding(savefig=True, grid_size=size)
-    benchmark_lmdp2mdp_embedding(savefig=True, map=Maps.CLIFF, name="CLIFF")
+    # for size in [10, 20, 30, 40, 45, 50]:
+    #     print(f"Grid size: {size}")
+    #     benchmark_lmdp2mdp_embedding(savefig=True, grid_size=size)
+    # benchmark_lmdp2mdp_embedding(savefig=True, map=Maps.CLIFF, name="CLIFF")
     
     
     # minigrid_lmdp.visualize_policy(save_gif=False, save_path="assets/original_lmdp.gif")
     
     # embedded_mdp = minigrid_lmdp.to_MDP()
     
-    # minigrid_mdp = MinigridMDP(
-    #     grid_size=grid_size,
-    #     map=Maps.DOUBLE_DOOR,
-    #     allowed_actions=[
-    #         MinigridActions.ROTATE_LEFT,
-    #         MinigridActions.ROTATE_RIGHT,
-    #         MinigridActions.FORWARD,
-    #         MinigridActions.PICKUP,
-    #         MinigridActions.DROP,
-    #         MinigridActions.TOGGLE,
-    #     ],
-    #     objects=Maps.DOUBLE_DOOR_OBJECTS, 
-    #     mdp=embedded_mdp,
-    #     deterministic=False
-    # )
-    # minigrid_mdp.visualize_policy(save_gif=True, save_path="assets/embeddings/embedded_mdp.gif", num_times=1)
+    minigrid_mdp = MinigridMDP(
+        # grid_size=60,
+        map=Maps.DOUBLE_DOOR,
+        allowed_actions=[
+            MinigridActions.ROTATE_LEFT,
+            MinigridActions.ROTATE_RIGHT,
+            MinigridActions.FORWARD,
+            MinigridActions.PICKUP,
+            MinigridActions.DROP,
+            MinigridActions.TOGGLE,
+        ],
+        objects=Maps.DOUBLE_DOOR_OBJECTS,
+        # threads=2
+        # sparse_optimization=False
+    )
+    minigrid_lmdp = MinigridLMDP(
+        grid_size=2,
+        map=Maps.DOUBLE_DOOR,
+        allowed_actions=[
+            MinigridActions.ROTATE_LEFT,
+            MinigridActions.ROTATE_RIGHT,
+            MinigridActions.FORWARD,
+            MinigridActions.PICKUP,
+            MinigridActions.DROP,
+            MinigridActions.TOGGLE,
+        ],
+        objects=Maps.DOUBLE_DOOR_OBJECTS,
+        # threads=2
+        sparse_optimization=True
+    )
+    
+    # print(minigrid_lmdp.num_states)
+    # print(minigrid_mdp.num_states)
+    
+    # print(minigrid_lmdp.num_actions)
+    # print(minigrid_mdp.num_actions)
+    
+    # print(minigrid_lmdp.num_non_terminal_states)
+    # print(minigrid_mdp.num_non_terminal_states)
+    
+    # equal = []
+    # for state in range(minigrid_lmdp.num_non_terminal_states):
+    #     mdps = set()
+    #     for action in range(minigrid_mdp.num_actions):
+    #         mdps.add(int(np.where(minigrid_mdp.P[state, action, :] != 0)[0][0]))
+        
+    #     lmdps = set([int(a) for a in np.where(minigrid_lmdp.P[state, :] != 0)[0]])
+    #     equal.append(lmdps == mdps)
+    #     print(f"MDP: {mdps}, LMDP: {lmdps}, {lmdps == mdps}")
+    
+    # minigrid_mdp.value_iteration()
+    # print(minigrid_mdp.R)
+    # vs = []
+    # for i in range(1, 30):
+    #     V, _ = minigrid_mdp.value_iteration(max_iter=i)
+    #     vs.append(V)
+    
+    # for i, v in enumerate(vs, start=1):
+    #     policy = minigrid_mdp.get_optimal_policy(v)
+    #     minigrid_mdp.visualize_policy(policies=[[i, policy]], save_gif=True, save_path=f"assets/policy{i}.gif", num_times=1)
+    print(minigrid_mdp.minigrid_env.custom_grid.states[0])
+    minigrid_mdp.visualize_policy(save_gif=True, save_path=f"assets/mdp_policy.gif", num_times=1)
     
     
         
