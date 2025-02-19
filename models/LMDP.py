@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 from sys import getsizeof
 from joblib import Parallel, delayed, cpu_count
 import time
-from utils.stats import ValueIterationStats
+from utils.stats import ModelBasedAlgsStats
 
 class LMDP:
     """
@@ -211,12 +211,13 @@ class LMDP:
         iterations = 0
         start_time = time.time()
         deltas = []
+        Vs = []
         
         while True:
             delta = 0
             z_new = G @ self.P @ z
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
-            
+            Vs.append(self.get_value_function(z_new))
             
             delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z), ord=np.inf)
             
@@ -234,7 +235,7 @@ class LMDP:
         
         self.z = z
         print(f"Converged in {iterations} iterations")
-        return z, ValueIterationStats(elapsed_time, iterations, deltas, self.num_states)
+        return z, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "PI")
 
     def get_value_function(self, z: np.ndarray = None) -> np.ndarray:
         """
@@ -249,10 +250,7 @@ class LMDP:
         if z is None:
             z = self.z
         
-        result = np.zeros_like(z)
-        # mask = z > 0
-        mask = z > 1e-300
-        result[mask] = np.log(z[mask]) * self.lmbda
+        result = np.log(z) * self.lmbda
         
         return result
     
@@ -278,8 +276,8 @@ class LMDP:
         Returns:
         - mdp (MDP): The converted Markov Decision Process.
         """
-        epsilon = 1e-100 # To avoid division by 0 when dividing the control by P.
         z, _ = self.power_iteration()
+        
         control = self.get_control(z)
         print(f"Computing the MDP embedding of this LMDP...")
         # The minimum number of actions that can be done to achieve the same behaviour in an MDP.
@@ -293,12 +291,10 @@ class LMDP:
         )
         
         # Define the reward function of the MDP.
-        kl_term =  np.sum(control * np.log(control / (self.P + epsilon) + epsilon), axis=1) # TODO: add noise as Todorov
-        # print(kl_term.shape)
-        # kl_term = np.zeros_like(control)
-        # mask = control > epsilon
-        # kl_term[mask] = control[mask] * np.log(control[mask] / self.P[mask])
-        # kl_term = np.sum(kl_term, axis=1)
+        kl_term = np.zeros_like(control)
+        mask = control > 0
+        kl_term[mask] = control[mask] * np.log(control[mask] / self.P[mask])
+        kl_term = np.sum(kl_term, axis=1)
         
         reward_non_terminal = self.R[:self.num_non_terminal_states] - self.lmbda * kl_term
         reward_non_terminal = np.tile(reward_non_terminal.reshape(-1, 1), (1, num_actions))
@@ -313,14 +309,13 @@ class LMDP:
             probs = control[s, non_zero_positions].flatten()
             for i, a in enumerate(range(num_actions), start=1):
                 mdp.P[s, a, non_zero_positions] = probs
-                # probs = np.roll(probs, shift=1, axis=0)
-                probs = np.random.permutation(probs)
-        
+                probs = np.roll(probs, shift=1, axis=0)
         
         V_lmdp = self.get_value_function(z)
+        
         mdp.compute_value_function()
         V_mdp = mdp.V
         
-        print("Error", np.mean(np.square(V_lmdp - V_mdp)))
+        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))
         
         return mdp

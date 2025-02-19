@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from utils.stats import ValueIterationStats
+from utils.stats import ModelBasedAlgsStats
 from abc import ABC, abstractmethod
 from domains.grid import CellType, CustomGrid
 from collections.abc import Callable
@@ -54,7 +54,6 @@ class MDP(ABC):
         self.num_actions = len(self.__alowed_actions)
         self.s0 = s0
         self.gamma = gamma
-        print(f"Gamma {gamma}")
         
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
@@ -132,7 +131,7 @@ class MDP(ABC):
             next_state >= self.num_non_terminal_states
         )
 
-    def value_iteration_inefficient(self, epsilon=1e-5) -> tuple[np.ndarray, ValueIterationStats]:
+    def value_iteration_inefficient(self, epsilon=1e-5) -> tuple[np.ndarray, ModelBasedAlgsStats]:
         """
         Perform value iteration to compute the optimal value function.
         From Sutton and Barto, page 83 from my references PDF #TODO: remove in a future.
@@ -142,7 +141,7 @@ class MDP(ABC):
 
         Returns:
         - V (np.ndarray): The optimal value function for each state.
-        - ValueIterationStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
+        - ModelBasedAlgsStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
         """
         V = np.zeros(self.num_states)
         iterations = 0
@@ -172,10 +171,10 @@ class MDP(ABC):
 
         elapsed_time = time.time() - start_time
         
-        return V, ValueIterationStats(elapsed_time, rewards, iterations, deltas, self.num_states)
+        return V, ModelBasedAlgsStats(elapsed_time, rewards, iterations, deltas, self.num_states)
     
     
-    def value_iteration(self, epsilon=1e-10, max_iter: int = None) -> tuple[np.ndarray, ValueIterationStats]:
+    def value_iteration(self, epsilon=1e-10) -> tuple[np.ndarray, ModelBasedAlgsStats]:
         """
         Perform value iteration to compute the optimal value function.
         Efficiently implemented with matrix operations
@@ -186,50 +185,40 @@ class MDP(ABC):
 
         Returns:
         - V (np.ndarray): The optimal value function for each state.
-        - ValueIterationStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
+        - ModelBasedAlgsStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
         """
         V = np.zeros(self.num_states)
-        Q = np.zeros((self.num_states, self.num_actions))
+
         iterations = 0
         start_time = time.time()
         deltas = []
-        print(f"Value iteration...")
         Vs = []
+        print(f"Value iteration...")
 
         while True:
             delta = 0
+            # expected_values = np.tensordot(self.P, V, axes=((2), (0))) # num_non_teminal X num_actions
             expected_values = self.P @ V
-            Q = self.R + self.gamma * np.concatenate((expected_values, self.R[:self.num_terminal_states, :])) # num_states X num_actions
-    
-            V_new =  Q.max(axis=1)
+            Q = self.R + self.gamma * np.concatenate((expected_values, self.R[self.num_non_terminal_states:, :])) # num_states X num_actions
+
+            V_new =  np.max(Q, axis=1)
             Vs.append(V_new)
-            # delta = np.mean(np.abs(V_new - V))
             delta = np.linalg.norm(V - V_new, np.inf)
             
-            # print(f"V max: {np.max(V)} ({np.argmax(V)}), V min: {np.min(V)} ({np.argmin(V)})")
-            # print(f"V_new max: {np.max(V_new)} ({np.argmax(V_new)}), V_new min: {np.min(V_new)} ({np.argmin(V_new)})")
             if iterations % 100 == 0:
-                # for i, elem in enumerate(V_new - V):
-                #     if elem != 0:
-                #         print(f"State {i}, difference: {elem} {self.minigrid_env.custom_grid.state_index_mapper[i]}")
                 print(f"Iter: {iterations}. Delta: {delta}")
-                print("V: ", V)
-                print("V new: ", V_new)
             
-            if max_iter is None and delta < epsilon:
+            
+            if delta < epsilon:
                 break
-            
-            if iterations == max_iter:
-                break
-            
+
             V = V_new
             iterations += 1
             deltas.append(delta)
 
         elapsed_time = time.time() - start_time
         print(f"Converged in {iterations} iterations")
-        return V, ValueIterationStats(elapsed_time, iterations, deltas, self.num_states)
-        # return V, Vs, ValueIterationStats(elapsed_time, iterations, deltas, self.num_states)
+        return V, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "VI")
     
     
     def compute_value_function(self):

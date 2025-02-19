@@ -8,7 +8,7 @@ from matplotlib.ticker import MaxNLocator
 from joblib import cpu_count
 import numpy as np
 from custom_palette import CustomPalette
-from utils.stats import ValueIterationStats
+from utils.stats import ModelBasedAlgsStats
 
 
 
@@ -163,8 +163,8 @@ def benchmark_lmdp2mdp_embedding(savefig: bool = True, grid_size: int = None, ma
     plt.ylabel("Value function")
     plt.legend()    
     
-    stats_lmdp: ValueIterationStats = minigrid_lmdp.stats
-    stats_mdp: ValueIterationStats = embedded_mdp.stats
+    stats_lmdp: ModelBasedAlgsStats = minigrid_lmdp.stats
+    stats_mdp: ModelBasedAlgsStats = embedded_mdp.stats
     
     print("LMDP stats")
     stats_lmdp.print_statistics()
@@ -187,3 +187,6 @@ def benchmark_lmdp2mdp_embedding(savefig: bool = True, grid_size: int = None, ma
         fig2.savefig(f"assets/benchmark/deltas_{save_name}.png", dpi=300)
     else:
         plt.show()
+    
+    
+    stats_mdp.value_fun_evolution_gif("assets/benchmark", f"value_function_evolution_{save_name}.gif", stats_lmdp)
