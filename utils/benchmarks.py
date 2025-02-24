@@ -183,10 +183,91 @@ def benchmark_lmdp2mdp_embedding(savefig: bool = True, grid_size: int = None, ma
     plt.legend()
     
     if savefig:
-        fig1.savefig(f"assets/benchmark/value_function_comparison_{save_name}.png", dpi=300)
-        fig2.savefig(f"assets/benchmark/deltas_{save_name}.png", dpi=300)
+        fig1.savefig(f"assets/benchmark/lmdp2mdp/value_function_comparison_{save_name}.png", dpi=300)
+        fig2.savefig(f"assets/benchmark/lmdp2mdp/deltas_{save_name}.png", dpi=300)
     else:
         plt.show()
     
     
-    stats_mdp.value_fun_evolution_gif("assets/benchmark", f"value_function_evolution_{save_name}.gif", stats_lmdp)
+    stats_mdp.value_fun_evolution_gif("assets/benchmark/lmdp2mdp", f"value_function_evolution_{save_name}.gif", stats_lmdp)
+
+
+def benchmark_mdp2lmdp_embedding(savefig: bool = True, grid_size: int = None, map: list[str] = None, objects: list[Object] = None, name: str = None, allowed_actions: list = None):
+    
+    custom_palette = CustomPalette()
+    lmdp_color = custom_palette[3]
+    mdp_color = custom_palette[4]
+    
+    save_name = name
+    if not grid_size:
+        assert map and name, "Must provide a map and its name if no grid size is specified"
+    elif not map:
+        name = f"Simple grid ${grid_size}\\times{grid_size}$"
+        save_name = f"simple_grid_{grid_size}"
+    
+
+    minigrid_mdp = MinigridMDP(
+        grid_size=grid_size,
+        map=map,
+        allowed_actions=allowed_actions,
+        objects=objects,
+        deterministic=False, # TODO: change when embedding for deterministic MDP is implemented
+    )
+    
+    
+    minigrid_mdp.compute_value_function()
+    mdp_v = minigrid_mdp.V
+    
+    # states_to_goal = minigrid_lmdp.states_to_goal()
+    cliff_states = [state for state in range(minigrid_mdp.num_states) if minigrid_mdp.minigrid_env.custom_grid.is_cliff(minigrid_mdp.minigrid_env.custom_grid.state_index_mapper[state])]
+    
+    embedded_lmdp = minigrid_mdp.to_LMDP()
+    embedded_lmdp.compute_value_function()
+    lmdp_v = embedded_lmdp.get_value_function()
+    error_all = np.mean(np.square(lmdp_v - mdp_v))
+    # error_some = np.mean(np.square(lmdp_v[states_to_goal] - mdp_v[states_to_goal]))
+    
+    
+    fig1 = plt.figure(figsize=(10, 5))
+    plt.rcParams.update({
+        "text.usetex": True
+    })
+    plt.scatter(cliff_states, lmdp_v[cliff_states], label="Cliff states", color=custom_palette[0], s=8, marker="x", zorder=3)
+    plt.scatter(cliff_states, mdp_v[cliff_states], color=custom_palette[0], s=8, marker="x", zorder=3)
+    plt.plot([i for i in range(len(lmdp_v))], lmdp_v, label="LMDP", color=lmdp_color, linewidth=1)
+    plt.plot([i for i in range(len(mdp_v))], mdp_v, label="MDP", color=mdp_color, linewidth=1)
+    plt.suptitle(f"LMDP and its embedded MDP comparison. {name}", fontsize=14, fontweight="bold")
+    plt.title(f"MSE: {error_all:,.3e}", fontsize=10)
+    # plt.title(f"MSE: {error_all:,.3e}\nMSE only with States that lead to the goal faster: {error_some:,.3e}", fontsize=10)
+    plt.xlabel("State")
+    plt.grid()
+    plt.ylabel("Value function")
+    plt.legend()    
+    
+    stats_lmdp: ModelBasedAlgsStats = minigrid_mdp.stats
+    stats_mdp: ModelBasedAlgsStats = embedded_lmdp.stats
+    
+    print("LMDP stats")
+    stats_lmdp.print_statistics()
+    
+    print("MDP stats")
+    stats_mdp.print_statistics()
+    
+    fig2 = plt.figure(figsize=(10, 5))
+    plt.suptitle(f"LMDP and its embedded MDP comparison. {name}. {minigrid_mdp.num_states} states", fontsize=14, fontweight="bold")
+    plt.title(f"Value Iteration and Power Iteration convergence", fontsize=10)
+    plt.plot([i for i in range(len(stats_lmdp.deltas))], stats_lmdp.deltas, color=lmdp_color, label=rf"Power Iteration: ${stats_lmdp.time:2f}$ sec")
+    plt.plot([i for i in range(len(stats_mdp.deltas))], stats_mdp.deltas, color=mdp_color, label=rf"Value Iteration: ${stats_mdp.time:2f}$ sec")
+    plt.xlabel("Iteration")
+    plt.ylabel(r"$| V_k - V_{k-1}|$")
+    plt.grid()
+    plt.legend()
+    
+    if savefig:
+        fig1.savefig(f"assets/benchmark/mdp2lmdp/value_function_comparison_{save_name}.png", dpi=300)
+        fig2.savefig(f"assets/benchmark/mdp2lmdp/deltas_{save_name}.png", dpi=300)
+    else:
+        plt.show()
+    
+    
+    # stats_mdp.value_fun_evolution_gif("assets/benchmark/mdp2lmdp/", f"value_function_evolution_{save_name}.gif", stats_lmdp)

@@ -6,6 +6,7 @@ from domains.grid import CellType, CustomGrid
 from collections.abc import Callable
 from utils.state import State
 from tqdm import tqdm
+import models
 
 class MDP(ABC):
     """
@@ -29,7 +30,15 @@ class MDP(ABC):
     #TODO: complete when code is finished
     """
 
-    def __init__(self, num_states: int, num_terminal_states: int, allowed_actions: list[int], gamma: int = 1, s0: int = 0) -> None:
+    def __init__(
+        self,
+        num_states: int,
+        num_terminal_states: int,
+        allowed_actions: list[int],
+        gamma: int = 1,
+        s0: int = 0,
+        deterministic: bool = False
+    ) -> None:
         """
         Initialize the MDP with the given parameters.
 
@@ -54,6 +63,7 @@ class MDP(ABC):
         self.num_actions = len(self.__alowed_actions)
         self.s0 = s0
         self.gamma = gamma
+        self.deterministic = deterministic
         
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
@@ -89,19 +99,22 @@ class MDP(ABC):
                     else:
                         next_state = pos.index(next_state)
 
-                self.P[state, action, next_state] = 1
-                # if self.deterministic:
-                # else:
-                #     # TODO: not tested for minigrid
-                #     # Stochastic policy. With 70% take the correct action, with 30% take a random action
-                #     self.P[state, action, next_state] = 0.7
-                #     rand_action = np.random.choice([a for a in self.__alowed_actions if a != action])
-                #     next_state, _, terminal = move(pos[CellType.NORMAL][state], rand_action)
-                #     if terminal:
-                #         next_state = pos[CellType.GOAL].index(next_state) + len(pos[CellType.NORMAL])
-                #     else:
-                #         next_state = pos[CellType.NORMAL].index(next_state)
-                #     self.P[state, action, next_state] += 0.3
+                if self.deterministic:
+                    self.P[state, action, next_state] = 1
+                else:
+                    # Stochastic policy. With 90% take the correct action, with 10% uniformly take every other action
+                    prob_correct = 0.7
+                    self.P[state, action, next_state] = prob_correct
+                    other_actions = [a for a in self.__alowed_actions if a != action]
+                    for new_action in other_actions:
+                        next_state, _, terminal = move(pos[state], new_action)
+                        if terminal:
+                            next_state = len(pos) + terminal_pos.index(next_state)
+                        else:
+                            next_state = pos.index(next_state)
+                        self.P[state, action, next_state] += (1 - prob_correct) / len(other_actions)
+                    
+                    
         
         print(f"Generated matrix P with {self.P.size:,} elements")
     
@@ -266,6 +279,77 @@ class MDP(ABC):
         #         policy[s] = np.argmax(vals)
             
         # return policy
+    
+    
+    def log(self, message, verbose=False):
+        if verbose:
+            print(message)
+        
+    def to_LMDP(self):
+        self.log(f"Computing the LMDP embedding of this MDP...")
+        verbose=False
+        
+        
+        lmdp = models.LMDP.LMDP(
+            num_states=self.num_states,
+            num_terminal_states=self.num_terminal_states,
+            sparse_optimization=False
+        )
+        
+        if self.deterministic:
+            pass
+            
+        else:
+            epsilon = 1e-10
+            for state in range(self.num_non_terminal_states):
+                self.log(f"STATE: {state}", verbose=verbose)
+                B = self.P[state, :, :]
+                zero_cols = np.all(B == 0, axis=0)
+                zero_cols_idx = np.where(zero_cols)[0]
+                self.log(B, verbose=verbose)
+                self.log(B.shape, verbose=verbose)
+                
+                self.log(f"zero cols: {zero_cols}", verbose=verbose)
+                self.log(f"zero cols idx: {zero_cols_idx}", verbose=verbose)
+                
+                # Remove 0 columns
+                self.log("Remove 0 columns", verbose=verbose)
+                B = B[:, ~zero_cols]
+                self.log(B, verbose=verbose)
+                self.log(B.shape, verbose=verbose)
+                
+                # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
+                B[B == 0] = epsilon
+                B /= np.sum(B, axis=1).reshape(-1, 1)
+                self.log(B, verbose=verbose)
+                self.log(f"Rank of B: {np.linalg.matrix_rank(B)}", verbose=verbose)
+                
+                y = self.R[state] + np.sum(B * np.log(B), axis=1)
+                B_dagger = np.linalg.pinv(B)
+                self.log(f"Pseudoinverse shape: {B_dagger.shape}", verbose=verbose)
+                self.log(f"y shape: {y.shape}", verbose=verbose)
+                c = B_dagger @ y
+                self.log(f"B:\n{B_dagger}", verbose=verbose)
+                self.log(f"y:\n{y}", verbose=verbose)
+                self.log(f"c:\n{c}", verbose=verbose)
+                
+                R = np.log(np.sum(np.exp(c))) # TODO: ask whether to use c or -c
+                x = c - R * np.ones(shape=c.shape)
+                self.log(f"R: {R}", verbose=verbose)
+                self.log(f"x: {x}", verbose=verbose)
+                lmdp.R[state] = R
+                lmdp.P[state, ~zero_cols] = np.exp(x)
+        
+        lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
+        
+        z, _ = lmdp.power_iteration()
+        V_lmdp = lmdp.get_value_function(z)
+        print(f"V LMDP:\n{V_lmdp}")
+        self.compute_value_function()
+        V_mdp = self.V
+        print(f"V MDP:\n{V_mdp}")
+        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        return lmdp
 
     def print_rewards(self):
         """

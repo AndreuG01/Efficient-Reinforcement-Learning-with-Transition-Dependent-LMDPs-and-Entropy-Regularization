@@ -262,6 +262,9 @@ class MinigridMDP(MDP):
         if allowed_actions:
             self.num_actions = len(allowed_actions)
             self.allowed_actions = allowed_actions
+        else:
+            self.num_actions = 3
+            self.allowed_actions = [i for i in range(self.num_actions)]
         
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
         self.remove_unreachable_states()
@@ -279,8 +282,9 @@ class MinigridMDP(MDP):
             super().__init__(
                 self.num_states,
                 num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
-                allowed_actions=allowed_actions,
+                allowed_actions=self.allowed_actions,
                 s0=0,
+                deterministic=self.deterministic
                 # gamma=0.999
             )
 
@@ -296,7 +300,8 @@ class MinigridMDP(MDP):
                 num_terminal_states=mdp.num_terminal_states,
                 allowed_actions=self.allowed_actions,
                 s0=mdp.s0,
-                gamma=mdp.gamma
+                gamma=mdp.gamma,
+                deterministic=mdp.deterministic
             )
             
             self.P = mdp.P
@@ -464,11 +469,16 @@ class MinigridLMDP(LMDP):
         objects: list[Object] = None,
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
-        threads: int = 4
+        threads: int = 4,
+        lmdp: LMDP = None
     ):
         
-        self.num_actions = len(allowed_actions)
-        self.allowed_actions = allowed_actions
+        if allowed_actions:
+            self.num_actions = len(allowed_actions)
+            self.allowed_actions = allowed_actions
+        else:
+            self.num_actions = 3
+            self.allowed_actions = [i for i in range(self.num_actions)]
         
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
         self.remove_unreachable_states()
@@ -478,24 +488,37 @@ class MinigridLMDP(LMDP):
         start_pos = self.minigrid_env.custom_grid.start_pos
         
         
-        super().__init__(
-            self.num_states,
-            num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
-            s0=0,
-            # lmbda=0.99,
-            sparse_optimization=sparse_optimization
-        )
+        if lmdp is None:
+            super().__init__(
+                self.num_states,
+                num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
+                s0=0,
+                # lmbda=0.99,
+                sparse_optimization=sparse_optimization
+            )
 
-        self.p_time = self.generate_P(
-            self.move,
-            self.minigrid_env.custom_grid,
-            self.allowed_actions,
-            benchmark=benchmark_p,
-            num_threads=threads
-        )
-        self._generate_R()
-        print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
-                
+            self.p_time = self.generate_P(
+                self.move,
+                self.minigrid_env.custom_grid,
+                self.allowed_actions,
+                benchmark=benchmark_p,
+                num_threads=threads
+            )
+            self._generate_R()
+            print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
+                    
+        else:
+            super().__init__(
+                num_states=lmdp.num_states,
+                num_terminal_states=lmdp.num_terminal_states,
+                s0=lmdp.s0,
+                lmbda=lmdp.lmbda,
+                sparse_optimization=False # TODO: update
+            )
+            self.P = lmdp.P
+            self.R = lmdp.R
+    
+    
     # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
     def remove_unreachable_states(self):
         print("Going to remove unreachable states")

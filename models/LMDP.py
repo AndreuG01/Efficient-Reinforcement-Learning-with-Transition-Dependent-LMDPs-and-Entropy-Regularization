@@ -1,12 +1,13 @@
 import numpy as np
 from collections.abc import Callable
 from domains.grid import CustomGrid
-from .MDP import MDP
+import models
 from tqdm import tqdm
 from scipy.sparse import csr_matrix
 from sys import getsizeof
 from joblib import Parallel, delayed, cpu_count
 import time
+import models.MDP
 from utils.stats import ModelBasedAlgsStats
 
 class LMDP:
@@ -261,7 +262,7 @@ class LMDP:
         """
         if not hasattr(self, "z"):
             print("Will compute power iteration")
-            _, self.stats = self.power_iteration()
+        _, self.stats = self.power_iteration()
         
         self.V = self.get_value_function()
         
@@ -269,7 +270,7 @@ class LMDP:
         # self.policy_multiple_states = self.get_optimal_policy(self.z, multiple_states=True)
         
     
-    def to_MDP(self) -> MDP:
+    def to_MDP(self):
         """
         Convert the LMDP to an equivalent MDP.
 
@@ -283,7 +284,7 @@ class LMDP:
         # The minimum number of actions that can be done to achieve the same behaviour in an MDP.
         num_actions = np.max(np.sum(control > 0, axis=1))
         
-        mdp = MDP(
+        mdp = models.MDP.MDP(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             allowed_actions=[i for i in range(num_actions)],
