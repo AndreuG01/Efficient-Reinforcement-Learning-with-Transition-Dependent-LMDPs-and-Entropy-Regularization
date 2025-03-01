@@ -11,21 +11,22 @@ from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, be
 from minigrid.manual_control import ManualControl
 from custom_palette import CustomPalette
 import pickle as pkl
+from utils.utils import visualize_stochasticity_rewards_embedded_lmdp
 
 if __name__ == "__main__":
     # benchmark_parallel_p()
-    grid_size = 3
+    grid_size = 4
     minigrid_mdp = MinigridMDP(
         grid_size=grid_size,
         allowed_actions=[
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
-            # MinigridActions.PICKUP,
-            # MinigridActions.DROP,
-            # MinigridActions.TOGGLE,
+            MinigridActions.PICKUP,
+            MinigridActions.DROP,
+            MinigridActions.TOGGLE,
         ],
-        map=Maps.SIMPLE_TEST,
+        # map=Maps.SIMPLE_TEST,
         # objects=Maps.CHALLENGE_DOOR_OBJECTS,
         deterministic=False
     )
@@ -35,7 +36,7 @@ if __name__ == "__main__":
     #         print(state)
     # print(minigrid_mdp.P[2, :, :])
     # # minigrid_mdp.visualize_policy()
-    # print(minigrid_mdp.P[4, :, :])
+    print(minigrid_mdp.P[0, :, :])
     embedded_lmdp = minigrid_mdp.to_LMDP()
     
     # print(embedded_lmdp.P[4, :])
@@ -55,17 +56,20 @@ if __name__ == "__main__":
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
-            # MinigridActions.PICKUP,
-            # MinigridActions.DROP,
-            # MinigridActions.TOGGLE,
+            MinigridActions.PICKUP,
+            MinigridActions.DROP,
+            MinigridActions.TOGGLE,
         ],
-        map=Maps.SIMPLE_TEST,
+        # map=Maps.SIMPLE_TEST,
         # objects=Maps.DOUBLE_DOOR_OBJECTS,
         threads=4,
         sparse_optimization=True,
         lmdp=embedded_lmdp
     )
-    minigrid_lmdp.visualize_policy()
+    
+    
+    visualize_stochasticity_rewards_embedded_lmdp(244, map=Maps.CLIFF)
+    # minigrid_lmdp.visualize_policy()
     # print(minigrid_lmdp.R)
     
     # minigrid_lmdp.visualize_policy(num_times=1, save_gif=False, save_path=f"assets/cliff_lmdp_stochastic_{stochastic}.gif")

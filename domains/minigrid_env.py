@@ -256,9 +256,11 @@ class MinigridMDP(MDP):
         deterministic: bool = True,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
         objects: list[Object] = None,
+        stochastic_prob: float = 0.9,
         mdp: MDP = None
     ):
         
+        self.stochastic_prob = stochastic_prob
         self.deterministic = deterministic
         if allowed_actions:
             self.num_actions = len(allowed_actions)
@@ -289,7 +291,7 @@ class MinigridMDP(MDP):
                 # gamma=0.999
             )
 
-            self.generate_P(self.move, self.minigrid_env.custom_grid)
+            self.generate_P(self.move, self.minigrid_env.custom_grid, stochastic_prob=self.stochastic_prob)
             self._generate_R()
             print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
         else:
@@ -420,7 +422,7 @@ class MinigridMDP(MDP):
             state_repr = self.minigrid_env.custom_grid.states[state]
             if self.minigrid_env.custom_grid.is_cliff(state_repr):
                 # For precision purposes, do not use rewards non strictily lower than np.log(np.finfo(np.float64).tiny) = -708
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-100, dtype=np.float64)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.float64)
             else:
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.float64)
 
@@ -634,9 +636,9 @@ class MinigridLMDP(LMDP):
             state_repr = self.minigrid_env.custom_grid.states[state]
             if self.minigrid_env.custom_grid.is_cliff(state_repr):
                 # For precision purposes, ensure that reward / self.lmbda is greater than np.log(np.finfo(np.float64).tiny) = -708
-                self.R[state] = np.float64(-10)
+                self.R[state] = np.float64(-100)
             else:
-                self.R[state] = np.float64(-1)
+                self.R[state] = np.float64(-10)
 
 
 
