@@ -67,7 +67,7 @@ class MDP(ABC):
         
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
-        self.R = np.zeros((self.num_states, self.num_actions))
+        self.R = np.zeros((self.num_states, self.num_actions), dtype=np.float64)
         
     
     
@@ -90,7 +90,10 @@ class MDP(ABC):
             for action in self.__alowed_actions:
                 # print(state, action)
                 if grid.is_cliff(grid.state_index_mapper[state]):
+                    # Cliff states always have the full probability to transition to the initial state, regardless of whether the model is stochastic, or deterministic
                     next_state = self.s0
+                    self.P[state, action, next_state] = 1
+                    continue
                 else:
                     next_state, _, terminal = move(pos[state], action)
                     # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
@@ -103,7 +106,7 @@ class MDP(ABC):
                     self.P[state, action, next_state] = 1
                 else:
                     # Stochastic policy. With 90% take the correct action, with 10% uniformly take every other action
-                    prob_correct = 0.7
+                    prob_correct = 0.9
                     self.P[state, action, next_state] = prob_correct
                     other_actions = [a for a in self.__alowed_actions if a != action]
                     for new_action in other_actions:
@@ -280,74 +283,54 @@ class MDP(ABC):
             
         # return policy
     
-    
-    def log(self, message, verbose=False):
-        if verbose:
-            print(message)
         
     def to_LMDP(self):
-        self.log(f"Computing the LMDP embedding of this MDP...")
-        verbose=False
+        print(f"Computing the LMDP embedding of this MDP...")
         
         
         lmdp = models.LMDP.LMDP(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
-            sparse_optimization=False
+            sparse_optimization=False,
+            lmbda=1
         )
         
-        if self.deterministic:
+        if self.deterministic and False:
             pass
             
         else:
             epsilon = 1e-10
             for state in range(self.num_non_terminal_states):
-                self.log(f"STATE: {state}", verbose=verbose)
+                print(f"STATE: {state}")
                 B = self.P[state, :, :]
                 zero_cols = np.all(B == 0, axis=0)
                 zero_cols_idx = np.where(zero_cols)[0]
-                self.log(B, verbose=verbose)
-                self.log(B.shape, verbose=verbose)
-                
-                self.log(f"zero cols: {zero_cols}", verbose=verbose)
-                self.log(f"zero cols idx: {zero_cols_idx}", verbose=verbose)
                 
                 # Remove 0 columns
-                self.log("Remove 0 columns", verbose=verbose)
                 B = B[:, ~zero_cols]
-                self.log(B, verbose=verbose)
-                self.log(B.shape, verbose=verbose)
                 
                 # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
                 B[B == 0] = epsilon
                 B /= np.sum(B, axis=1).reshape(-1, 1)
-                self.log(B, verbose=verbose)
-                self.log(f"Rank of B: {np.linalg.matrix_rank(B)}", verbose=verbose)
                 
-                y = self.R[state] + np.sum(B * np.log(B), axis=1)
+                log_B = np.where(B != 0, np.log(B), B)
+                y = self.R[state] + np.sum(B * log_B, axis=1)
                 B_dagger = np.linalg.pinv(B)
-                self.log(f"Pseudoinverse shape: {B_dagger.shape}", verbose=verbose)
-                self.log(f"y shape: {y.shape}", verbose=verbose)
                 c = B_dagger @ y
-                self.log(f"B:\n{B_dagger}", verbose=verbose)
-                self.log(f"y:\n{y}", verbose=verbose)
-                self.log(f"c:\n{c}", verbose=verbose)
                 
-                R = np.log(np.sum(np.exp(c))) # TODO: ask whether to use c or -c
+                
+                R = np.log(np.sum(np.exp(c)))
                 x = c - R * np.ones(shape=c.shape)
-                self.log(f"R: {R}", verbose=verbose)
-                self.log(f"x: {x}", verbose=verbose)
                 lmdp.R[state] = R
                 lmdp.P[state, ~zero_cols] = np.exp(x)
+                
         
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
-        
         z, _ = lmdp.power_iteration()
         V_lmdp = lmdp.get_value_function(z)
-        print(f"V LMDP:\n{V_lmdp}")
         self.compute_value_function()
         V_mdp = self.V
-        print(f"V MDP:\n{V_mdp}")
+        
         print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
         return lmdp
 

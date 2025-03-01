@@ -3,7 +3,7 @@ from .state import Object
 class Maps:
     SIMPLE_TEST = [
     "####",
-    "#S #",
+    "#SC#",
     "# G#",
     "####"
     ]

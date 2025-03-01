@@ -47,7 +47,7 @@ class LMDP:
         self.sparse_optimization = sparse_optimization
         
         self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states))
-        self.R = np.zeros(self.num_states)
+        self.R = np.zeros(self.num_states, dtype=np.float64)
         
     
     
@@ -162,27 +162,17 @@ class LMDP:
         return control
         
     
-    def get_optimal_policy(self, z: np.ndarray, multiple_states: bool = False) -> np.ndarray:
+    def get_optimal_policy(self, z: np.ndarray) -> np.ndarray:
         """
         Compute the optimal policy based on the control matrix.
 
         Args:
         - z (np.ndarray): The transfomed value function vector.
-        - multiple_states (bool): Whether to allow multiple optimal states (default is False).
 
         Returns:
         - policy (np.ndarray): The optimal policy.
         """
-        policy = np.zeros(self.num_states, dtype=object)
-        probs = self.get_control(z)
-        
-        if multiple_states:
-            for i in range(probs.shape[0]):        
-                policy[i] = [j for j in range(len(probs[i, :])) if probs[i, j] == np.max(probs[i, :])]  
-        else:
-            policy = probs.argmax(axis=1)
-        
-        return policy
+        return self.get_control(z)
         
     
     def transition_action(self, state: int, next_state: list[int]) -> list[int]:
@@ -252,6 +242,7 @@ class LMDP:
             z = self.z
         
         result = np.log(z) * self.lmbda
+        result[result == -np.inf] = np.finfo(np.float64).min
         
         return result
     
@@ -267,7 +258,6 @@ class LMDP:
         self.V = self.get_value_function()
         
         self.policy = self.get_optimal_policy(self.z)
-        # self.policy_multiple_states = self.get_optimal_policy(self.z, multiple_states=True)
         
     
     def to_MDP(self):

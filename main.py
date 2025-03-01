@@ -14,30 +14,41 @@ import pickle as pkl
 
 if __name__ == "__main__":
     # benchmark_parallel_p()
-    grid_size = 4
-    gridworld_mdp = MinigridMDP(
+    grid_size = 3
+    minigrid_mdp = MinigridMDP(
         grid_size=grid_size,
         allowed_actions=[
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE,
+            # MinigridActions.PICKUP,
+            # MinigridActions.DROP,
+            # MinigridActions.TOGGLE,
         ],
-        map=Maps.CLIFF,
+        map=Maps.SIMPLE_TEST,
         # objects=Maps.CHALLENGE_DOOR_OBJECTS,
         deterministic=False
     )
-    stochastic = "0_7"
+    # minigrid_mdp.visualize_policy()
+    # for state in range(minigrid_mdp.num_states):
+    #     if minigrid_mdp.minigrid_env.custom_grid.is_cliff(minigrid_mdp.minigrid_env.custom_grid.state_index_mapper[state]):
+    #         print(state)
+    # print(minigrid_mdp.P[2, :, :])
+    # # minigrid_mdp.visualize_policy()
+    # print(minigrid_mdp.P[4, :, :])
+    embedded_lmdp = minigrid_mdp.to_LMDP()
     
-    # gridworld_mdp.visualize_policy(num_times=1, save_gif=False, save_path=f"assets/cliff_mdp_stochastic_{stochastic}.gif")
+    # print(embedded_lmdp.P[4, :])
+    
+    stochastic = "0_9"
+    
+    # # gridworld_mdp.visualize_policy(num_times=1, save_gif=False, save_path=f"assets/cliff_mdp_stochastic_{stochastic}.gif")
 
-    print(gridworld_mdp.P)
-    embedded_lmdp = gridworld_mdp.to_LMDP()
-    # print(f"Original R: {gridworld_mdp.R}")
-    # print(f"Embedded R: {embedded_lmdp.R}")
-    # print(embedded_lmdp.P)
+    # print(gridworld_mdp.P)
+    # embedded_lmdp = gridworld_mdp.to_LMDP()
+    # # print(f"Original R: {gridworld_mdp.R}")
+    # # print(f"Embedded R: {embedded_lmdp.R}")
+    # # print(embedded_lmdp.P)
     minigrid_lmdp = MinigridLMDP(
         grid_size=grid_size,
         allowed_actions=[
@@ -48,28 +59,30 @@ if __name__ == "__main__":
             # MinigridActions.DROP,
             # MinigridActions.TOGGLE,
         ],
-        map=Maps.CLIFF,
+        map=Maps.SIMPLE_TEST,
         # objects=Maps.DOUBLE_DOOR_OBJECTS,
         threads=4,
         sparse_optimization=True,
         lmdp=embedded_lmdp
     )
+    minigrid_lmdp.visualize_policy()
+    # print(minigrid_lmdp.R)
     
     # minigrid_lmdp.visualize_policy(num_times=1, save_gif=False, save_path=f"assets/cliff_lmdp_stochastic_{stochastic}.gif")
-    # print("LMDP", minigrid_lmdp.V)
+    # # print("LMDP", minigrid_lmdp.V)
     
-    benchmark_mdp2lmdp_embedding(
-        map=Maps.CLIFF,
-        name=f"CLIFF_Stochasticity_{stochastic}_RewardCliff_100",
-        allowed_actions=[
-            MinigridActions.ROTATE_LEFT,
-            MinigridActions.ROTATE_RIGHT,
-            MinigridActions.FORWARD,
-            # MinigridActions.PICKUP,
-            # MinigridActions.DROP,
-            # MinigridActions.TOGGLE,
-        ]
-    )
+    # benchmark_mdp2lmdp_embedding(
+    #     map=Maps.CLIFF,
+    #     name=f"CLIFF_Stochasticity_{stochastic}_RewardCliff_700",
+    #     allowed_actions=[
+    #         MinigridActions.ROTATE_LEFT,
+    #         MinigridActions.ROTATE_RIGHT,
+    #         MinigridActions.FORWARD,
+    #         # MinigridActions.PICKUP,
+    #         # MinigridActions.DROP,
+    #         # MinigridActions.TOGGLE,
+    #     ]
+    # )
 
     # gridworld_mdp.compute_value_function()
     # print(gridworld_mdp.policy)

@@ -188,7 +188,8 @@ class CustomMinigridEnv(MiniGridEnv):
                             # print(f"Next_state idx {next_state}, {np.where(model.P[state_idx, policy[state_idx], :] != 0)}, {model.P[state_idx, policy[state_idx], np.where(model.P[state_idx, policy[state_idx], :] != 0)[0]]}")
                             
                     else:
-                        next_state = policy[state_idx]
+                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx])
+                        print(f"State: {state_idx}, probs: {policy[state_idx]}")
                         action = model.transition_action(state_idx, next_state)
                     
                     next_state, _, _ = model.move(state, action)
@@ -418,6 +419,7 @@ class MinigridMDP(MDP):
         for state in range(self.num_non_terminal_states):
             state_repr = self.minigrid_env.custom_grid.states[state]
             if self.minigrid_env.custom_grid.is_cliff(state_repr):
+                # For precision purposes, do not use rewards non strictily lower than np.log(np.finfo(np.float64).tiny) = -708
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-100, dtype=np.float64)
             else:
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.float64)
@@ -631,9 +633,10 @@ class MinigridLMDP(LMDP):
         for state in range(self.num_non_terminal_states):
             state_repr = self.minigrid_env.custom_grid.states[state]
             if self.minigrid_env.custom_grid.is_cliff(state_repr):
-                self.R[state] = -10
+                # For precision purposes, ensure that reward / self.lmbda is greater than np.log(np.finfo(np.float64).tiny) = -708
+                self.R[state] = np.float64(-10)
             else:
-                self.R[state] = -1
+                self.R[state] = np.float64(-1)
 
 
 
