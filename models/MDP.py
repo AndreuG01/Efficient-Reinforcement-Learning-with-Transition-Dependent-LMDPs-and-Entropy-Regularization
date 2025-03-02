@@ -291,7 +291,8 @@ class MDP(ABC):
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,
-            lmbda=1
+            lmbda=1,
+            s0=self.s0
         )
         
         if self.deterministic and False:

@@ -166,6 +166,7 @@ class CustomMinigridEnv(MiniGridEnv):
         for policy_epoch, policy in policies:
             print(f"Visualizing policy from training epoch: {policy_epoch}")
             for i in tqdm(range(num_times), desc=f"Playing {num_times} games"):
+                num_mistakes = 1
                 self.reset()
                 done = False
                 actions = 0
@@ -182,17 +183,24 @@ class CustomMinigridEnv(MiniGridEnv):
                             
                         else:
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, policy[state_idx], :])
+                            if next_state != np.argmax(model.P[state_idx, policy[state_idx], :]):
+                                print(f"MISTAKE {num_mistakes}")
+                                num_mistakes += 1
                             # We need to get the action that leads to the next state
                             action = model.transition_action(state_idx, next_state)
                             # print(f"Action chosen at move {actions}: {action}")
                             # print(f"Next_state idx {next_state}, {np.where(model.P[state_idx, policy[state_idx], :] != 0)}, {model.P[state_idx, policy[state_idx], np.where(model.P[state_idx, policy[state_idx], :] != 0)[0]]}")
                             
                     else:
+                        # next_state = np.argmax(policy[state_idx])
                         next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx])
-                        print(f"State: {state_idx}, probs: {policy[state_idx]}")
+                        if next_state != np.argmax(policy[state_idx]):
+                            print(f"MISTAKE {num_mistakes}")
+                            num_mistakes += 1
                         action = model.transition_action(state_idx, next_state)
                     
-                    next_state, _, _ = model.move(state, action)
+                    next_state, _, terminal = model.move(state, action)
+                    
                     next_properties = next_state.properties
                     next_layout = next_state.layout
                     
@@ -270,23 +278,22 @@ class MinigridMDP(MDP):
             self.allowed_actions = [i for i in range(self.num_actions)]
         
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        start_pos = self.minigrid_env.custom_grid.start_pos
+        self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
+        
         self.remove_unreachable_states()
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
         print(f"MDP with {self.num_actions} actions. Allowed actions: {self.allowed_actions}")
         
-        
-        start_pos = self.minigrid_env.custom_grid.start_pos
-        
-        
-    
+
         if mdp is None:
             super().__init__(
                 self.num_states,
                 num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
                 allowed_actions=self.allowed_actions,
-                s0=0,
+                s0=self.minigrid_env.custom_grid.states.index(self.start_state),
                 deterministic=self.deterministic
                 # gamma=0.999
             )
@@ -315,7 +322,7 @@ class MinigridMDP(MDP):
         print("Going to remove unreachable states")
         
         reachable_states = set()
-        queue = list(self.minigrid_env.custom_grid.terminal_states)
+        queue = [self.start_state]
 
         for terminal_state in queue:
             reachable_states.add(terminal_state)
@@ -441,6 +448,30 @@ class MinigridMDP(MDP):
                     return action
                 
         return 0
+    
+    def states_to_goal(self, stochastic: bool = False) -> list[int]:
+        """
+        Returns the indices of the states that lead to the solution based on the derived policy
+        """
+        curr_state = self.minigrid_env.custom_grid.state_index_mapper[self.s0]
+        curr_state_idx = self.s0
+        states = [self.s0]
+        
+        while not self.minigrid_env.custom_grid.is_terminal(curr_state):
+            if stochastic:
+                curr_state_idx = np.random.choice(self.minigrid_env.custom_grid.get_num_states(), p=self.P[curr_state_idx, self.policy[curr_state_idx], :])
+                curr_state = self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx]
+            else:
+                curr_action = self.policy[curr_state_idx]
+                curr_state, _, terminal = self.move(self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx], curr_action)
+                if terminal:
+                    curr_state_idx = self.minigrid_env.custom_grid.terminal_states.index(curr_state)
+                else:
+                    curr_state_idx = self.minigrid_env.custom_grid.states.index(curr_state)
+            
+            states.append(curr_state_idx)
+        
+        return states
 
 
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
@@ -485,18 +516,21 @@ class MinigridLMDP(LMDP):
             self.allowed_actions = [i for i in range(self.num_actions)]
         
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        
+        start_pos = self.minigrid_env.custom_grid.start_pos
+        self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
+        print(f"LMDP start state")
+        
         self.remove_unreachable_states()
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
-        
-        start_pos = self.minigrid_env.custom_grid.start_pos
         
         
         if lmdp is None:
             super().__init__(
                 self.num_states,
                 num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
-                s0=0,
+                s0=self.minigrid_env.custom_grid.states.index(self.start_state),
                 # lmbda=0.99,
                 sparse_optimization=sparse_optimization
             )
@@ -528,7 +562,7 @@ class MinigridLMDP(LMDP):
         print("Going to remove unreachable states")
         
         reachable_states = set()
-        queue = list(self.minigrid_env.custom_grid.terminal_states)
+        queue = [self.start_state]
 
         for terminal_state in queue:
             reachable_states.add(terminal_state)
@@ -657,7 +691,7 @@ class MinigridLMDP(LMDP):
         return 0
 
     
-    def states_to_goal(self) -> list[int]:
+    def states_to_goal(self, stochastic: bool = False) -> list[int]:
         """
         Returns the indices of the states that lead to the solution based on the derived policy
         """
@@ -666,7 +700,11 @@ class MinigridLMDP(LMDP):
         states = [self.s0]
         
         while not self.minigrid_env.custom_grid.is_terminal(curr_state):        
-            curr_state_idx = self.policy[curr_state_idx]
+            if stochastic:
+                curr_state_idx = np.random.choice(self.minigrid_env.custom_grid.get_num_states(), p=self.policy[curr_state_idx])
+            else:
+                curr_state_idx = np.argmax(self.policy[curr_state_idx])
+            
             curr_state = self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx]
             states.append(curr_state_idx)
         

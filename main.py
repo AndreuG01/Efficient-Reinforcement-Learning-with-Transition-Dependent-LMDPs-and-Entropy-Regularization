@@ -22,21 +22,24 @@ if __name__ == "__main__":
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE,
+            # MinigridActions.PICKUP,
+            # MinigridActions.DROP,
+            # MinigridActions.TOGGLE,
         ],
-        # map=Maps.SIMPLE_TEST,
+        map=Maps.CLIFF,
         # objects=Maps.CHALLENGE_DOOR_OBJECTS,
-        deterministic=False
+        deterministic=False,
     )
-    # minigrid_mdp.visualize_policy()
+    # minigrid_mdp.visualize_policy(num_times=1)
+    # exit()
     # for state in range(minigrid_mdp.num_states):
     #     if minigrid_mdp.minigrid_env.custom_grid.is_cliff(minigrid_mdp.minigrid_env.custom_grid.state_index_mapper[state]):
     #         print(state)
     # print(minigrid_mdp.P[2, :, :])
     # # minigrid_mdp.visualize_policy()
-    print(minigrid_mdp.P[0, :, :])
+    print(minigrid_mdp.P[100, :, :])
+    # exit()
+    # minigrid_mdp.compute_value_function()
     embedded_lmdp = minigrid_mdp.to_LMDP()
     
     # print(embedded_lmdp.P[4, :])
@@ -56,19 +59,54 @@ if __name__ == "__main__":
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE,
+            # MinigridActions.PICKUP,
+            # MinigridActions.DROP,
+            # MinigridActions.TOGGLE,
         ],
-        # map=Maps.SIMPLE_TEST,
-        # objects=Maps.DOUBLE_DOOR_OBJECTS,
+        map=Maps.CLIFF,
+        # objects=Maps.CHALLENGE_DOOR_OBJECTS,
         threads=4,
         sparse_optimization=True,
         lmdp=embedded_lmdp
     )
+    minigrid_lmdp.visualize_policy(num_times=1)
+    
+    print("MDP")
+    print(minigrid_mdp.V)
+    print("LMDP")
+    minigrid_lmdp.compute_value_function()
+    print(minigrid_lmdp.V)
+    states_to_goal_ideal = minigrid_lmdp.states_to_goal()
+    print("mdp", minigrid_mdp.states_to_goal(stochastic=True))
+    print("lmdp", minigrid_lmdp.states_to_goal(stochastic=True))
+    
+    # fig = plt.figure(figsize=(10, 5))
+    # plt.plot(np.arange(len(minigrid_mdp.V)), minigrid_mdp.V, label="MDP")
+    # plt.plot(np.arange(len(minigrid_lmdp.V)), minigrid_lmdp.V, label="LMDP")
+    # plt.scatter(minigrid_mdp.states_to_goal(), minigrid_mdp.V[minigrid_mdp.states_to_goal()], label="States to goal", color="red", marker="x")
+    # plt.scatter(minigrid_lmdp.states_to_goal(), minigrid_lmdp.V[minigrid_lmdp.states_to_goal()], label="States to goal", color="green", marker="x")
+    # plt.legend()
+    # plt.show()
+    
+    # states_to_goal_sotchastic = []
+    # for i in range(10):
+    #     states_to_goal_sotchastic.append(minigrid_lmdp.states_to_goal(stochastic=True))
     
     
-    visualize_stochasticity_rewards_embedded_lmdp(244, map=Maps.CLIFF)
+    # fig = plt.figure(figsize=(10, 5))
+    # plt.plot(np.arange(len(states_to_goal_ideal)), states_to_goal_ideal, linewidth=2, label="Ideal")
+    # for states in states_to_goal_sotchastic:
+    #     plt.plot(np.arange(len(states)), states, marker="x", color="gray", linewidth=0.3, markersize=3)
+    # plt.xlabel("Step number")
+    # plt.ylabel("State idx")
+    # plt.grid()
+    # plt.legend()
+    # plt.show()
+    
+    # minigrid_lmdp.visualize_policy([(0, minigrid_lmdp.policy)])
+    
+    
+    # visualize_stochasticity_rewards_embedded_lmdp(0, map=Maps.SIMPLE_TEST)
     # minigrid_lmdp.visualize_policy()
     # print(minigrid_lmdp.R)
     
