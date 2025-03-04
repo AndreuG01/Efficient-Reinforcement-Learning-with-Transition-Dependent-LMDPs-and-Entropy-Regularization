@@ -220,7 +220,7 @@ class MDP(ABC):
             Vs.append(V_new)
             delta = np.linalg.norm(V - V_new, np.inf)
             
-            if iterations % 100 == 0:
+            if iterations % 1000 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
             
             
@@ -257,7 +257,6 @@ class MDP(ABC):
         Returns:
         - policy (np.ndarray): The optimal policy, where each element corresponds to the optimal action for a state.
         """
-        # # TODO: change to matrix operation
         expected_utilities = self.R[:self.num_non_terminal_states] + \
                      self.gamma * np.einsum("saj,j->sa", self.P[:self.num_non_terminal_states], V)
         if multiple_actions:
@@ -290,7 +289,7 @@ class MDP(ABC):
         lmdp = models.LMDP.LMDP(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
-            sparse_optimization=False,
+            sparse_optimization=True,
             lmbda=1,
             s0=self.s0
         )
@@ -328,8 +327,7 @@ class MDP(ABC):
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, _ = lmdp.power_iteration()
         V_lmdp = lmdp.get_value_function(z)
-        self.compute_value_function()
-        V_mdp = self.V
+        V_mdp, _ = self.value_iteration()
         
         print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
         return lmdp

@@ -120,3 +120,60 @@ def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map
         plt.savefig("assets/stochasticity_effect_normal_reward_1.png", dpi=300)
     else:
         plt.show()
+
+
+
+def compare_value_function_by_stochasticity(map=None, objects=None, grid_size: int = 3, map_name: str = None, save_fig: bool = True):
+    """
+    Compares the value function of an MDP under different stochasticity levels.
+    
+    This function evaluates how varying the probability of taking the intended transition 
+    affects the computed value function in an MDP setting.
+
+    Parameters:
+    - map (optional): The environment map, if applicable.
+    - objects (optional): A list of objects or entities within the environment.
+    - grid_size (int, default=3): The size of the grid for the MDP environment.
+    """
+    palette = CustomPalette()
+    if map_name is not None:
+        assert map_name is not None, "Must provide a name for the map"
+    
+    plt.rcParams.update({"text.usetex": True})
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    linewidth = 0.5
+
+    for i, stochasticity in enumerate(np.arange(0.1, 1.0, 0.1)):
+        mdp = MinigridMDP(
+            grid_size=grid_size,
+            allowed_actions=[
+                MinigridActions.ROTATE_LEFT,
+                MinigridActions.ROTATE_RIGHT,
+                MinigridActions.FORWARD,
+                MinigridActions.PICKUP,
+                MinigridActions.DROP,
+                MinigridActions.TOGGLE
+            ],
+            map=map,
+            objects=objects,
+            deterministic=True if stochasticity == 1 else False,
+            stochastic_prob=stochasticity
+        )
+        mdp.compute_value_function()
+        embedded_lmdp = mdp.to_LMDP()
+        embedded_lmdp.compute_value_function()
+        axes[0].plot([i for i in range(mdp.num_states)], mdp.V, label=f"$p = {round(stochasticity, 1)}$, Iter: ${mdp.stats.iterations}$", linewidth=linewidth, color=palette[i])
+        axes[1].plot([i for i in range(embedded_lmdp.num_states)], embedded_lmdp.V, linewidth=linewidth, color=palette[i])
+    
+    axes[0].set_xlabel("State $s$")
+    axes[0].set_ylabel("$V_{MDP}^*(s)$")
+    axes[0].legend()
+    axes[1].set_xlabel("State $s$")
+    axes[1].set_ylabel("$V_{LMDP}^*(s)$")
+    
+    plt.suptitle(f"Value function comparison of MDP and its embedded LMDP with different stochasticity $p$\nMap: {map_name}")
+    
+    if save_fig:
+        plt.savefig(f"assets/stochasticity_comparison_{map_name}.png", dpi=300)
+    else:
+        plt.show()

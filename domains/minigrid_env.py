@@ -431,7 +431,7 @@ class MinigridMDP(MDP):
                 # For precision purposes, do not use rewards non strictily lower than np.log(np.finfo(np.float64).tiny) = -708
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.float64)
             else:
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-1, dtype=np.float64)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float64)
 
 
 
