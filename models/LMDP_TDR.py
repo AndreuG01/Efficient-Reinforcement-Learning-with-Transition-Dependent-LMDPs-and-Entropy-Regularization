@@ -117,7 +117,6 @@ class LMDP_TDR:
         probs = self.get_control(z, o)
         if self.sparse_optimization:
             probs = probs.toarray()
-        print(probs)
         return probs
         
         

@@ -266,20 +266,6 @@ class MDP(ABC):
             policy = np.argmax(expected_utilities, axis=1)
 
         return policy
-        # policy = np.zeros(self.num_states, dtype=object)
-        # for s in range(self.num_non_terminal_states):  # Skip terminal states
-        #     # Find the action that maximizes the expected utility
-        #     vals = [
-        #         sum(self.P[s, a, s_next] * (self.R[s, a] + self.gamma * V[s_next])
-        #             for s_next in range(self.num_states))
-        #         for a in range(self.num_actions)
-        #     ]
-        #     if multiple_actions:
-        #         policy[s] = [i for i in range(len(vals)) if vals[i] == np.max(vals)]
-        #     else:
-        #         policy[s] = np.argmax(vals)
-            
-        # return policy
     
         
     def to_LMDP(self):
@@ -331,6 +317,58 @@ class MDP(ABC):
         
         print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
         return lmdp
+    
+    
+    def to_LMDP_TDR(self):
+        print(f"Computing the LMDP-TDR embedding of this MDP...")
+        
+        
+        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+            num_states=self.num_states,
+            num_terminal_states=self.num_terminal_states,
+            sparse_optimization=True,
+            lmbda=1,
+            s0=self.s0
+        )
+        
+        if self.deterministic and False:
+            pass
+            
+        else:
+            epsilon = 1e-10
+            for state in range(self.num_non_terminal_states):
+                # print(f"STATE: {state}")
+                B = self.P[state, :, :]
+                zero_cols = np.all(B == 0, axis=0)
+                zero_cols_idx = np.where(zero_cols)[0]
+                
+                # Remove 0 columns
+                B = B[:, ~zero_cols]
+                
+                # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
+                B[B == 0] = epsilon
+                B /= np.sum(B, axis=1).reshape(-1, 1)
+                
+                log_B = np.where(B != 0, np.log(B), B)
+                y = self.R[state] + np.sum(B * log_B, axis=1)
+                B_dagger = np.linalg.pinv(B)
+                x = B_dagger @ y
+                
+                support_x = len([col for col in zero_cols if col == False])
+                print(support_x)
+                
+                
+                lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(support_x)
+                lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(support_x))
+                
+        
+        lmdp_tdr.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
+        z, _ = lmdp_tdr.power_iteration()
+        V_lmdp = lmdp_tdr.get_value_function(z)
+        V_mdp, _ = self.value_iteration()
+        
+        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        return lmdp_tdr
 
     def print_rewards(self):
         """
