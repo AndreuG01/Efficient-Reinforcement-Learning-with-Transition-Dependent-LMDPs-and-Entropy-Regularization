@@ -519,7 +519,6 @@ class MinigridLMDP(LMDP):
         
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
-        print(f"LMDP start state")
         
         self.remove_unreachable_states()
         
@@ -666,13 +665,9 @@ class MinigridLMDP(LMDP):
 
                   
     def _generate_R(self):
-        for state in range(self.num_non_terminal_states):
-            state_repr = self.minigrid_env.custom_grid.states[state]
-            if self.minigrid_env.custom_grid.is_cliff(state_repr):
-                # For precision purposes, ensure that reward / self.lmbda is greater than np.log(np.finfo(np.float64).tiny) = -708
-                self.R[state] = np.float64(-100)
-            else:
-                self.R[state] = np.float64(-10)
+        self.R[:] = np.float64(-5)
+        cliff_states = [i for i in range(self.num_states) if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i])]
+        self.R[cliff_states] = np.float64(-10)
 
 
 
@@ -744,29 +739,32 @@ class MinigridLMDP_TDR(LMDP_TDR):
         threads: int = 4
     ):
         
-        self.num_actions = len(allowed_actions)
-        self.allowed_actions = allowed_actions
+        if allowed_actions:
+            self.num_actions = len(allowed_actions)
+            self.allowed_actions = allowed_actions
+        else:
+            self.num_actions = 3
+            self.allowed_actions = [i for i in range(self.num_actions)]
         
         self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        start_pos = self.minigrid_env.custom_grid.start_pos
+        self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         self.remove_unreachable_states()
         
         
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
-        start_pos = self.minigrid_env.custom_grid.start_pos
         
         
         super().__init__(
             self.num_states,
             num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
-            s0=0,
-            # lmbda=0.99,
+            s0=self.minigrid_env.custom_grid.states.index(self.start_state),
             sparse_optimization=sparse_optimization
         )
 
         self.p_time = self.generate_P(
-            self.minigrid_env.custom_grid.states,
             self.move,
             self.minigrid_env.custom_grid,
             self.allowed_actions,
@@ -780,12 +778,13 @@ class MinigridLMDP_TDR(LMDP_TDR):
     # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
     def remove_unreachable_states(self):
         print("Going to remove unreachable states")
-        reachable_states = set()
-        queue = []
-        for terminal_state in self.minigrid_env.custom_grid.terminal_states:
-            reachable_states.add(terminal_state)
-            queue.append(terminal_state)
         
+        reachable_states = set()
+        queue = [self.start_state]
+
+        for terminal_state in queue:
+            reachable_states.add(terminal_state)
+
         while queue:
             current_state = queue.pop(0)
             for action in self.allowed_actions:
@@ -793,11 +792,17 @@ class MinigridLMDP_TDR(LMDP_TDR):
                 if next_state not in reachable_states:
                     reachable_states.add(next_state)
                     queue.append(next_state)
-        
-        states = list(reachable_states - set(self.minigrid_env.custom_grid.terminal_states))
-        print(f"Removing {len(self.minigrid_env.custom_grid.states) - len(states)} states")
+
+        states = [state for state in self.minigrid_env.custom_grid.states if state in reachable_states]
+        terminal_states = [state for state in self.minigrid_env.custom_grid.terminal_states if state in reachable_states]
+
+        removed_states = len(self.minigrid_env.custom_grid.states) - len(states)
+        print(f"Removing {removed_states} states")
+
         self.minigrid_env.custom_grid.states = states
-        self.minigrid_env.custom_grid.generate_state_index_mapper()   
+        self.minigrid_env.custom_grid.terminal_states = terminal_states
+        self.minigrid_env.custom_grid.generate_state_index_mapper() 
+    
     
     # TODO: same as MinigridMDP
     def move(self, state: State, action: int):
@@ -879,20 +884,9 @@ class MinigridLMDP_TDR(LMDP_TDR):
 
                   
     def _generate_R(self):
-        for state in range(self.num_non_terminal_states):
-            for action in range(self.num_actions):
-                state_repr = self.minigrid_env.custom_grid.states[state]
-                next_state, _, terminal = self.move(state_repr, action)
-                if terminal:
-                    next_state_idx = self.minigrid_env.custom_grid.terminal_state_idx(next_state)
-                else:
-                    next_state_idx = self.minigrid_env.custom_grid.states.index(next_state)
-                
-                if self.minigrid_env.custom_grid.is_cliff(state_repr):
-                    self.R[state, next_state_idx] = -10
-                else:
-                    
-                    self.R[state, next_state_idx] = -1
+        self.R[:, np.arange(self.num_non_terminal_states)] = np.float64(-5)
+        cliff_states = [i for i in range(self.num_states) if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i])]
+        self.R[:, cliff_states] = np.float64(-10)
 
         # Matrix R is now sparese as well, so if sparse_optimization is activated, we convert it.
         if self.sparse_optimization:

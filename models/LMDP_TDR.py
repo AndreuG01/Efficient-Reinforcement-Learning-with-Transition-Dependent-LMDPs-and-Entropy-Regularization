@@ -21,17 +21,18 @@ class LMDP_TDR:
         self.R = np.zeros((self.num_non_terminal_states, self.num_states))
     
     
-    def generate_P(self, pos: dict[int, list], move: Callable, grid: CustomGrid, actions: list[int], num_threads: int = 10, benchmark: bool = False) -> float:
+    def generate_P(self, move: Callable, grid: CustomGrid, actions: list[int], num_threads: int = 10, benchmark: bool = False) -> float:
         """
         Generates the transition probability matrix (P) for the LMDP, based on the dynamics of the environment.
 
         Args:
-        - pos (dict[int, list]): The different positions of the grid
         - move (Callable): A function that determines the next state based on the current state and action.
         The function signature should be `move(state: State, action: int) -> tuple[next_state: State, reward: float, done: bool]`.
         - grid (CustomGrid): The grid environment for which the transition matrix is being generated.
         - actions (list[int]): List of possible actions that can be taken in the environment (NOTE THAT THE LMDP DOES NOT HAVE ACTIONS INTO ACOUNT)
         """
+        pos = grid.states
+        terminal_pos = grid.terminal_states
         
         def process_state(state: int) -> list[float]:
             row_updates = []
@@ -42,7 +43,7 @@ class LMDP_TDR:
                     next_state, _, terminal = move(pos[state], action)
                     # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
                     if terminal:
-                        next_state = grid.terminal_state_idx(next_state)
+                        next_state = len(pos) + terminal_pos.index(next_state)
                     else:
                         next_state = pos.index(next_state)
                 
@@ -113,16 +114,13 @@ class LMDP_TDR:
     
     
     def get_optimal_policy(self, z: np.ndarray, o: np.ndarray | csr_matrix, multiple_states: bool = False) -> np.ndarray:
-        policy = np.zeros(self.num_states, dtype=object)
         probs = self.get_control(z, o)
+        if self.sparse_optimization:
+            probs = probs.toarray()
+        print(probs)
+        return probs
         
-        if multiple_states:
-            for i in range(probs.shape[0]):        
-                policy[i] = [j for j in range(len(probs[i, :])) if probs[i, j] == np.max(probs[i, :])]  
-        else:
-            policy = np.asarray(probs.argmax(axis=1)).squeeze()
-            
-        return policy
+        
         
     
     def transition_action(self, state: int, next_state: list[int]) -> list[int]:
@@ -149,19 +147,19 @@ class LMDP_TDR:
             z_new = G @ z
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
            
-            delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z))
-            z = z_new
+            delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z), ord=np.inf)
             
-            if iterations % 10 == 0:
+            if iterations % 100 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
         
             if delta < epsilon:
                 break
             
+            z = z_new
             iterations += 1
         
         self.z = z
-        
+        print(f"Converged in {iterations} iterations")
         return z
         
     
@@ -169,9 +167,8 @@ class LMDP_TDR:
         if z is None:
             z = self.z
         
-        result = np.zeros_like(z)
-        mask = z > 1e-100
-        result[mask] = np.log(z[mask]) * self.lmbda
+        result = np.log(z) * self.lmbda
+        result[result == -np.inf] = np.finfo(np.float64).min
         
         return result
     
