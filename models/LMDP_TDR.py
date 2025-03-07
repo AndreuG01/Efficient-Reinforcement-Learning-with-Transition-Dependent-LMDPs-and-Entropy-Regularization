@@ -130,7 +130,7 @@ class LMDP_TDR:
     
     def power_iteration(self, epsilon=1e-10) -> np.ndarray:
         if self.sparse_optimization:
-            self.o = np.exp(self.R.toarray() * self.lmbda) # TODO: I have problems when this is a sparse matrix
+            self.o = np.exp(self.R.toarray() / self.lmbda) # TODO: I have problems when this is a sparse matrix
             G = csr_matrix(self.P.multiply(self.o))
             
         else:

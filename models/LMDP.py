@@ -8,6 +8,7 @@ from sys import getsizeof
 from joblib import Parallel, delayed, cpu_count
 import time
 import models.MDP
+import models.LMDP_TDR
 from utils.stats import ModelBasedAlgsStats
 
 class LMDP:
@@ -278,6 +279,7 @@ class LMDP:
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             allowed_actions=[i for i in range(num_actions)],
+            s0=self.s0
             # gamma=0.9
         )
         
@@ -310,3 +312,22 @@ class LMDP:
         print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))
         
         return mdp
+
+
+    def to_LMDP_TDR(self):
+        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+            num_states=self.num_states,
+            num_terminal_states=self.num_terminal_states,
+            s0=self.s0,
+            sparse_optimization=self.sparse_optimization
+        )
+        
+        lmdp_tdr.P = self.P.copy()
+        for state in range(self.num_non_terminal_states):
+            lmdp_tdr.R[state, :] = np.full(shape=self.num_states, fill_value=self.R[state], dtype=np.float64)
+        
+        if self.sparse_optimization:
+            lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
+        
+        return lmdp_tdr
+        

@@ -21,49 +21,47 @@ if __name__ == "__main__":
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD
         ],
-        map=Maps.SIMPLE_TEST,
+        map=Maps.CLIFF,
         deterministic=True
     )
     print(mdp.R)
     
-    
-    
-    lmdp_tdr = MinigridLMDP_TDR(
-        grid_size=40,
-        allowed_actions=[
-            MinigridActions.ROTATE_LEFT,
-            MinigridActions.ROTATE_RIGHT,
-            MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE
-        ],
-        map=Maps.SIMPLE_TEST,
-        # objects=Maps.CHALLENGE_DOOR_OBJECTS,
-        sparse_optimization=False,
-        threads=4
-    )
-    
-    # print(lmdp_tdr.P)
-    print(lmdp_tdr.R)
-    # print(lmdp_tdr.P[np.where(lmdp_tdr.R == 0)])
-
     lmdp = MinigridLMDP(
         grid_size=40,
         allowed_actions=[
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE
+            # MinigridActions.PICKUP,
+            # MinigridActions.DROP,
+            # MinigridActions.TOGGLE
         ],
-        map=Maps.SIMPLE_TEST,
+        map=Maps.CLIFF,
         # objects=Maps.CHALLENGE_DOOR_OBJECTS,
-        sparse_optimization=False,
+        sparse_optimization=True,
         threads=4
     )
     
+    # lmdp_tdr = lmdp.to_LMDP_TDR()
+    # print(lmdp_tdr.R)
+    
+    print(lmdp.P)
+    print(lmdp.R)
+    lmdp_tdr = MinigridLMDP_TDR(
+        grid_size=40,
+        allowed_actions=[
+            MinigridActions.ROTATE_LEFT,
+            MinigridActions.ROTATE_RIGHT,
+            MinigridActions.FORWARD,
+            # MinigridActions.PICKUP,
+            # MinigridActions.DROP,
+            # MinigridActions.TOGGLE
+        ],
+        map=Maps.CLIFF,
+        # objects=Maps.CHALLENGE_DOOR_OBJECTS,
+        sparse_optimization=True,
+        threads=4
+    ) 
     
     cliff_states = [i for i in range(lmdp.num_states) if lmdp.minigrid_env.custom_grid.is_cliff(lmdp.minigrid_env.custom_grid.state_index_mapper[i])]
     print(f"Cliff states: {cliff_states}")
@@ -83,21 +81,27 @@ if __name__ == "__main__":
             i, j = idx
             diff = abs(lmdp.policy[i, j] - lmdp_tdr.policy[i, j])
             print(f"Index ({i}, {j}): Diff = {round(diff, 4)}. lmdp.policy = {lmdp.policy[i, j]}, lmdp_tdr.policy = {lmdp_tdr.policy[i, j]}")
+            # print(f"\tLMDP:{lmdp.policy[i, :]}")
+            # print(f"\tLMDP-TDR:{lmdp_tdr.policy[i, :]}")
     else:
         print("\t\tPOLICIES are close", True)
 
     
+    # print(lmdp_tdr.minigrid_env.custom_grid.states[19])
+    # print(lmdp_tdr.minigrid_env.custom_grid.states[55])
+    # print(lmdp_tdr.minigrid_env.custom_grid.states[58])
 
 
-    # close = np.isclose(lmdp.V, lmdp_tdr.V)
-    # if not np.all(close):
-    #     diff_indices = np.where(~close)
-    #     print("VALUE FUNCTIONS are NOT close at indices:")
-    #     for idx in diff_indices[0]:
-    #         diff = abs(lmdp.V[idx] - lmdp_tdr.V[idx])
-    #         print(f"Index ({idx}): Diff = {round(diff, 4)} lmdp.V = {lmdp.V[idx]}, lmdp_tdr.V = {lmdp_tdr.V[idx]}")
-    # else:
-    #     print("\t\tVALUE FUNCTIONS are close", True)
+    close = np.isclose(lmdp.V, lmdp_tdr.V)
+    if not np.all(close):
+        diff_indices = np.where(~close)
+        print("VALUE FUNCTIONS are NOT close at indices:")
+        for idx in diff_indices[0]:
+            diff = abs(lmdp.V[idx] - lmdp_tdr.V[idx])
+            # print(f"Index ({idx}{', cliff' if idx in cliff_states else ''}): Diff = {round(diff, 4)} lmdp.V = {lmdp.V[idx]}, lmdp_tdr.V = {lmdp_tdr.V[idx]}")
+            print(f"Index ({idx}{', cliff' if idx in cliff_states else ''}): Diff = {round(diff, 4)} lmdp.V = {lmdp.V[idx]}, lmdp_tdr.V = {lmdp_tdr.V[idx]}. State: {lmdp.minigrid_env.custom_grid.states[idx]}")
+    else:
+        print("\t\tVALUE FUNCTIONS are close", True)
 
     # print(np.argmax(lmdp_tdr.policy, axis=1))
     # print(np.argmax(lmdp.policy, axis=1))

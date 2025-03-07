@@ -429,7 +429,7 @@ class MinigridMDP(MDP):
             state_repr = self.minigrid_env.custom_grid.states[state]
             if self.minigrid_env.custom_grid.is_cliff(state_repr):
                 # For precision purposes, do not use rewards non strictily lower than np.log(np.finfo(np.float64).tiny) = -708
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-10, dtype=np.float64)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=np.float64)
             else:
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float64)
 
@@ -667,7 +667,8 @@ class MinigridLMDP(LMDP):
     def _generate_R(self):
         self.R[:] = np.float64(-5)
         cliff_states = [i for i in range(self.num_states) if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i])]
-        self.R[cliff_states] = np.float64(-10)
+        self.R[cliff_states] = np.float64(-50)
+        self.R[self.num_non_terminal_states:] = np.float64(0)
 
 
 
@@ -884,32 +885,16 @@ class MinigridLMDP_TDR(LMDP_TDR):
 
                   
     def _generate_R(self):
-        # Option 1: ignore which transitions are valid and assign a reward based on the transitioned state s'
-        self.R[:, np.arange(self.num_non_terminal_states)] = np.float64(-5)
-        cliff_states = [i for i in range(self.num_states) if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i])]
-        self.R[:, cliff_states] = np.float64(-10)
+        if self.sparse_optimization:
+            indices = self.P.nonzero()
+        else:
+            indices = np.where(self.P != 0)
         
-        # Option 2: consider only valid transitions
-        # transitions = set()
-
-        # self.R.fill(np.float64(-10))
-        # for state in tqdm(range(self.num_non_terminal_states), desc="Generating reward matrix R", total=self.num_non_terminal_states):
-        #     state_repr = self.minigrid_env.custom_grid.state_index_mapper[state]  
-        #     for action in range(self.num_actions):
-        #         next_state, _, terminal = self.move(state_repr, action)
-                
-        #         if terminal:
-        #             next_state_idx = len(self.minigrid_env.custom_grid.states) + self.minigrid_env.custom_grid.terminal_states.index(next_state)
-        #         else:
-        #             next_state_idx = self.minigrid_env.custom_grid.states.index(next_state)
-                
-        #         transitions.add((state, next_state_idx))
-        #         if self.minigrid_env.custom_grid.is_cliff(next_state):
-        #             self.R[state, next_state_idx] = np.float64(-10)
-        #         else:
-        #             self.R[state, next_state_idx] = np.float64(-5)
-        # self.R[:, self.num_non_terminal_states:] = 0
-
+        for i, j in zip(indices[0], indices[1]):
+            if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[j]) or self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i]):
+                self.R[i, j] = np.float64(-50)
+            else:
+                self.R[i, j] = np.float64(-5)
 
         # Matrix R is now sparese as well, so if sparse_optimization is activated, we convert it.
         if self.sparse_optimization:
