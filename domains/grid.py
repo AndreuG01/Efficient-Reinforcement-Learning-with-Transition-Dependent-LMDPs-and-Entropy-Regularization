@@ -173,8 +173,8 @@ class CustomGrid:
             all_placements.append(placement)
 
         # Generate all possible ways to place n-1 keys
-        for key_subset in combinations(key_objects, len(key_objects) - 1):
-            for key_positions in permutations(valid_positions, len(key_objects) - 1):
+        for key_subset in combinations(key_objects, max(len(key_objects) - 1, 0)):
+            for key_positions in permutations(valid_positions, max(len(key_objects) - 1, 0)):
                 placement = {pos: None for pos in valid_positions}
                 
                 # Doors
