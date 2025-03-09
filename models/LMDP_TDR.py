@@ -129,6 +129,7 @@ class LMDP_TDR:
 
     
     def power_iteration(self, epsilon=1e-10) -> np.ndarray:
+        print(f"Power iteration LMDP-TDR...")
         if self.sparse_optimization:
             self.o = np.exp(self.R.toarray() / self.lmbda) # TODO: I have problems when this is a sparse matrix
             G = csr_matrix(self.P.multiply(self.o))
@@ -173,9 +174,9 @@ class LMDP_TDR:
     
     
     def compute_value_function(self):
-        if not hasattr(self, "z"):
-            print("Will compute power iteration")
-            self.power_iteration()
+        # if not hasattr(self, "z"):
+        print("Will compute power iteration")
+        self.power_iteration()
         
         self.V = self.get_value_function()
         

@@ -15,116 +15,64 @@ from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_v
 
 if __name__ == "__main__":
     
+    
     mdp = MinigridMDP(
         allowed_actions=[
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
-            MinigridActions.FORWARD
-        ],
-        map=Maps.CLIFF,
-        deterministic=True
-    )
-    print(mdp.R)
-    
-    lmdp = MinigridLMDP(
-        grid_size=40,
-        allowed_actions=[
-            MinigridActions.ROTATE_LEFT,
-            MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
-            # MinigridActions.PICKUP,
-            # MinigridActions.DROP,
-            # MinigridActions.TOGGLE
+            MinigridActions.PICKUP,
+            MinigridActions.DROP,
+            MinigridActions.TOGGLE
         ],
-        map=Maps.CLIFF,
-        # objects=Maps.CHALLENGE_DOOR_OBJECTS,
-        sparse_optimization=True,
-        threads=4
+        map=Maps.DOUBLE_DOOR,
+        objects=Maps.DOUBLE_DOOR_OBJECTS,
+        deterministic=False,
     )
+    print(mdp.P.shape)
     
-    # lmdp_tdr = lmdp.to_LMDP_TDR()
-    # print(lmdp_tdr.R)
+    embedded_lmdp = mdp.to_LMDP()
+    embedded_lmdptdr = mdp.to_LMDP_TDR()
     
-    print(lmdp.P)
-    print(lmdp.R)
-    lmdp_tdr = MinigridLMDP_TDR(
-        grid_size=40,
-        allowed_actions=[
-            MinigridActions.ROTATE_LEFT,
-            MinigridActions.ROTATE_RIGHT,
-            MinigridActions.FORWARD,
-            # MinigridActions.PICKUP,
-            # MinigridActions.DROP,
-            # MinigridActions.TOGGLE
-        ],
-        map=Maps.CLIFF,
-        # objects=Maps.CHALLENGE_DOOR_OBJECTS,
-        sparse_optimization=True,
-        threads=4
-    ) 
-    
-    cliff_states = [i for i in range(lmdp.num_states) if lmdp.minigrid_env.custom_grid.is_cliff(lmdp.minigrid_env.custom_grid.state_index_mapper[i])]
-    print(f"Cliff states: {cliff_states}")
-    # lmdp_tdr.visualize_policy(num_times=3)
-    lmdp_tdr.compute_value_function()
-    lmdp.compute_value_function()
     mdp.compute_value_function()
-    state = 3
-    # print(lmdp_tdr.policy[state, :])
-    # print(lmdp.policy[state, :])
-
-    close = np.isclose(lmdp.policy, lmdp_tdr.policy)
-    if not np.all(close):
-        diff_indices = np.argwhere(~close)
-        print("POLICIES are NOT close at indices:")
-        for idx in diff_indices:
-            i, j = idx
-            diff = abs(lmdp.policy[i, j] - lmdp_tdr.policy[i, j])
-            print(f"Index ({i}, {j}): Diff = {round(diff, 4)}. lmdp.policy = {lmdp.policy[i, j]}, lmdp_tdr.policy = {lmdp_tdr.policy[i, j]}")
-            # print(f"\tLMDP:{lmdp.policy[i, :]}")
-            # print(f"\tLMDP-TDR:{lmdp_tdr.policy[i, :]}")
-    else:
-        print("\t\tPOLICIES are close", True)
-
+    embedded_lmdp.compute_value_function()
+    embedded_lmdptdr.compute_value_function()
     
-    # print(lmdp_tdr.minigrid_env.custom_grid.states[19])
-    # print(lmdp_tdr.minigrid_env.custom_grid.states[55])
-    # print(lmdp_tdr.minigrid_env.custom_grid.states[58])
-
-
-    close = np.isclose(lmdp.V, lmdp_tdr.V)
+    
+    # lmdp = MinigridLMDP(
+    #     allowed_actions=[
+    #         MinigridActions.ROTATE_LEFT,
+    #         MinigridActions.ROTATE_RIGHT,
+    #         MinigridActions.FORWARD,
+    #         # MinigridActions.PICKUP,
+    #         # MinigridActions.DROP,
+    #         # MinigridActions.TOGGLE
+    #     ],
+    #     map=Maps.SIMPLE_TEST,
+    #     # objects=Maps.CHALLENGE_DOOR_OBJECTS,
+    #     lmdp=embedded_lmdp
+    # )
+    
+    # lmdp.visualize_policy(num_times=1, save_gif=True, save_path="assets/now.gif")
+    
+    close = np.isclose(embedded_lmdp.V, embedded_lmdptdr.V)
     if not np.all(close):
         diff_indices = np.where(~close)
         print("VALUE FUNCTIONS are NOT close at indices:")
         for idx in diff_indices[0]:
-            diff = abs(lmdp.V[idx] - lmdp_tdr.V[idx])
+            diff = abs(embedded_lmdp.V[idx] - embedded_lmdptdr.V[idx])
             # print(f"Index ({idx}{', cliff' if idx in cliff_states else ''}): Diff = {round(diff, 4)} lmdp.V = {lmdp.V[idx]}, lmdp_tdr.V = {lmdp_tdr.V[idx]}")
-            print(f"Index ({idx}{', cliff' if idx in cliff_states else ''}): Diff = {round(diff, 4)} lmdp.V = {lmdp.V[idx]}, lmdp_tdr.V = {lmdp_tdr.V[idx]}. State: {lmdp.minigrid_env.custom_grid.states[idx]}")
+            print(f"Index ({idx}): Diff = {round(diff, 4)} elmdp.V = {embedded_lmdp.V[idx]}, lmdp_tdr.V = {embedded_lmdptdr.V[idx]}.")
     else:
         print("\t\tVALUE FUNCTIONS are close", True)
-
-    # print(np.argmax(lmdp_tdr.policy, axis=1))
-    # print(np.argmax(lmdp.policy, axis=1))
-    
     
     fig = plt.figure(figsize=(10, 5))
-    plt.plot(np.arange(len(lmdp_tdr.V)), lmdp_tdr.V, label="lmdp_tdr", linewidth=1)
-    plt.scatter(cliff_states, lmdp_tdr.V[cliff_states], marker="x", color="purple", s=10)
-    plt.plot(np.arange(len(lmdp.V)), lmdp.V, label="lmdp", linewidth=1)
-    plt.scatter(cliff_states, lmdp.V[cliff_states], marker="x", color="purple", label="Cliff states", s=10)
-    
-    # plt.plot(np.arange(len(mdp.V)), mdp.V, label="mdp", linewidth=1)
-    # plt.scatter(cliff_states, mdp.V[cliff_states], marker="x", color="purple", s=10)
-    
-    # plt.plot(np.arange(len(embedded_mdp.V)), embedded_mdp.V, label="embedded_mdp", linewidth=1)
-    # plt.scatter(cliff_states, embedded_mdp.V[cliff_states], marker="x", color="purple", s=10)
-    plt.legend()
-    plt.title("CHALLENGE DOOR")
+    plt.plot(np.arange(len(mdp.V)), mdp.V, label="MDP")
+    plt.plot(np.arange(len(embedded_lmdp.V)), embedded_lmdp.V, label="Embedded LMDP")
+    plt.plot(np.arange(len(embedded_lmdptdr.V)), embedded_lmdptdr.V, label="Embedded LMDP-TDR")
     plt.xlabel("State index")
     plt.ylabel("V(s)")
-    plt.savefig("assets/lmdp_tdr.png", dpi=300)
-    # plt.show()
+    plt.title("DOUBLE_DOOR")
     
-    # lmdp_tdr.visualize_policy(num_times=3, save_gif=True, save_path="assets/tdr.gif")
-    
-    
+    plt.legend()
+    plt.savefig("assets/mdp_lmdp-tdr.png", dpi=300)

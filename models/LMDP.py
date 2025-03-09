@@ -195,7 +195,7 @@ class LMDP:
         G = np.diag(np.exp(self.R[:self.num_non_terminal_states] / self.lmbda))
         z = np.ones(self.num_states)
         
-        print(f"Power iteration...")
+        print(f"Power iteration LMDP...")
         if self.sparse_optimization:
             if type(self.P) != csr_matrix: self.P = csr_matrix(self.P)
             G = csr_matrix(G)

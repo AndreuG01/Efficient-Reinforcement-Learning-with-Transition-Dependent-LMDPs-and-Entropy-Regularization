@@ -1,6 +1,14 @@
 from .state import Object
 
 class Maps:
+    
+    EASIEST = [
+        "###",
+        "#S#",
+        "#G#",
+        "###",
+    ]
+    
     SIMPLE_TEST = [
     "####",
     "#SC#",

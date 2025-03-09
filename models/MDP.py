@@ -6,6 +6,7 @@ from domains.grid import CellType, CustomGrid
 from collections.abc import Callable
 from utils.state import State
 from tqdm import tqdm
+from scipy.sparse import csr_matrix
 import models
 
 class MDP(ABC):
@@ -340,7 +341,6 @@ class MDP(ABC):
                 # print(f"STATE: {state}")
                 B = self.P[state, :, :]
                 zero_cols = np.all(B == 0, axis=0)
-                zero_cols_idx = np.where(zero_cols)[0]
                 
                 # Remove 0 columns
                 B = B[:, ~zero_cols]
@@ -348,22 +348,23 @@ class MDP(ABC):
                 # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
                 B[B == 0] = epsilon
                 B /= np.sum(B, axis=1).reshape(-1, 1)
-                
+
                 log_B = np.where(B != 0, np.log(B), B)
                 y = self.R[state] + np.sum(B * log_B, axis=1)
                 B_dagger = np.linalg.pinv(B)
                 x = B_dagger @ y
                 
-                support_x = len([col for col in zero_cols if col == False])
-                print(support_x)
+                support_x = [col for col in zero_cols if col == False]
+                len_support = len(support_x)
                 
-                
-                lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(support_x)
-                lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(support_x))
+                lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support)
+                lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
                 
         
-        lmdp_tdr.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
-        z, _ = lmdp_tdr.power_iteration()
+        lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
+        lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
+        
+        z = lmdp_tdr.power_iteration()
         V_lmdp = lmdp_tdr.get_value_function(z)
         V_mdp, _ = self.value_iteration()
         
