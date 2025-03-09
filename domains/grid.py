@@ -1,6 +1,33 @@
 from utils.state import State, Object
 from itertools import product, combinations, permutations
+from copy import deepcopy
 import copy
+
+class MinigridActions:
+    """
+    Possible actions:
+        Action number   |   Action type | Action description     |   Keyboard key     
+        ------------------------------------------------------------------------
+              0         |   left        |   Turn left            |   Left
+              1         |   right       |   Turn right           |   Right
+              2         |   forward     |   Move forward         |   Up
+              3         |   pikup       |   Pickup an object     |   Pageup / Tab
+              4         |   drop        |   Drop an object       |   Pagedown / Left shift
+              5         |   toggle      |   Toggle               |   Space
+              6         |   done        |   Done                 |   Enter
+    """
+    ROTATE_LEFT = 0
+    ROTATE_RIGHT = 1
+    FORWARD = 2
+    PICKUP = 3
+    DROP = 4
+    TOGGLE = 5
+    DONE = 6
+    
+    @classmethod
+    def get_actions(cls) -> list[int]:
+        return [value for key, value in cls.__dict__.items() if type(value) == int]
+
 
 class CellType:
     """
@@ -225,6 +252,82 @@ class CustomGrid:
         self.size_x = len(self.map)
         self.size_y = len(self.map[0])
     
+    def move(self, state: State, action: int, offsets: dict ={0: (1, 0), 1: (0, 1), 2: (-1, 0), 3: (0, -1)}):
+        orientation = state.properties["orientation"]
+        y, x, curr_layout = state.y, state.x, state.layout
+        
+        next_state = State(y, x, layout=deepcopy(state.layout), **state.properties)
+        
+        if action in [MinigridActions.ROTATE_LEFT, MinigridActions.ROTATE_RIGHT]:
+            next_state.properties["orientation"] = (orientation + (1 if action == MinigridActions.ROTATE_RIGHT else -1)) % 4
+            
+            return next_state, True, False
+
+        dy, dx = offsets[orientation]
+        new_y, new_x = y + dy, x + dx
+        next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
+        
+        if action == MinigridActions.FORWARD:
+            if next_object is not None and next_object.type == "key":
+                # If there is a key in the next state, the agent remains at the same state.
+                in_bounds = True
+            
+            elif next_object is not None and next_object.type == "door" and not state.properties[f"{next_object.color}_door_{next_object.id}"]:
+                # If in the next state there is a door and it is not opened, the agent remains where it is
+                in_bounds = True
+            
+            else:
+                # The agent moves as usually
+                next_state.y = y + dy
+                next_state.x = x + dx
+                in_bounds = self.is_valid(next_state)
+                if not in_bounds: next_state = state
+        
+            return next_state, in_bounds, self.is_terminal(next_state)
+
+        elif action == MinigridActions.PICKUP:
+            # If the agent is facing a key, it gets it. Otherwise, it remains at the same state
+            if not curr_layout: return next_state, True, False
+            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
+            agent_has_key = len(layout_keys) == self.get_num_keys() - 1
+            if next_object is not None and next_object.type == "key" and not agent_has_key:
+                # print("pickup")
+                next_state.layout[(new_x, new_y)] = None
+            
+            return next_state, True, False
+            
+        elif action == MinigridActions.TOGGLE:
+            # If the agent is facing a door for which it has the key:
+            #   - If the door is closed: it opens it.
+            #   - If the door is opened: it closes it.
+            # If the agent does not have the key, it remains where it is.
+            if not curr_layout: return next_state, True, False
+            missing_key = [obj for obj in self.objects if obj not in curr_layout.values()]
+            if len(missing_key) == 0:
+                return next_state, True, False
+            
+            missing_key: Object = missing_key[0]
+            
+            if next_object is not None and next_object.type == "door" and missing_key.color == next_object.color:
+                # print("toggle")
+                next_state.properties[f"{next_object.color}_door_{next_object.id}"] = not next_state.properties[f"{next_object.color}_door_{next_object.id}"]
+            return next_state, True, False
+        
+        elif action == MinigridActions.DROP:
+            # If the agent is wearing a key and the position towards which it is facing is an empty square, then the agent can drop the object
+            if not curr_layout: return next_state, True, False
+            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
+            agent_has_key = len(layout_keys) == self.get_num_keys() - 1
+           
+            if next_object is None and agent_has_key and self.is_normal(State(new_y, new_x, curr_layout, **state.properties)):
+                carrying_object = [obj for obj in self.objects if obj.type == "key" and obj not in layout_keys][0]
+            
+                next_state.layout[(new_x, new_y)] = carrying_object
+            
+            return next_state, True, False
+        else:
+            # Done actions have no effect yet
+            return next_state, True, False
     
     def get_num_states(self) -> int:
         """

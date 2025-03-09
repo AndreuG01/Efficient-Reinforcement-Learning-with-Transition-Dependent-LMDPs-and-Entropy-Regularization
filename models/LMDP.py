@@ -52,7 +52,7 @@ class LMDP:
         
     
     
-    def generate_P(self, move: Callable, grid: CustomGrid, actions: list[int], num_threads: int = 10, benchmark: bool = False) -> float:
+    def generate_P(self, grid: CustomGrid, actions: list[int], num_threads: int = 10, benchmark: bool = False) -> float:
         """
         Generates the transition probability matrix (P) for the LMDP, based on the dynamics of the environment.
 
@@ -72,7 +72,7 @@ class LMDP:
                 if grid.is_cliff(grid.state_index_mapper[state]):
                     next_state = self.s0
                 else:
-                    next_state, _, terminal = move(pos[state], action)
+                    next_state, _, terminal = grid.move(pos[state], action)
                     # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
                     if terminal:
                         next_state = len(pos) + terminal_pos.index(next_state)

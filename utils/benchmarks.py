@@ -1,6 +1,7 @@
 from domains.grid_world import GridWorldMDP
 from domains.minigrid_env import MinigridMDP, MinigridLMDP
-from domains.minigrid_env import MinigridMDP, MinigridActions
+from domains.minigrid_env import MinigridMDP
+from domains.grid import MinigridActions
 from utils.maps import Maps
 from utils.state import Object
 import matplotlib.pyplot as plt

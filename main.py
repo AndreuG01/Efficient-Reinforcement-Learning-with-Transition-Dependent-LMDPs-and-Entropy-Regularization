@@ -1,5 +1,6 @@
+from domains.grid import MinigridActions
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP
-from domains.minigrid_env import MinigridMDP, MinigridActions, MinigridLMDP, MinigridLMDP_TDR
+from domains.minigrid_env import MinigridMDP, MinigridLMDP, MinigridLMDP_TDR
 from algorithms import QLearning, QLearningPlotter, QLearningHyperparameters, QLearningHyperparameterExplorer
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -25,10 +26,11 @@ if __name__ == "__main__":
             MinigridActions.DROP,
             MinigridActions.TOGGLE
         ],
-        map=Maps.DOUBLE_DOOR,
-        objects=Maps.DOUBLE_DOOR_OBJECTS,
-        deterministic=False,
+        map=Maps.CLIFF,
+        # objects=Maps.DOUBLE_DOOR_OBJECTS,
+        deterministic=False
     )
+    
     print(mdp.P.shape)
     
     embedded_lmdp = mdp.to_LMDP()

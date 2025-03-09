@@ -1,13 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from custom_palette import CustomPalette
-from domains.minigrid_env import MinigridMDP, MinigridActions, MinigridLMDP
-from models.LMDP import LMDP
-
-import matplotlib.pyplot as plt
-import numpy as np
-from custom_palette import CustomPalette
-from domains.minigrid_env import MinigridMDP, MinigridActions, MinigridLMDP
+from domains.minigrid_env import MinigridMDP, MinigridLMDP
+from domains.grid import MinigridActions
 from models.LMDP import LMDP
 
 def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map=None, objects=None, grid_size: int = 3, save_fig: bool = True):

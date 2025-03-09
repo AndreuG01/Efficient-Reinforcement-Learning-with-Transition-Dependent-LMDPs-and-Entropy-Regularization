@@ -73,7 +73,7 @@ class MDP(ABC):
     
     
     
-    def generate_P(self, move: Callable, grid: CustomGrid, stochastic_prob: float = 0.9):
+    def generate_P(self, grid: CustomGrid, stochastic_prob: float = 0.9):
         """
         Generates the transition probability matrix (P) for the MDP, based on the dynamics of the environment
         (deterministic or stochastic).
@@ -96,7 +96,7 @@ class MDP(ABC):
                     self.P[state, action, next_state] = 1
                     continue
                 else:
-                    next_state, _, terminal = move(pos[state], action)
+                    next_state, _, terminal = grid.move(pos[state], action)
                     # Convert from coordinate-like system (i, j) (grid format) to index based (idx) (matrix format)
                     if terminal:
                         next_state = len(pos) + terminal_pos.index(next_state)
@@ -110,7 +110,8 @@ class MDP(ABC):
                     self.P[state, action, next_state] = stochastic_prob
                     other_actions = [a for a in self.__alowed_actions if a != action]
                     for new_action in other_actions:
-                        next_state, _, terminal = move(pos[state], new_action)
+                        
+                        next_state, _, terminal = grid.move(pos[state], new_action)
                         if terminal:
                             next_state = len(pos) + terminal_pos.index(next_state)
                         else:

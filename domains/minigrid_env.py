@@ -17,30 +17,6 @@ from collections.abc import Callable
 from scipy.sparse import csr_matrix
 from sys import getsizeof
 
-class MinigridActions:
-    """
-    Possible actions:
-        Action number   |   Action type | Action description     |   Keyboard key     
-        ------------------------------------------------------------------------
-              0         |   left        |   Turn left            |   Left
-              1         |   right       |   Turn right           |   Right
-              2         |   forward     |   Move forward         |   Up
-              3         |   pikup       |   Pickup an object     |   Pageup / Tab
-              4         |   drop        |   Drop an object       |   Pagedown / Left shift
-              5         |   toggle      |   Toggle               |   Space
-              6         |   done        |   Done                 |   Enter
-    """
-    ROTATE_LEFT = 0
-    ROTATE_RIGHT = 1
-    FORWARD = 2
-    PICKUP = 3
-    DROP = 4
-    TOGGLE = 5
-    DONE = 6
-    
-    @classmethod
-    def get_actions(cls) -> list[int]:
-        return [value for key, value in cls.__dict__.items() if type(value) == int]
 
 
 class CustomMinigridEnv(MiniGridEnv):
@@ -199,7 +175,7 @@ class CustomMinigridEnv(MiniGridEnv):
                             num_mistakes += 1
                         action = model.transition_action(state_idx, next_state)
                     
-                    next_state, _, terminal = model.move(state, action)
+                    next_state, _, terminal = self.custom_grid.move(state, action)
                     
                     next_properties = next_state.properties
                     next_layout = next_state.layout
@@ -298,7 +274,7 @@ class MinigridMDP(MDP):
                 # gamma=0.999
             )
 
-            self.generate_P(self.move, self.minigrid_env.custom_grid, stochastic_prob=self.stochastic_prob)
+            self.generate_P(self.minigrid_env.custom_grid, stochastic_prob=self.stochastic_prob)
             self._generate_R()
             print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
         else:
@@ -330,7 +306,7 @@ class MinigridMDP(MDP):
         while queue:
             current_state = queue.pop(0)
             for action in self.allowed_actions:
-                next_state, _, _ = self.move(current_state, action)
+                next_state, _, _ = self.minigrid_env.custom_grid.move(current_state, action)
                 if next_state not in reachable_states:
                     reachable_states.add(next_state)
                     queue.append(next_state)
@@ -345,84 +321,6 @@ class MinigridMDP(MDP):
         self.minigrid_env.custom_grid.terminal_states = terminal_states
         self.minigrid_env.custom_grid.generate_state_index_mapper()
         
-    
-    def move(self, state: State, action: int):
-        orientation = state.properties["orientation"]
-        y, x, curr_layout = state.y, state.x, state.layout
-        
-        next_state = State(y, x, layout=deepcopy(state.layout), **state.properties)
-        
-        if action in [MinigridActions.ROTATE_LEFT, MinigridActions.ROTATE_RIGHT]:
-            next_state.properties["orientation"] = (orientation + (1 if action == MinigridActions.ROTATE_RIGHT else -1)) % 4
-            
-            return next_state, True, False
-        
-        dy, dx = self.OFFSETS[orientation]
-        new_y, new_x = y + dy, x + dx
-        next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
-        
-        if action == MinigridActions.FORWARD:
-            if next_object is not None and next_object.type == "key":
-                # If there is a key in the next state, the agent remains at the same state.
-                in_bounds = True
-            
-            elif next_object is not None and next_object.type == "door" and not state.properties[f"{next_object.color}_door_{next_object.id}"]:
-                # If in the next state there is a door and it is not opened, the agent remains where it is
-                in_bounds = True
-            
-            else:
-                # The agent moves as usually
-                next_state.y = y + dy
-                next_state.x = x + dx
-                in_bounds = self.minigrid_env.custom_grid.is_valid(next_state)
-                if not in_bounds: next_state = state
-        
-            return next_state, in_bounds, self.minigrid_env.custom_grid.is_terminal(next_state)
-
-        elif action == MinigridActions.PICKUP:
-            # If the agent is facing a key, it gets it. Otherwise, it remains at the same state
-            if not curr_layout: return next_state, True, False
-            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
-            agent_has_key = len(layout_keys) == self.minigrid_env.custom_grid.get_num_keys() - 1
-            if next_object is not None and next_object.type == "key" and not agent_has_key:
-                # print("pickup")
-                next_state.layout[(new_x, new_y)] = None
-            
-            return next_state, True, False
-            
-        elif action == MinigridActions.TOGGLE:
-            # If the agent is facing a door for which it has the key:
-            #   - If the door is closed: it opens it.
-            #   - If the door is opened: it closes it.
-            # If the agent does not have the key, it remains where it is.
-            if not curr_layout: return next_state, True, False
-            missing_key = [obj for obj in self.minigrid_env.custom_grid.objects if obj not in curr_layout.values()]
-            if len(missing_key) == 0:
-                return next_state, True, False
-            
-            missing_key: Object = missing_key[0]
-            
-            if next_object is not None and next_object.type == "door" and missing_key.color == next_object.color:
-                # print("toggle")
-                next_state.properties[f"{next_object.color}_door_{next_object.id}"] = not next_state.properties[f"{next_object.color}_door_{next_object.id}"]
-            return next_state, True, False
-        
-        elif action == MinigridActions.DROP:
-            # If the agent is wearing a key and the position towards which it is facing is an empty square, then the agent can drop the object
-            if not curr_layout: return next_state, True, False
-            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
-            agent_has_key = len(layout_keys) == self.minigrid_env.custom_grid.get_num_keys() - 1
-           
-            if next_object is None and agent_has_key and self.minigrid_env.custom_grid.is_normal(State(new_y, new_x, curr_layout, **state.properties)):
-                carrying_object = [obj for obj in self.minigrid_env.custom_grid.objects if obj.type == "key" and obj not in layout_keys][0]
-            
-                next_state.layout[(new_x, new_y)] = carrying_object
-            
-            return next_state, True, False
-        else:
-            # Done actions have no effect yet
-            return next_state, True, False
-
           
     def _generate_R(self):
         for state in range(self.num_non_terminal_states):
@@ -438,7 +336,7 @@ class MinigridMDP(MDP):
     def transition_action(self, state_idx, next_state_idx):
         curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
         for action in self.allowed_actions:
-            move_state, _, _ = self.move(curr_state, action)
+            move_state, _, _ = self.minigrid_env.custom_grid.move(curr_state, action)
             next_state = self.minigrid_env.custom_grid.state_index_mapper[next_state_idx]
             if type(next_state) == State:
                 if move_state == next_state:
@@ -463,7 +361,7 @@ class MinigridMDP(MDP):
                 curr_state = self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx]
             else:
                 curr_action = self.policy[curr_state_idx]
-                curr_state, _, terminal = self.move(self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx], curr_action)
+                curr_state, _, terminal = self.minigrid_env.custom_grid.move(self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx], curr_action)
                 if terminal:
                     curr_state_idx = self.minigrid_env.custom_grid.terminal_states.index(curr_state)
                 else:
@@ -535,7 +433,6 @@ class MinigridLMDP(LMDP):
             )
 
             self.p_time = self.generate_P(
-                self.move,
                 self.minigrid_env.custom_grid,
                 self.allowed_actions,
                 benchmark=benchmark_p,
@@ -569,7 +466,7 @@ class MinigridLMDP(LMDP):
         while queue:
             current_state = queue.pop(0)
             for action in self.allowed_actions:
-                next_state, _, _ = self.move(current_state, action)
+                next_state, _, _ = self.minigrid_env.custom_grid.move(current_state, action)
                 if next_state not in reachable_states:
                     reachable_states.add(next_state)
                     queue.append(next_state)
@@ -584,84 +481,6 @@ class MinigridLMDP(LMDP):
         self.minigrid_env.custom_grid.terminal_states = terminal_states
         self.minigrid_env.custom_grid.generate_state_index_mapper()
 
-    
-    # TODO: same as MinigridMDP
-    def move(self, state: State, action: int):
-        orientation = state.properties["orientation"]
-        y, x, curr_layout = state.y, state.x, state.layout
-        
-        next_state = State(y, x, layout=deepcopy(state.layout), **state.properties)
-        
-        if action in [MinigridActions.ROTATE_LEFT, MinigridActions.ROTATE_RIGHT]:
-            next_state.properties["orientation"] = (orientation + (1 if action == MinigridActions.ROTATE_RIGHT else -1)) % 4
-            
-            return next_state, True, False
-        
-        dy, dx = self.OFFSETS[orientation]
-        new_y, new_x = y + dy, x + dx
-        next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
-        
-        if action == MinigridActions.FORWARD:
-            if next_object is not None and next_object.type == "key":
-                # If there is a key in the next state, the agent remains at the same state.
-                in_bounds = True
-            
-            elif next_object is not None and next_object.type == "door" and not state.properties[f"{next_object.color}_door_{next_object.id}"]:
-                # If in the next state there is a door and it is not opened, the agent remains where it is
-                in_bounds = True
-            
-            else:
-                # The agent moves as usually
-                next_state.y = y + dy
-                next_state.x = x + dx
-                in_bounds = self.minigrid_env.custom_grid.is_valid(next_state)
-                if not in_bounds: next_state = state
-        
-            return next_state, in_bounds, self.minigrid_env.custom_grid.is_terminal(next_state)
-
-        elif action == MinigridActions.PICKUP:
-            # If the agent is facing a key, it gets it. Otherwise, it remains at the same state
-            if not curr_layout: return next_state, True, False
-            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
-            agent_has_key = len(layout_keys) == self.minigrid_env.custom_grid.get_num_keys() - 1
-            if next_object is not None and next_object.type == "key" and not agent_has_key:
-                # print("pickup")
-                next_state.layout[(new_x, new_y)] = None
-            
-            return next_state, True, False
-            
-        elif action == MinigridActions.TOGGLE:
-            # If the agent is facing a door for which it has the key:
-            #   - If the door is closed: it opens it.
-            #   - If the door is opened: it closes it.
-            # If the agent does not have the key, it remains where it is.
-            if not curr_layout: return next_state, True, False
-            missing_key = [obj for obj in self.minigrid_env.custom_grid.objects if obj not in curr_layout.values()]
-            if len(missing_key) == 0:
-                return next_state, True, False
-            
-            missing_key: Object = missing_key[0]
-            
-            if next_object is not None and next_object.type == "door" and missing_key.color == next_object.color:
-                # print("toggle")
-                next_state.properties[f"{next_object.color}_door_{next_object.id}"] = not next_state.properties[f"{next_object.color}_door_{next_object.id}"]
-            return next_state, True, False
-        
-        elif action == MinigridActions.DROP:
-            # If the agent is wearing a key and the position towards which it is facing is an empty square, then the agent can drop the object
-            if not curr_layout: return next_state, True, False
-            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
-            agent_has_key = len(layout_keys) == self.minigrid_env.custom_grid.get_num_keys() - 1
-           
-            if next_object is None and agent_has_key and self.minigrid_env.custom_grid.is_normal(State(new_y, new_x, curr_layout, **state.properties)):
-                carrying_object = [obj for obj in self.minigrid_env.custom_grid.objects if obj.type == "key" and obj not in layout_keys][0]
-            
-                next_state.layout[(new_x, new_y)] = carrying_object
-            
-            return next_state, True, False
-        else:
-            # Drop and Done actions have no effect yet
-            return next_state, True, False
 
                   
     def _generate_R(self):
@@ -675,7 +494,7 @@ class MinigridLMDP(LMDP):
     def transition_action(self, state_idx, next_state_idx):
         curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
         for action in self.allowed_actions:
-            move_state, _, _ = self.move(curr_state, action)
+            move_state, _, _ = self.minigrid_env.custom_grid.move(curr_state, action)
             next_state = self.minigrid_env.custom_grid.state_index_mapper[next_state_idx]
             if type(next_state) == State:
                 if move_state == next_state:
@@ -766,7 +585,6 @@ class MinigridLMDP_TDR(LMDP_TDR):
         )
 
         self.p_time = self.generate_P(
-            self.move,
             self.minigrid_env.custom_grid,
             self.allowed_actions,
             benchmark=benchmark_p,
@@ -789,7 +607,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
         while queue:
             current_state = queue.pop(0)
             for action in self.allowed_actions:
-                next_state, _, _ = self.move(current_state, action)
+                next_state, _, _ = self.minigrid_env.custom_grid.move(current_state, action)
                 if next_state not in reachable_states:
                     reachable_states.add(next_state)
                     queue.append(next_state)
@@ -803,86 +621,6 @@ class MinigridLMDP_TDR(LMDP_TDR):
         self.minigrid_env.custom_grid.states = states
         self.minigrid_env.custom_grid.terminal_states = terminal_states
         self.minigrid_env.custom_grid.generate_state_index_mapper() 
-    
-    
-    # TODO: same as MinigridMDP
-    def move(self, state: State, action: int):
-        orientation = state.properties["orientation"]
-        y, x, curr_layout = state.y, state.x, state.layout
-        
-        next_state = State(y, x, layout=deepcopy(state.layout), **state.properties)
-        
-        if action in [MinigridActions.ROTATE_LEFT, MinigridActions.ROTATE_RIGHT]:
-            next_state.properties["orientation"] = (orientation + (1 if action == MinigridActions.ROTATE_RIGHT else -1)) % 4
-            
-            return next_state, True, False
-        
-        dy, dx = self.OFFSETS[orientation]
-        new_y, new_x = y + dy, x + dx
-        next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
-        
-        if action == MinigridActions.FORWARD:
-            if next_object is not None and next_object.type == "key":
-                # If there is a key in the next state, the agent remains at the same state.
-                in_bounds = True
-            
-            elif next_object is not None and next_object.type == "door" and not state.properties[f"{next_object.color}_door_{next_object.id}"]:
-                # If in the next state there is a door and it is not opened, the agent remains where it is
-                in_bounds = True
-            
-            else:
-                # The agent moves as usually
-                next_state.y = y + dy
-                next_state.x = x + dx
-                in_bounds = self.minigrid_env.custom_grid.is_valid(next_state)
-                if not in_bounds: next_state = state
-        
-            return next_state, in_bounds, self.minigrid_env.custom_grid.is_terminal(next_state)
-
-        elif action == MinigridActions.PICKUP:
-            # If the agent is facing a key, it gets it. Otherwise, it remains at the same state
-            if not curr_layout: return next_state, True, False
-            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
-            agent_has_key = len(layout_keys) == self.minigrid_env.custom_grid.get_num_keys() - 1
-            if next_object is not None and next_object.type == "key" and not agent_has_key:
-                # print("pickup")
-                next_state.layout[(new_x, new_y)] = None
-            
-            return next_state, True, False
-            
-        elif action == MinigridActions.TOGGLE:
-            # If the agent is facing a door for which it has the key:
-            #   - If the door is closed: it opens it.
-            #   - If the door is opened: it closes it.
-            # If the agent does not have the key, it remains where it is.
-            if not curr_layout: return next_state, True, False
-            missing_key = [obj for obj in self.minigrid_env.custom_grid.objects if obj not in curr_layout.values()]
-            if len(missing_key) == 0:
-                return next_state, True, False
-            
-            missing_key: Object = missing_key[0]
-            
-            if next_object is not None and next_object.type == "door" and missing_key.color == next_object.color:
-                # print("toggle")
-                next_state.properties[f"{next_object.color}_door_{next_object.id}"] = not next_state.properties[f"{next_object.color}_door_{next_object.id}"]
-            return next_state, True, False
-        
-        elif action == MinigridActions.DROP:
-            # If the agent is wearing a key and the position towards which it is facing is an empty square, then the agent can drop the object
-            if not curr_layout: return next_state, True, False
-            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
-            agent_has_key = len(layout_keys) == self.minigrid_env.custom_grid.get_num_keys() - 1
-           
-            if next_object is None and agent_has_key and self.minigrid_env.custom_grid.is_normal(State(new_y, new_x, curr_layout, **state.properties)):
-                carrying_object = [obj for obj in self.minigrid_env.custom_grid.objects if obj.type == "key" and obj not in layout_keys][0]
-            
-                next_state.layout[(new_x, new_y)] = carrying_object
-            
-            return next_state, True, False
-        else:
-            # Drop and Done actions have no effect yet
-            return next_state, True, False
-
                   
     def _generate_R(self):
         if self.sparse_optimization:
@@ -907,7 +645,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
     def transition_action(self, state_idx, next_state_idx):
         curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
         for action in self.allowed_actions:
-            move_state, _, _ = self.move(curr_state, action)
+            move_state, _, _ = self.minigrid_env.custom_grid.move(curr_state, action)
             next_state = self.minigrid_env.custom_grid.state_index_mapper[next_state_idx]
             if type(next_state) == State:
                 if move_state == next_state:
