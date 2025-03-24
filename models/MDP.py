@@ -8,6 +8,7 @@ from utils.state import State
 from tqdm import tqdm
 from scipy.sparse import csr_matrix
 import models
+from copy import deepcopy
 
 class MDP(ABC):
     """
@@ -361,7 +362,87 @@ class MDP(ABC):
                 lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support)
                 lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
                 
+        lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
+        lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
         
+        z = lmdp_tdr.power_iteration()
+        V_lmdp = lmdp_tdr.get_value_function(z)
+        V_mdp, _ = self.value_iteration()
+        
+        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        return lmdp_tdr
+    
+    
+    def to_LMDP_TDR_2(self):
+        print(f"Computing the LMDP-TDR embedding of this MDP...")
+        
+        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+            num_states=self.num_states,
+            num_terminal_states=self.num_terminal_states,
+            sparse_optimization=True,
+            lmbda=1,
+            s0=self.s0
+        )
+        
+        R_1 = np.einsum("san,na->sn", self.P, self.R) / self.num_actions
+        R_1[R_1 == 0] = 1e-10
+
+        
+        if self.deterministic and False:
+            pass
+            
+        else:
+            epsilon = 1e-10
+            for state in range(self.num_non_terminal_states):
+                # print(f"STATE: {state}")
+                B = self.P[state, :, :]
+                zero_cols = np.all(B == 0, axis=0)
+                zero_cols_idx = np.where(zero_cols)[0]
+                
+                # Remove 0 columns
+                B = B[:, ~zero_cols]
+                curr_r1 = R_1[state, ~zero_cols]
+                
+                # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
+                B[B == 0] = epsilon
+                B /= np.sum(B, axis=1).reshape(-1, 1)
+                
+
+                log_B = np.where(B != 0, np.log(B), B)
+                y_1 = self.R[state] + np.sum(B * log_B, axis=1)
+                y = self.R[state] + np.sum(B * (lmdp_tdr.lmbda * log_B - curr_r1), axis=1)
+                
+                test_1 = np.zeros_like(self.R[state])
+                for s in range(self.num_states):
+                    if s in zero_cols_idx: continue
+                    test_1 += self.P[state, :, s] * (np.log(self.P[state, :, s]))
+                
+                test_1 += self.R[state]
+                assert np.all(test_1 == y_1)
+                
+                test_2 = np.zeros_like(self.R[state])
+                for s in range(self.num_states):
+                    if s in zero_cols_idx: continue
+                    test_2 += self.P[state, :, s] * (np.log(self.P[state, :, s]) - R_1[state, s])
+                
+                test_2 += self.R[state]
+                
+                assert np.all(test_2 == y)
+                
+                B_dagger = np.linalg.pinv(B)
+                x_1 = B_dagger @ y_1 # From first version of the embedding to do some checkings
+                x = B_dagger @ y
+                
+                assert np.all(np.isclose(np.sum(B_dagger * test_2, axis=1) + curr_r1, x_1)) # If this does not fail, it means that the results obtained here are the same as in the first embedding version and therefore, the LMDP and LMDP with TDR will be equivalent
+                
+                support_x = [col for col in zero_cols if col == False]
+                len_support = len(support_x)
+                
+                
+                lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support) # R_2
+                lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
+                
+        lmdp_tdr.R += R_1
         lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
         lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
         

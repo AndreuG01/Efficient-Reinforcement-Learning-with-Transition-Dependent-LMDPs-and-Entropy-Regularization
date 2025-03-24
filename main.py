@@ -26,19 +26,26 @@ if __name__ == "__main__":
             MinigridActions.DROP,
             MinigridActions.TOGGLE
         ],
-        map=Maps.CLIFF,
+        map=Maps.SIMPLE_TEST,
         # objects=Maps.DOUBLE_DOOR_OBJECTS,
         deterministic=False
     )
     
-    print(mdp.P.shape)
+    print(mdp.R)
     
     embedded_lmdp = mdp.to_LMDP()
     embedded_lmdptdr = mdp.to_LMDP_TDR()
+    embedded_lmdptdr_2 = mdp.to_LMDP_TDR_2()
     
     mdp.compute_value_function()
     embedded_lmdp.compute_value_function()
     embedded_lmdptdr.compute_value_function()
+    embedded_lmdptdr_2.compute_value_function()
+    
+    print("REWARD 1")
+    print(embedded_lmdptdr.R)
+    print("REWARD 2")
+    print(embedded_lmdptdr_2.R)
     
     
     # lmdp = MinigridLMDP(
@@ -72,6 +79,7 @@ if __name__ == "__main__":
     plt.plot(np.arange(len(mdp.V)), mdp.V, label="MDP")
     plt.plot(np.arange(len(embedded_lmdp.V)), embedded_lmdp.V, label="Embedded LMDP")
     plt.plot(np.arange(len(embedded_lmdptdr.V)), embedded_lmdptdr.V, label="Embedded LMDP-TDR")
+    plt.plot(np.arange(len(embedded_lmdptdr_2.V)), embedded_lmdptdr_2.V, label="Embedded LMDP-TDR-version 2")
     plt.xlabel("State index")
     plt.ylabel("V(s)")
     plt.title("DOUBLE_DOOR")
