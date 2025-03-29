@@ -12,6 +12,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
 from .grid import CustomGrid, CellType
 from utils.state import State
+from typing import Literal
  
                 
 class GridWorldMDP(MDP):
@@ -75,6 +76,7 @@ class GridWorldMDP(MDP):
         self.start_state = [state for state in self.grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
         # TODO: remove unreachable states in case that I add the possibilities for GridWorld to support objects (e.g. keys, doors, etc.)
+        
         self.num_states = self.grid.get_num_states()
         
         
@@ -126,75 +128,82 @@ class GridWorldLMDP(LMDP):
         3: (-1, 0)   # LEFT
     }
     
-    def __init__(self, grid_size: int = 3, map: list[str] = None, deterministic: bool = True) -> None:
-        self.grid = CustomGrid("gridworld", map=map, grid_size=grid_size)
-        self.num_sates = self.grid.get_num_states()
+    def __init__(
+        self,
+        grid_size: int = 3,
+        map: list[str] = None,
+        sparse_optimization: bool = True,
+        benchmark_p: bool = False,
+        threads: int = 4,
+        lmdp: LMDP = None
+    ) -> None:
         
-        start_pos = self.grid.start_pos
-        
-        self.deterministic = deterministic
-        
-        super().__init__(
-            self.num_sates,
-            num_terminal_states=self.grid.get_num_terminal_states(),
-            s0=self.grid.positions[CellType.NORMAL].index(State(*start_pos))
-        )
+        self.deterministic = False
         
         self.allowed_actions = [i for i in range(len(self.OFFSETS))] # It is not that the LMDP has actions, but to determine the transition probabilities, we need to know how the agent moves through the environment
+        self.num_actions = len(self.allowed_actions)
         
-        self.generate_P(self.grid.positions, self.move, self.grid, self.allowed_actions)
-        self._generate_R()
-    
-    
-    # TODO: the same as GridWorldMDP. Perhaps could be unified somehow.
-    def move(self, state: State, action: int) -> tuple[State, bool, bool]:
-        """
-        Computes the next position after performing an action, and returns whether the move is valid and whether the agent has reached a terminal state.
-
-        Args:
-        - pos (tuple[int, int]): The current position of the agent.
-        - action (int): The action taken (0: up, 1: right, 2: down, 3: left).
-
-        Returns:
-        - tuple[tuple[int, int], bool, bool]: The next position, whether the move is valid, and whether the position is terminal.
-        """
-        y = state.y
-        x = state.x
-        dy, dx = self.OFFSETS[action]
-        next_state = State(y + dy, x + dx)
+        self.grid = CustomGrid("gridworld", map=map, grid_size=grid_size)
+        start_pos = self.grid.start_pos
+        self.start_state = [state for state in self.grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
-        in_bounds = self.grid.is_valid(next_state)
-        if not in_bounds: next_state = state
+        # TODO: remove unreachable states in case that I add the possibilities for GridWorld to support objects (e.g. keys, doors, etc.)
+        self.num_sates = self.grid.get_num_states()
         
-        # if next_pos in self.grid.positions[self.CLIFF]: next_pos = self.start_pos
-
-        return next_state, in_bounds, self.grid.is_terminal(next_state)
+        if lmdp is None:
+            super().__init__(
+                self.num_sates,
+                num_terminal_states=self.grid.get_num_terminal_states(),
+                s0=self.grid.states.index(self.start_state),
+                sparse_optimization=sparse_optimization
+            )
+            
+            self.p_time = self.generate_P(
+                self.grid,
+                self.allowed_actions,
+                benchmark=benchmark_p,
+                num_threads=threads
+            )
+            self._generate_R()
+        
+        else:
+            super().__init__(
+                num_states=lmdp.num_states,
+                num_terminal_states=lmdp.num_terminal_states,
+                s0=lmdp.s0,
+                lmbda=lmdp.lmbda,
+                sparse_optimization=False #TODO: update
+            )
+            
+            self.P = lmdp.P
+            self.R = lmdp.R
     
     
-    # TODO: same as GridWorldMDP. Perhaps could be unified somehow.
     def _generate_R(self) -> None:
         """
         Generates the reward matrix (R) for the grid world, setting the default reward to -1 for all actions.
         """
-        pos = self.grid.positions
-        for j in range(self.grid.size_x):
-            for i in range(self.grid.size_y):
-                tmp_state = State(i, j)
-                if tmp_state in pos[CellType.NORMAL]:
-                    self.R[pos[CellType.NORMAL].index(tmp_state)] = -1
-                if tmp_state in pos[CellType.CLIFF]:
-                    self.R[pos[CellType.NORMAL].index(tmp_state)] = -10
-
+        self.R[:] = np.float64(-5)
+        cliff_states = [i for i in range(self.num_states) if self.grid.is_cliff(self.grid.state_index_mapper[i])]
+        self.R[cliff_states] = np.float64(-50)
+        self.R[self.num_non_terminal_states:] = np.float64(0)
+        
     
     def policy_to_action(self, state: int, next_state: list[int]) -> list[int]:
         origin_x = self.grid.state_index_mapper[state].x
         origin_y = self.grid.state_index_mapper[state].y
         actions = []
-        for next_s in next_state:
+        for state_idx, state_prob in enumerate(next_state):
+            if state_idx < self.num_non_terminal_states:
+                tmp_state = self.grid.states[state_idx]
+            else:
+                tmp_state = self.grid.terminal_states[state_idx - self.num_non_terminal_states]
+            
+            if state_prob == 0: continue
             for action in range(len(self.OFFSETS)):
                 dy, dx = self.OFFSETS[action]
-                x = self.grid.state_index_mapper[next_s].x
-                y = self.grid.state_index_mapper[next_s].y
+                x = tmp_state.x
+                y = tmp_state.y
                 if (origin_x + dx == x) and (origin_y + dy == y):
                     actions.append(action)
         
@@ -286,6 +295,10 @@ class GridWorldPlotter:
 
         fig, ax = plt.subplots(figsize=self.__figsize)
         divider = make_axes_locatable(ax)
+        
+        # Put the start to its color
+        for pos in grid_positions[CellType.START]:
+            ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.START_COLOR))
 
         if show_value_function:
             value_grid = np.zeros_like(grid, dtype=float)
@@ -302,20 +315,7 @@ class GridWorldPlotter:
             
             cax = divider.append_axes("right", size="5%", pad=0.1)
             cbar = plt.colorbar(im, cax=cax)
-            cbar.set_label("Value Function", fontsize=12)
-
-            # Put the walls to its color
-            for pos in grid_positions[CellType.WALL]:
-                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.WALL_COLOR))
-            # Put the goal to its color
-            for pos in grid_positions[CellType.GOAL]:
-                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.GOAL_COLOR))
-            # Put the cliff to its color
-            for pos in grid_positions[CellType.CLIFF]:
-                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.CLIFF_COLOR))
-            # Put the start to its color
-            for pos in grid_positions[CellType.START]:
-                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.START_COLOR))
+            cbar.set_label("Value Function", fontsize=12)            
             
         else:
             # Default color scheme for grid elements
@@ -332,17 +332,21 @@ class GridWorldPlotter:
         prob_cmap = plt.get_cmap("Greens")
         for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
             curr_state = [state for state in self.gridworld.grid.states if state.x == pos[1] and state.y == pos[0]][0]
+            if self.gridworld.grid.is_cliff(curr_state): continue
             if self.is_mdp:
+                # We need to get the probability distribution of transitioning to the next states
                 actions = policy[idx] if multiple_actions else [policy[idx]]
-            else:
-                next_state = policy[idx] if multiple_actions else [policy[idx]]
-                actions = self.gridworld.policy_to_action(idx, next_state)
+            
             y = curr_state.y
             x = curr_state.x
             if not self.gridworld.deterministic:
-                # We need to get the probability distribution of transitioning to the next states
-                probs = self.gridworld.P[idx, actions[0], :]
-                action_probs = self.__get_action_probs(curr_state, probs)
+                if self.is_mdp:
+                    probs = self.gridworld.P[idx, actions[0], :]
+                else:
+                    probs = policy[idx]
+                
+                action_probs = self.get_action_probs(curr_state, probs)
+                
                 ax.plot([y - 0.5, y + 0.5], [x - 0.5, x + 0.5], color="black", linewidth=0.2)
                 ax.plot([y - 0.5, y + 0.5], [x + 0.5, x - 0.5], color="black", linewidth=0.2)
                 quadrants = {0: [(y + 0.5, x - 0.5), (y, x), (y - 0.5, x - 0.5)],
@@ -360,13 +364,24 @@ class GridWorldPlotter:
                     if show_prob:
                         ax.text(np.mean([p[0] for p in q_vertices]), np.mean([p[1] for p in q_vertices]), f"{prob:.2f}", 
                                 color="white" if self.gridworld.V[idx] > 0.3 * np.min(self.gridworld.V) else "black", fontweight="heavy" if prob == max_prob else None, fontsize=prob_size, ha="center", va="center")
-            else:               
+            else:
                 for action in actions:
                     dy, dx = self.gridworld.OFFSETS[action]
                     ax.quiver(
                         y, x, 0.35 * dy, 0.35 * dx, scale=1, scale_units="xy", angles="xy", 
                         width=0.005, color=self.POLICY_COLOR, headaxislength=3, headlength=3
                     )
+        # Put the walls to its color
+        for pos in grid_positions[CellType.WALL]:
+            ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.WALL_COLOR))
+        # Put the goal to its color
+        for pos in grid_positions[CellType.GOAL]:
+            ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.GOAL_COLOR))
+        # Put the cliff to its color
+        for pos in grid_positions[CellType.CLIFF]:
+            ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.CLIFF_COLOR))
+        
+    
         if not self.gridworld.deterministic and color_probs:
             # sm = cm.ScalarMappable(cmap=prob_cmap)
             # sm.set_array([])  # Empty array to avoid warnings
@@ -392,7 +407,8 @@ class GridWorldPlotter:
         else:
             plt.show()
 
-    def __get_action_probs(self, curr_state: State, probs: list[float]):
+
+    def get_action_probs(self, curr_state: State, probs: list[float]):
         
         x = curr_state.x
         y = curr_state.y

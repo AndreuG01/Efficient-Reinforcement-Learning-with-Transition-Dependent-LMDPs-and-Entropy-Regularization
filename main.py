@@ -16,25 +16,32 @@ from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_v
 
 if __name__ == "__main__":
     
-    
-    gridworld_mdp = GridWorldMDP(
+    mdp = GridWorldMDP(
         map=Maps.CLIFF,
-        deterministic=True,
-        stochastic_prob=0.8
+        deterministic=True
     )
     
-    gridworld_mdp.compute_value_function()
-    print(gridworld_mdp.V)
-    
-    plotter = GridWorldPlotter(
-        gridworld_mdp
+    lmdp = GridWorldLMDP(
+        map=Maps.CLIFF,
+        sparse_optimization=False
     )
     
-    plotter.plot_grid_world(
-        show_value_function=True,
-        show_prob=True
-    )
+    lmdp.compute_value_function()
+    mdp.compute_value_function()
     
+    fig = plt.figure(figsize=(10, 5))
+    
+    plt.plot([i for i in range(len(mdp.V))], mdp.V, label="MDP")
+    plt.plot([i for i in range(len(lmdp.V))], lmdp.V, label="LMDP")
+    
+    plt.xlabel("State index")
+    plt.ylabel("V(s)")
+    plt.legend()
     
     plt.show()
     
+    plotter = GridWorldPlotter(
+        lmdp
+    )
+    
+    plotter.plot_grid_world()
