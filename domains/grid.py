@@ -2,6 +2,7 @@ from utils.state import State, Object
 from itertools import product, combinations, permutations
 from copy import deepcopy
 import copy
+from typing import Literal
 
 class MinigridActions:
     """
@@ -74,7 +75,14 @@ class CustomGrid:
         "C": CellType.CLIFF
     }
 
-    def __init__(self, map: list[str] = None, objects = list[Object], grid_size: int = 3, properties: dict[str, list] = None):
+    def __init__(
+        self,
+        type: Literal["gridworld", "minigrid"],
+        map: list[str] = None,
+        objects: list[Object] = None,
+        grid_size: int = 3,
+        properties: dict[str, list] = None
+    ):
         """
         Initializes the grid with either a predefined map or generates a simple grid.
 
@@ -82,6 +90,7 @@ class CustomGrid:
         - map (list[str], optional): A list of strings representing the grid.
         - grid_size (int, optional): The size of the grid if generating a simple grid (default is 3).
         """
+        self.type = type
         self.map = map
         self.char_positions = {v: k for k, v in self.POSITIONS_CHAR.items()}
         
@@ -130,15 +139,9 @@ class CustomGrid:
                 # obj = layout[(pos[0], pos[1])]
                 # if obj is not None and obj.type == "key": continue
                 terminal_states.append(State(pos[0], pos[1], layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
-        
-        
-        
-        
-        return states, terminal_states
+                
+        return states, terminal_states        
 
-
-    
-        
 
     def _get_layout_combinations(self):
         if len(self.objects) == 0: return [None]
@@ -252,7 +255,36 @@ class CustomGrid:
         self.size_x = len(self.map)
         self.size_y = len(self.map[0])
     
-    def move(self, state: State, action: int, offsets: dict ={0: (1, 0), 1: (0, 1), 2: (-1, 0), 3: (0, -1)}):
+    
+    def move(self, state: State, action: int):
+        if self.type == "gridworld":
+            return self.__move_gridworld(state, action)
+        else:
+            return self.__move_minigrid(state, action)
+    
+    
+    def __move_gridworld(self, state: State, action: int, offsets: dict ={0: (0, -1), 1: (1, 0), 2: (0, 1), 3: (-1, 0)}):
+        """
+        Computes the next position after performing an action, and returns whether the move is valid and whether the agent has reached a terminal state.
+
+        Args:
+        - pos (tuple[int, int]): The current position of the agent.
+        - action (int): The action taken (0: up, 1: right, 2: down, 3: left).
+
+        Returns:
+        - tuple[tuple[int, int], bool, bool]: The next position, whether the move is valid, and whether the position is terminal.
+        """
+        y = state.y
+        x = state.x
+        dy, dx = offsets[action]
+        next_state = State(y + dy, x + dx, layout=state.layout)
+        
+        in_bounds = self.is_valid(next_state)
+        if not in_bounds: next_state = state
+
+        return next_state, in_bounds, self.is_terminal(next_state)
+    
+    def __move_minigrid(self, state: State, action: int, offsets: dict ={0: (1, 0), 1: (0, 1), 2: (-1, 0), 3: (0, -1)}):
         orientation = state.properties["orientation"]
         y, x, curr_layout = state.y, state.x, state.layout
         

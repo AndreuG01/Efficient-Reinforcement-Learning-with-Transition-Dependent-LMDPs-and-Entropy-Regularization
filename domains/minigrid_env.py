@@ -50,7 +50,7 @@ class CustomMinigridEnv(MiniGridEnv):
     ):
         
         self.num_directions = 4
-        self.custom_grid = CustomGrid(map=map, grid_size=grid_size, properties=properties, objects=objects)
+        self.custom_grid = CustomGrid("minigrid", map=map, grid_size=grid_size, properties=properties, objects=objects)
         self.agent_start_pos = self.custom_grid.start_pos
         self.agent_start_dir = agent_start_dir
 
