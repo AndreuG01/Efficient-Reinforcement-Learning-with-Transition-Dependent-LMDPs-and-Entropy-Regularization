@@ -578,11 +578,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         self.remove_unreachable_states()
         
-        
-        
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
-        
-        
         
         super().__init__(
             self.num_states,

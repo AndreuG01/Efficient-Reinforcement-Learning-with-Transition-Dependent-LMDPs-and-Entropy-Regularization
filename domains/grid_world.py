@@ -6,6 +6,7 @@ import matplotlib.colors as mcolors
 from matplotlib import colorbar
 from models.MDP import MDP
 from models.LMDP import LMDP
+from models.LMDP_TDR import LMDP_TDR
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -13,7 +14,8 @@ import os
 from .grid import CustomGrid, CellType
 from utils.state import State
 from typing import Literal
- 
+from sys import getsizeof
+from scipy.sparse import csr_matrix
                 
 class GridWorldMDP(MDP):
     """
@@ -208,6 +210,73 @@ class GridWorldLMDP(LMDP):
                     actions.append(action)
         
         return actions
+
+class GridWorldLMDP_TDR(LMDP_TDR):
+    OFFSETS = {
+        0: (0, -1),  # UP
+        1: (1, 0),   # RIGHT
+        2: (0, 1),   # DOWN
+        3: (-1, 0)   # LEFT
+    }
+    
+    def __init__(
+        self,
+        grid_size: int = 3,
+        map: list[str] = None,
+        sparse_optimization: bool = True,
+        benchmark_p: bool = False,
+        threads: int = 4
+    ):
+        self.deterministic = False
+        
+        self.allowed_actions = [i for i in range(len(self.OFFSETS))] # It is not that the LMDP has actions, but to determine the transition probabilities, we need to know how the agent moves through the environment
+        self.num_actions = len(self.allowed_actions)
+        
+        self.grid = CustomGrid("gridworld", map=map, grid_size=grid_size)
+        start_pos = self.grid.start_pos
+        self.start_state = [state for state in self.grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
+        
+        # TODO: remove unreachable states in case that I add the possibilities for GridWorld to support objects (e.g. keys, doors, etc.)
+        self.num_sates = self.grid.get_num_states()
+        
+        super().__init__(
+            self.num_sates,
+            num_terminal_states=self.grid.get_num_terminal_states(),
+            s0=self.grid.states.index(self.start_state),
+            sparse_optimization=sparse_optimization
+        )
+        
+        self.p_time = self.generate_P(
+            self.grid,
+            self.allowed_actions,
+            benchmark=benchmark_p,
+            num_threads=threads
+        )
+        
+        self._generate_R()
+        
+        print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
+
+
+    def _generate_R(self):
+        if self.sparse_optimization:
+            indices = self.P.nonzero()
+        else:
+            indices = np.where(self.P != 0)
+            
+        for i, j in zip(indices[0], indices[1]):
+            if self.grid.is_cliff(self.grid.state_index_mapper[j]) or self.grid.is_cliff(self.grid.state_index_mapper[i]):
+                self.R[i, j] = np.float64(-50)
+            else:
+                self.R[i, j] = np.float64(-5)
+        
+        if self.sparse_optimization:
+            print("Converting R into sparse matrix...")
+            print(f"Memory usage before conversion: {getsizeof(self.R):,} bytes")
+            self.R = csr_matrix(self.R)
+            print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
+                
+
 
 class GridWorldPlotter:
     """
@@ -447,6 +516,3 @@ class GridWorldPlotter:
             fig.savefig(os.path.join(self.__out_path, f"{'deterministic' if self.gridworld.deterministic else 'stochastic'}_cum_reward.png"))
         else:
             plt.show()
-
-        
-
