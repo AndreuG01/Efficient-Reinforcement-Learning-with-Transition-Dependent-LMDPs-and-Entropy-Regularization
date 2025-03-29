@@ -22,67 +22,86 @@ if __name__ == "__main__":
             MinigridActions.ROTATE_LEFT,
             MinigridActions.ROTATE_RIGHT,
             MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE
+            # MinigridActions.PICKUP,
+            # MinigridActions.DROP,
+            # MinigridActions.TOGGLE
         ],
-        map=Maps.SIMPLE_TEST,
+        map=Maps.LARGE_TEST_CLIFF,
         # objects=Maps.DOUBLE_DOOR_OBJECTS,
-        deterministic=False
+        deterministic=True,
     )
     
-    print(mdp.R)
     
-    embedded_lmdp = mdp.to_LMDP()
-    embedded_lmdptdr = mdp.to_LMDP_TDR()
-    embedded_lmdptdr_2 = mdp.to_LMDP_TDR_2()
+    
+    lmdp = MinigridLMDP(
+        allowed_actions=[
+            MinigridActions.ROTATE_LEFT,
+            MinigridActions.ROTATE_RIGHT,
+            MinigridActions.FORWARD,
+            # MinigridActions.PICKUP,
+            # MinigridActions.DROP,
+            # MinigridActions.TOGGLE
+        ],
+        map=Maps.LARGE_TEST_CLIFF,
+        # objects=Maps.DOUBLE_DOOR_OBJECTS,
+        sparse_optimization=False,
+    )
+    
+    lmdp_tdr = MinigridLMDP_TDR(
+        allowed_actions=[
+            MinigridActions.ROTATE_LEFT,
+            MinigridActions.ROTATE_RIGHT,
+            MinigridActions.FORWARD,
+            # MinigridActions.PICKUP,
+            # MinigridActions.DROP,
+            # MinigridActions.TOGGLE
+        ],
+        map=Maps.LARGE_TEST_CLIFF,
+        # objects=Maps.DOUBLE_DOOR_OBJECTS,
+        sparse_optimization=False
+    )
+    
     
     mdp.compute_value_function()
-    embedded_lmdp.compute_value_function()
-    embedded_lmdptdr.compute_value_function()
-    embedded_lmdptdr_2.compute_value_function()
+    states_goal, actions_goal = mdp.states_to_goal(include_actions=True)
+    states_goal = states_goal[:-1]
+    actions_goal = [int(action) for action in actions_goal[:-1]]
     
-    print("REWARD 1")
-    print(embedded_lmdptdr.R)
-    print("REWARD 2")
-    print(embedded_lmdptdr_2.R)
+    print("States to goal: ", states_goal)
+    print("Actions to goal: ", actions_goal)
     
     
-    # lmdp = MinigridLMDP(
-    #     allowed_actions=[
-    #         MinigridActions.ROTATE_LEFT,
-    #         MinigridActions.ROTATE_RIGHT,
-    #         MinigridActions.FORWARD,
-    #         # MinigridActions.PICKUP,
-    #         # MinigridActions.DROP,
-    #         # MinigridActions.TOGGLE
-    #     ],
-    #     map=Maps.SIMPLE_TEST,
-    #     # objects=Maps.CHALLENGE_DOOR_OBJECTS,
-    #     lmdp=embedded_lmdp
-    # )
+    for i in range(len(states_goal) - 1):
+        lmdp_tdr.R[states_goal[i], states_goal[i+1]] = -1
+        lmdp.R[states_goal[i+1]] = -1
+        mdp.R[states_goal[i], actions_goal[i]] = -1
+        
     
-    # lmdp.visualize_policy(num_times=1, save_gif=True, save_path="assets/now.gif")
     
-    close = np.isclose(embedded_lmdp.V, embedded_lmdptdr.V)
-    if not np.all(close):
-        diff_indices = np.where(~close)
-        print("VALUE FUNCTIONS are NOT close at indices:")
-        for idx in diff_indices[0]:
-            diff = abs(embedded_lmdp.V[idx] - embedded_lmdptdr.V[idx])
-            # print(f"Index ({idx}{', cliff' if idx in cliff_states else ''}): Diff = {round(diff, 4)} lmdp.V = {lmdp.V[idx]}, lmdp_tdr.V = {lmdp_tdr.V[idx]}")
-            print(f"Index ({idx}): Diff = {round(diff, 4)} elmdp.V = {embedded_lmdp.V[idx]}, lmdp_tdr.V = {embedded_lmdptdr.V[idx]}.")
-    else:
-        print("\t\tVALUE FUNCTIONS are close", True)
+    
+    
+    
+    mdp.compute_value_function()
+    lmdp.compute_value_function()
+    lmdp_tdr.compute_value_function()
+    
+    
+    
+    
+    
+    
+    diff_mdp_lmdp = np.linalg.norm(mdp.V - lmdp.V)
+    diff_mdp_lmdptdr = np.linalg.norm(mdp.V - lmdp_tdr.V)
     
     fig = plt.figure(figsize=(10, 5))
-    plt.plot(np.arange(len(mdp.V)), mdp.V, label="MDP")
-    plt.plot(np.arange(len(embedded_lmdp.V)), embedded_lmdp.V, label="Embedded LMDP")
-    plt.plot(np.arange(len(embedded_lmdptdr.V)), embedded_lmdptdr.V, label="Embedded LMDP-TDR")
-    plt.plot(np.arange(len(embedded_lmdptdr_2.V)), embedded_lmdptdr_2.V, label="Embedded LMDP-TDR-version 2")
+    plt.plot([i for i in range(len(lmdp.V))], lmdp.V, color="blue", label="LMDP")
+    plt.plot([i for i in range(len(mdp.V))], mdp.V, color="green", label="MDP")
+    plt.plot([i for i in range(len(lmdp_tdr.V))], lmdp_tdr.V, color="red", label="LMDP-TDR")
     plt.xlabel("State index")
     plt.ylabel("V(s)")
-    plt.title("DOUBLE_DOOR")
-    
+    plt.title(f"MDP vs LMPD: {round(diff_mdp_lmdp, 3)}. MDP vs LMDP-TDR: {round(diff_mdp_lmdptdr, 3)}")
+    plt.grid()
     plt.legend()
-    plt.savefig("assets/mdp_lmdp-tdr.png", dpi=300)
+    
+    plt.show()
+    

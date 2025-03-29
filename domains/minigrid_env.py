@@ -347,13 +347,16 @@ class MinigridMDP(MDP):
                 
         return 0
     
-    def states_to_goal(self, stochastic: bool = False) -> list[int]:
+    def states_to_goal(self, stochastic: bool = False, include_actions: bool = False) -> list[int]:
         """
         Returns the indices of the states that lead to the solution based on the derived policy
+        include_actions: if true, the actions that lead to the transition of the states are returned as well
         """
         curr_state = self.minigrid_env.custom_grid.state_index_mapper[self.s0]
         curr_state_idx = self.s0
         states = [self.s0]
+        actions = []
+        
         
         while not self.minigrid_env.custom_grid.is_terminal(curr_state):
             if stochastic:
@@ -368,6 +371,10 @@ class MinigridMDP(MDP):
                     curr_state_idx = self.minigrid_env.custom_grid.states.index(curr_state)
             
             states.append(curr_state_idx)
+            actions.append(curr_action)
+        
+        if include_actions:
+            return (states, actions)
         
         return states
 
