@@ -265,18 +265,17 @@ def lmdp_tdr_advantage():
 
     
     fig, axes = plt.subplots(ncols=2, figsize=(10, 5))
-    axes[0].scatter(mdp.V, lmdp.V, color=lmdp_color)
-    min_val = min(min(mdp.V), min(lmdp.V))
-    max_val = max(max(mdp.V), max(lmdp.V))
-    axes[0].plot([min_val, max_val], [min_val, max_val], color="gray", lw=1, linestyle='--')
+    
+    sns.regplot(x=mdp.V, y=lmdp.V, ax=axes[0], scatter=False, line_kws={"color": "gray", "lw": 1, "linestyle": "--"})
+    axes[0].scatter(mdp.V, lmdp.V, color=lmdp_color, zorder=3)
     axes[0].set_title(f"$\mathcal{{M}}$ vs $\mathcal{{L}}$: $R^2 = {r_squared_lmdp_mdp:.3f}$")
     axes[0].set_xlabel("$V_{\mathcal{M}}(s)$")
     axes[0].set_ylabel("$V_{\mathcal{L}}(s)$")
     
-    axes[1].scatter(mdp.V, lmdp_tdr.V, color=lmdp_tdr_color)
-    min_val = min(min(mdp.V), min(lmdp_tdr.V))
-    max_val = max(max(mdp.V), max(lmdp_tdr.V))
-    axes[1].plot([min_val, max_val], [min_val, max_val], color="gray", lw=1, linestyle='--')
+    
+    sns.regplot(x=mdp.V, y=lmdp_tdr.V, ax=axes[1], scatter=False, line_kws={"color": "gray", "lw": 1, "linestyle": "--"})
+    axes[1].scatter(mdp.V, lmdp_tdr.V, color=lmdp_tdr_color, zorder=3)
+    
     axes[1].set_title(f"$\mathcal{{M}}$ vs $\mathcal{{L'}}$: $R^2 = {r_squared_lmdp_tdr_mdp:.3f}$")
     axes[1].set_xlabel("$V_{\mathcal{M}}(s)$")
     axes[1].set_ylabel("$V_{\mathcal{L\'}}(s)$")
