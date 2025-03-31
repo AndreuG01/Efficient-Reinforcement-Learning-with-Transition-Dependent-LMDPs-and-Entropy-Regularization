@@ -8,6 +8,8 @@ from models.LMDP import LMDP
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP, GridWorldLMDP_TDR
 from utils.maps import Maps
 import os
+import seaborn as sns
+import scipy.stats as stats
 
 def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map=None, objects=None, grid_size: int = 3, save_fig: bool = True):
     """
@@ -192,13 +194,11 @@ def lmdp_tdr_advantage():
     lmdp = GridWorldLMDP(
         map=map,
         sparse_optimization=False
-    
     )
     lmdp_tdr = GridWorldLMDP_TDR(
         map=map,
         sparse_optimization=False
     )
-    
     
     # Risky states are those between the index 25 and 34 (both included)
     for i in range(25, 34 + 1):
@@ -219,7 +219,7 @@ def lmdp_tdr_advantage():
         name=output_dir
     )
     
-    # 1. Safe the MAP
+    # 1. Save the MAP
     plotter.plot_grid_world(
         show_value_function=False,
         show_prob=False,
@@ -236,12 +236,16 @@ def lmdp_tdr_advantage():
 
     palette = CustomPalette()
     plt.rcParams.update({"text.usetex": True})
+    
+    mdp_color = palette[5]
+    lmdp_color = palette[3]
+    lmdp_tdr_color = palette[4]
 
     fig, ax = plt.subplots(figsize=(10, 5))
     states_idx = [i for i in range(len(mdp.V))]
-    ax.plot(states_idx, mdp.V, label="MDP", color=palette[5])
-    ax.plot(states_idx, lmdp.V, label="state-dependent LMDP", color=palette[3])
-    ax.plot(states_idx, lmdp_tdr.V, label="transition-dependent LMDP", color=palette[4])
+    ax.plot(states_idx, mdp.V, label="MDP", color=mdp_color)
+    ax.plot(states_idx, lmdp.V, label="state-dependent LMDP", color=lmdp_color)
+    ax.plot(states_idx, lmdp_tdr.V, label="transition-dependent LMDP", color=lmdp_tdr_color)
 
     rect = patches.Rectangle((24.5, min(mdp.V)), 10, max(mdp.V) - min(mdp.V),
                             linewidth=1.5, edgecolor="red", linestyle="--", facecolor="none", label="Risky states")
@@ -254,5 +258,28 @@ def lmdp_tdr_advantage():
     ax.grid()
     plt.savefig(os.path.join(f"assets/{output_dir}", "value_functions.png"), dpi=300, bbox_inches="tight")
 
+
+    # Calculate R^2 values
+    r_squared_lmdp_mdp = np.corrcoef(mdp.V, lmdp.V)[0, 1] ** 2
+    r_squared_lmdp_tdr_mdp = np.corrcoef(mdp.V, lmdp_tdr.V)[0, 1] ** 2
+
     
+    fig, axes = plt.subplots(ncols=2, figsize=(10, 5))
+    axes[0].scatter(mdp.V, lmdp.V, color=lmdp_color)
+    min_val = min(min(mdp.V), min(lmdp.V))
+    max_val = max(max(mdp.V), max(lmdp.V))
+    axes[0].plot([min_val, max_val], [min_val, max_val], color="gray", lw=1, linestyle='--')
+    axes[0].set_title(f"$\mathcal{{M}}$ vs $\mathcal{{L}}$: $R^2 = {r_squared_lmdp_mdp:.3f}$")
+    axes[0].set_xlabel("$V_{\mathcal{M}}(s)$")
+    axes[0].set_ylabel("$V_{\mathcal{L}}(s)$")
     
+    axes[1].scatter(mdp.V, lmdp_tdr.V, color=lmdp_tdr_color)
+    min_val = min(min(mdp.V), min(lmdp_tdr.V))
+    max_val = max(max(mdp.V), max(lmdp_tdr.V))
+    axes[1].plot([min_val, max_val], [min_val, max_val], color="gray", lw=1, linestyle='--')
+    axes[1].set_title(f"$\mathcal{{M}}$ vs $\mathcal{{L'}}$: $R^2 = {r_squared_lmdp_tdr_mdp:.3f}$")
+    axes[1].set_xlabel("$V_{\mathcal{M}}(s)$")
+    axes[1].set_ylabel("$V_{\mathcal{L\'}}(s)$")
+    
+    plt.savefig(os.path.join(f"assets/{output_dir}", "correlation_plots.png"), dpi=300, bbox_inches="tight")
+
