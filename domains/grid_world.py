@@ -329,6 +329,7 @@ class GridWorldPlotter:
         policy: np.ndarray = None,
         multiple_actions: bool = False,
         show_prob: bool = False,
+        show_actions: bool = True,
         prob_size: float = None,
         color_probs: bool = True
     ):
@@ -434,6 +435,7 @@ class GridWorldPlotter:
                         ax.text(np.mean([p[0] for p in q_vertices]), np.mean([p[1] for p in q_vertices]), f"{prob:.2f}", 
                                 color="white" if self.gridworld.V[idx] > 0.3 * np.min(self.gridworld.V) else "black", fontweight="heavy" if prob == max_prob else None, fontsize=prob_size, ha="center", va="center")
             else:
+                if not show_actions: break
                 for action in actions:
                     dy, dx = self.gridworld.OFFSETS[action]
                     ax.quiver(
@@ -470,9 +472,9 @@ class GridWorldPlotter:
 
         if savefig:
             if save_title is None:
-                plt.savefig(os.path.join(self.__out_path, f"{'deterministic' if self.gridworld.deterministic else 'stochastic'}_policy{'_value_function' if show_value_function else ''}"), dpi=300)
+                plt.savefig(os.path.join(self.__out_path, f"{'deterministic' if self.gridworld.deterministic else 'stochastic'}_policy{'_value_function' if show_value_function else ''}"), dpi=300, bbox_inches="tight")
             else:
-                plt.savefig(os.path.join(self.__out_path, save_title), dpi=300)
+                plt.savefig(os.path.join(self.__out_path, save_title), dpi=300, bbox_inches="tight")
         else:
             plt.show()
 

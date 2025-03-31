@@ -12,43 +12,8 @@ from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, be
 from minigrid.manual_control import ManualControl
 from custom_palette import CustomPalette
 import pickle as pkl
-from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity
+from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage
 
 if __name__ == "__main__":
     
-    mdp = GridWorldMDP(
-        map=Maps.CLIFF,
-        deterministic=True
-    )
-    
-    lmdp = GridWorldLMDP(
-        map=Maps.CLIFF,
-        sparse_optimization=False
-    
-    )
-    lmdp_tdr = GridWorldLMDP_TDR(
-        map=Maps.CLIFF,
-        sparse_optimization=False
-    )
-    
-    lmdp.compute_value_function()
-    mdp.compute_value_function()
-    lmdp_tdr.compute_value_function()
-    
-    fig = plt.figure(figsize=(10, 5))
-    
-    plt.plot([i for i in range(len(mdp.V))], mdp.V, label="MDP")
-    plt.plot([i for i in range(len(lmdp.V))], lmdp.V, label="LMDP")
-    plt.plot([i for i in range(len(lmdp_tdr.V))], lmdp_tdr.V, label="LMDP-TDR")
-    
-    plt.xlabel("State index")
-    plt.ylabel("V(s)")
-    plt.legend()
-    
-    plt.show()
-    
-    plotter = GridWorldPlotter(
-        lmdp_tdr
-    )
-    
-    plotter.plot_grid_world()
+    lmdp_tdr_advantage()

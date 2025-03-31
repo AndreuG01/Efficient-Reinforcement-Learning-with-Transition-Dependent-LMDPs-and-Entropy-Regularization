@@ -1,9 +1,13 @@
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import numpy as np
 from custom_palette import CustomPalette
 from domains.minigrid_env import MinigridMDP, MinigridLMDP
 from domains.grid import MinigridActions
 from models.LMDP import LMDP
+from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP, GridWorldLMDP_TDR
+from utils.maps import Maps
+import os
 
 def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map=None, objects=None, grid_size: int = 3, save_fig: bool = True):
     """
@@ -172,3 +176,83 @@ def compare_value_function_by_stochasticity(map=None, objects=None, grid_size: i
         plt.savefig(f"assets/stochasticity_comparison_{map_name}.png", dpi=300)
     else:
         plt.show()
+
+
+def lmdp_tdr_advantage():
+    """
+    A function that has been created to illustrate the advantages of the LMDP with transition-dependent rewards over
+    an LMDP with state-dependent rewards.
+    """
+    map = Maps.CLIFF_WALKING
+    mdp = GridWorldMDP(
+        map=map,
+        deterministic=True,
+        stochastic_prob=0.4
+    )
+    lmdp = GridWorldLMDP(
+        map=map,
+        sparse_optimization=False
+    
+    )
+    lmdp_tdr = GridWorldLMDP_TDR(
+        map=map,
+        sparse_optimization=False
+    )
+    
+    
+    # Risky states are those between the index 25 and 34 (both included)
+    for i in range(25, 34 + 1):
+        mdp.R[i,:] = -20
+        mdp.R[i,1] = -5
+        lmdp.R[i] = -20
+        lmdp_tdr.R[i,:] = -20
+        lmdp_tdr.R[i,i+1] = -5
+    
+    lmdp.compute_value_function()
+    mdp.compute_value_function()
+    lmdp_tdr.compute_value_function()
+    
+    output_dir = "LMDP_TDR_advantage"
+    
+    plotter = GridWorldPlotter(
+        mdp,
+        name=output_dir
+    )
+    
+    # 1. Safe the MAP
+    plotter.plot_grid_world(
+        show_value_function=False,
+        show_prob=False,
+        show_actions=False,
+        savefig=True,
+        save_title="WALKING_CLIFF"
+    )
+    
+    diff_mdp_lmdp = round(np.linalg.norm(mdp.V - lmdp.V), 4)
+    diff_mdp_lmdptdr = round(np.linalg.norm(mdp.V - lmdp_tdr.V), 4)
+    
+    print(f"Squared norm between MDP and LMDP state-dependent: {diff_mdp_lmdp}")
+    print(f"Squared norm between MDP and LMDP transition-dependent: {diff_mdp_lmdptdr}")
+
+    palette = CustomPalette()
+    plt.rcParams.update({"text.usetex": True})
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    states_idx = [i for i in range(len(mdp.V))]
+    ax.plot(states_idx, mdp.V, label="MDP", color=palette[5])
+    ax.plot(states_idx, lmdp.V, label="state-dependent LMDP", color=palette[3])
+    ax.plot(states_idx, lmdp_tdr.V, label="transition-dependent LMDP", color=palette[4])
+
+    rect = patches.Rectangle((24.5, min(mdp.V)), 10, max(mdp.V) - min(mdp.V),
+                            linewidth=1.5, edgecolor="red", linestyle="--", facecolor="none", label="Risky states")
+    ax.add_patch(rect)
+
+    ax.set_title("Value functions for the Walking Cliff problem")
+    ax.set_xlabel("State index")
+    ax.set_ylabel("$V(s)$")
+    ax.legend()
+    ax.grid()
+    plt.savefig(os.path.join(f"assets/{output_dir}", "value_functions.png"), dpi=300, bbox_inches="tight")
+
+    
+    

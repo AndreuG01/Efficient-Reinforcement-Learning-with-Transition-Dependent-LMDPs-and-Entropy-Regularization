@@ -77,12 +77,14 @@ class Maps:
         "#################",
     ]
     
-    CLIFF_2 = [
-        "#######",
-        "#     #",
-        "#     #",
-        "#SCCCG#",
-        "#######",
+    
+    CLIFF_WALKING = [ # From Sutton and Barto, 2018
+        "##############",
+        "#            #",
+        "#            #",
+        "#            #",
+        "#SCCCCCCCCCCG#",
+        "##############",
     ]
 
     CHEATING_CLIFF = [
