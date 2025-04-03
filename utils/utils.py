@@ -10,6 +10,7 @@ from utils.maps import Maps
 import os
 import seaborn as sns
 import scipy.stats as stats
+from sklearn.metrics import r2_score
 
 def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map=None, objects=None, grid_size: int = 3, save_fig: bool = True):
     """
@@ -260,25 +261,75 @@ def lmdp_tdr_advantage():
 
 
     # Calculate R^2 values
-    r_squared_lmdp_mdp = np.corrcoef(mdp.V, lmdp.V)[0, 1] ** 2
-    r_squared_lmdp_tdr_mdp = np.corrcoef(mdp.V, lmdp_tdr.V)[0, 1] ** 2
+    r_squared_lmdp_mdp = r2_score(mdp.V, lmdp.V)
+    r_squared_lmdp_tdr_mdp = r2_score(mdp.V, lmdp_tdr.V)
 
     
     fig, axes = plt.subplots(ncols=2, figsize=(10, 5))
     
-    sns.regplot(x=mdp.V, y=lmdp.V, ax=axes[0], scatter=False, line_kws={"color": "gray", "lw": 1, "linestyle": "--"})
+    # sns.regplot(x=mdp.V, y=lmdp.V, ax=axes[0], scatter=False, line_kws={"color": "gray", "lw": 1, "linestyle": "--"})
+    axes[0].plot(mdp.V, mdp.V, color="gray", linestyle="--", lw=1)
     axes[0].scatter(mdp.V, lmdp.V, color=lmdp_color, zorder=3)
     axes[0].set_title(f"$\mathcal{{M}}$ vs $\mathcal{{L}}$: $R^2 = {r_squared_lmdp_mdp:.3f}$")
     axes[0].set_xlabel("$V_{\mathcal{M}}(s)$")
     axes[0].set_ylabel("$V_{\mathcal{L}}(s)$")
     
     
-    sns.regplot(x=mdp.V, y=lmdp_tdr.V, ax=axes[1], scatter=False, line_kws={"color": "gray", "lw": 1, "linestyle": "--"})
+    # sns.regplot(x=mdp.V, y=lmdp_tdr.V, ax=axes[1], scatter=False, line_kws={"color": "gray", "lw": 1, "linestyle": "--"})
+    axes[1].plot(mdp.V, mdp.V, color="gray", linestyle="--", lw=1)
     axes[1].scatter(mdp.V, lmdp_tdr.V, color=lmdp_tdr_color, zorder=3)
-    
     axes[1].set_title(f"$\mathcal{{M}}$ vs $\mathcal{{L'}}$: $R^2 = {r_squared_lmdp_tdr_mdp:.3f}$")
     axes[1].set_xlabel("$V_{\mathcal{M}}(s)$")
     axes[1].set_ylabel("$V_{\mathcal{L\'}}(s)$")
     
     plt.savefig(os.path.join(f"assets/{output_dir}", "correlation_plots.png"), dpi=300, bbox_inches="tight")
 
+
+def uniform_assumption_plot():
+    lmdp = GridWorldLMDP(
+            grid_size=15,
+            # allowed_actions=[
+            #     MinigridActions.ROTATE_LEFT,
+            #     MinigridActions.ROTATE_RIGHT,
+            #     MinigridActions.FORWARD,
+            # ],
+            sparse_optimization=False
+        )
+    probs = np.arange(0.1, 1.0, 0.1)
+    np.random.seed(23)
+    state = {}
+    for s in range(lmdp.num_non_terminal_states):
+        non_zero = np.where(lmdp.P[s] != 0)[0]
+        state[s] = np.random.randint(0, len(non_zero))
+    
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    palette = CustomPalette()
+    plt.rcParams.update({"text.usetex": True})
+    colors = [palette[i] for i in range(len(probs))]
+    
+    value_functions = []
+    
+    for i, stochastic_prob in enumerate(probs):
+        for s in range(lmdp.num_non_terminal_states):
+            non_zero = np.where(lmdp.P[s] != 0)[0]
+            lmdp.P[s, non_zero] = (1 - stochastic_prob) / max(len(non_zero) - 1, 1)
+            lmdp.P[s, state[s]] = stochastic_prob
+
+        
+        lmdp.compute_value_function()
+        value_functions.append(lmdp.V)
+        iters = lmdp.stats.iterations
+        axes[0].plot([i for i in range(len(lmdp.V))], lmdp.V, label=f"$p = {round(stochastic_prob, 1)}$. ${iters}$ iters", color=colors[i])
+    
+    axes[0].set_title("Value functions")
+    axes[0].set_xlabel("State index $s$")
+    axes[0].set_ylabel(r"$V_{p_i}(s)$")
+    axes[0].legend()
+    correlation_matrix = np.corrcoef(value_functions)
+    
+
+    sns.heatmap(correlation_matrix, annot=False, cmap="coolwarm", xticklabels=[f"$V_{{p_{i+1}}}(\cdot)$" for i in range(len(value_functions))], yticklabels=[f"$V_{{p_{i+1}}}(\cdot)$" for i in range(len(value_functions))], ax=axes[1])
+    axes[1].set_title("Pearson correlation matrix")
+    plt.suptitle("Impact of Transition Probability Bias on Value Functions and Convergence in LMDPs", fontsize=14)
+    plt.tight_layout()
+    plt.savefig("assets/impact_transition_probability.png", dpi=300, bbox_inches="tight")
