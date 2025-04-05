@@ -9,6 +9,7 @@ from tqdm import tqdm
 from scipy.sparse import csr_matrix
 import models
 from copy import deepcopy
+from typing import Literal
 
 class MDP(ABC):
     """
@@ -39,7 +40,8 @@ class MDP(ABC):
         allowed_actions: list[int],
         gamma: int = 1,
         s0: int = 0,
-        deterministic: bool = False
+        deterministic: bool = False,
+        behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
     ) -> None:
         """
         Initialize the MDP with the given parameters.
@@ -57,6 +59,7 @@ class MDP(ABC):
         assert 0 <= s0 <= num_states - 1, "Initial state must be a valid state"
         assert num_terminal_states < num_states, "There must be fewer terminal states than the total number of states"
         assert 0 <= gamma <= 1, "Discount factor must be in the range [0, 1]"
+        assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
         
         self.num_states = num_states
         self.num_terminal_states = num_terminal_states
@@ -66,6 +69,7 @@ class MDP(ABC):
         self.s0 = s0
         self.gamma = gamma
         self.deterministic = deterministic
+        self.behaviour = behaviour
         
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
@@ -107,7 +111,7 @@ class MDP(ABC):
                 if self.deterministic:
                     self.P[state, action, next_state] = 1
                 else:
-                    # Stochastic policy. With 90% take the correct action, with 10% uniformly take every other action
+                    # Stochastic policy. With stochastic_prob take the correct action. With 1 - stochastic_prob, uniformly take every other action
                     self.P[state, action, next_state] = stochastic_prob
                     other_actions = [a for a in self.__alowed_actions if a != action]
                     for new_action in other_actions:
@@ -445,6 +449,55 @@ class MDP(ABC):
         lmdp_tdr.R += R_1
         lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
         lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
+        
+        z = lmdp_tdr.power_iteration()
+        V_lmdp = lmdp_tdr.get_value_function(z)
+        V_mdp, _ = self.value_iteration()
+        
+        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        return lmdp_tdr
+
+    
+    def to_LMDP_TDR_3(self):
+        print(f"Computing the LMDP-TDR embedding of this MDP...")
+        
+        
+        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+            num_states=self.num_states,
+            num_terminal_states=self.num_terminal_states,
+            sparse_optimization=False,
+            lmbda=1,
+            s0=self.s0
+        )
+        
+        
+        
+        if self.deterministic and False:
+            pass
+            
+        else:
+            epsilon = 1e-10
+            for state in range(self.num_non_terminal_states):
+                x = np.sum(self.P[state, :, :] * self.R[state, :].reshape(-1, 1), axis=0)
+                nonzero_cols = np.where(x != 0)[0]
+                len_support = len(nonzero_cols)
+                
+                lmdp_tdr.P[state, nonzero_cols] = np.exp(-np.log(len_support))
+                lmdp_tdr.R[state] = x + lmdp_tdr.lmbda * np.log(len_support)
+                
+                
+                
+            # numerator = np.einsum("sak,sa->sk", self.P, self.R[:self.num_non_terminal_states])
+            # denominator = np.sum(self.P, axis=1)
+            # with np.errstate(divide="ignore", invalid="ignore"):
+            #     x = np.where(denominator != 0, numerator / denominator, 0.0)
+            
+            # lmdp_tdr.x = x    # x[state] = 
+                
+                
+
+        # lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
+        # lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
         
         z = lmdp_tdr.power_iteration()
         V_lmdp = lmdp_tdr.get_value_function(z)

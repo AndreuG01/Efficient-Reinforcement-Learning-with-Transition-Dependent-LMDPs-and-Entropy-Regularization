@@ -5,7 +5,7 @@ from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import Door, Goal, Key, Wall, Lava
 from minigrid.minigrid_env import MiniGridEnv
-from .grid import CustomGrid, CellType
+from .grid import CustomGrid, CellType, MinigridActions
 from models.MDP import MDP
 from models.LMDP import LMDP
 from models.LMDP_TDR import LMDP_TDR
@@ -16,6 +16,7 @@ from tqdm import tqdm
 from collections.abc import Callable
 from scipy.sparse import csr_matrix
 from sys import getsizeof
+from typing import Literal
 
 
 
@@ -237,15 +238,18 @@ class MinigridMDP(MDP):
         grid_size: int = 3,
         map: list[str] = None,
         allowed_actions: list[int] = None,
-        deterministic: bool = True,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
         objects: list[Object] = None,
         stochastic_prob: float = 0.9,
+        behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         mdp: MDP = None
     ):
         
         self.stochastic_prob = stochastic_prob
-        self.deterministic = deterministic
+        assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
+        self.behaviour = behaviour
+        deterministic = self.behaviour == "deterministic"
+        
         if allowed_actions:
             self.num_actions = len(allowed_actions)
             self.allowed_actions = allowed_actions
@@ -270,11 +274,22 @@ class MinigridMDP(MDP):
                 num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
                 allowed_actions=self.allowed_actions,
                 s0=self.minigrid_env.custom_grid.states.index(self.start_state),
-                deterministic=self.deterministic
+                deterministic=deterministic,
+                behaviour=self.behaviour
                 # gamma=0.999
             )
 
             self.generate_P(self.minigrid_env.custom_grid, stochastic_prob=self.stochastic_prob)
+            
+            # If the agent has a mixed behaviour, we have to make navigation actions deterministic.
+            if self.behaviour == "mixed":
+                for state in range(self.num_non_terminal_states):
+                    manipulation_probs = self.P[state, MinigridActions.PICKUP:, :]
+                    max_indices = np.argmax(manipulation_probs, axis=1)
+                    self.P[state, MinigridActions.PICKUP:, :] = 0
+                    self.P[state, MinigridActions.PICKUP + np.arange(len(max_indices)), max_indices] = 1
+
+
             self._generate_R()
             print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
         else:
@@ -287,7 +302,8 @@ class MinigridMDP(MDP):
                 allowed_actions=self.allowed_actions,
                 s0=mdp.s0,
                 gamma=mdp.gamma,
-                deterministic=mdp.deterministic
+                deterministic=mdp.deterministic,
+                behaviour=self.behaviour
             )
             
             self.P = mdp.P

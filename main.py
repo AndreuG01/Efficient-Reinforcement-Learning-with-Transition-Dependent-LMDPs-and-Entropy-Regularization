@@ -12,8 +12,40 @@ from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, be
 from minigrid.manual_control import ManualControl
 from custom_palette import CustomPalette
 import pickle as pkl
-from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage
+from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot
+from sklearn.metrics import r2_score
+import matplotlib.gridspec as gridspec
+from tqdm import tqdm
+from scipy.stats import pearsonr
+import pickle
+import seaborn as sns
 
 if __name__ == "__main__":
     
-    lmdp_tdr_advantage()
+    fig = plt.figure(figsize=(10, 5))
+    for type in ["mixed", "deterministic", "stochastic"]:
+        print(type)
+        mdp = MinigridMDP(
+            grid_size=20,
+            map=Maps.SIMPLE_DOOR,
+            objects=Maps.SIMPLE_DOOR_OBJECTS,
+            allowed_actions=[
+                MinigridActions.ROTATE_LEFT,
+                MinigridActions.ROTATE_RIGHT,
+                MinigridActions.FORWARD,
+                MinigridActions.PICKUP,
+                MinigridActions.DROP,
+                MinigridActions.TOGGLE
+            ],
+            behaviour=type,
+            stochastic_prob=0.5
+        )
+        mdp.compute_value_function()
+        plt.plot([i for i in range(len(mdp.V))], mdp.V, label=type)
+    
+    plt.legend()
+    plt.show()
+    
+    
+    
+    
