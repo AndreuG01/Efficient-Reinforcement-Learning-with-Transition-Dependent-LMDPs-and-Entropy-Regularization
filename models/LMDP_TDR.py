@@ -6,8 +6,8 @@ from sys import getsizeof
 from joblib import Parallel, delayed, cpu_count
 import time
 from tqdm import tqdm
-from .MDP import MDP
-
+import models
+import models.LMDP
 class LMDP_TDR:
     def __init__(self, num_states: int, num_terminal_states: int, lmbda: int = 1, s0: int = 0, sparse_optimization: bool = True) -> None:
         self.num_states = num_states
@@ -184,5 +184,28 @@ class LMDP_TDR:
         # self.policy_multiple_states = self.get_optimal_policy(self.z, self.o, multiple_states=True)
         
     
-    def to_MDP(self) -> MDP:
+    def to_MDP(self):
         raise NotImplementedError("Not implemented yet")
+    
+    
+    def to_LMDP(self):
+        lmdp = models.LMDP.LMDP(
+            self.num_states,
+            self.num_terminal_states,
+            self.lmbda,
+            self.s0,
+            sparse_optimization=False
+        )
+        
+        large_negative = np.float64(-1e10)
+        x = self.R + self.lmbda * np.where(self.P != 0, np.log(self.P), large_negative)
+        
+        lmdp.R = self.lmbda * np.log(np.sum(np.exp(x / self.lmbda), axis=1))
+        # Add the rewards for the terminal states
+        lmdp.R = np.append(lmdp.R, np.zeros(self.num_terminal_states))
+        
+        lmdp.P = np.exp(x / self.lmbda)
+        lmdp.P /= np.sum(lmdp.P, axis=1).reshape(-1, 1)
+
+        return lmdp
+        
