@@ -21,7 +21,7 @@ import pickle
 import seaborn as sns
 
 if __name__ == "__main__":
-    
+    stochastic_prob = 0.5
     fig = plt.figure(figsize=(10, 5))
     for type in ["mixed", "deterministic", "stochastic"]:
         print(type)
@@ -38,11 +38,21 @@ if __name__ == "__main__":
                 MinigridActions.TOGGLE
             ],
             behaviour=type,
-            stochastic_prob=0.5
+            stochastic_prob=stochastic_prob
         )
         mdp.compute_value_function()
-        plt.plot([i for i in range(len(mdp.V))], mdp.V, label=type)
+        if type == "mixed":
+            label = f"Mixed (p = {stochastic_prob} for manipulation actions)"
+        elif type == "deterministic":
+            label = "Deterministic"
+        else:
+            label = f"Stochastic (p = {stochastic_prob})"
+        
+        plt.plot([i for i in range(len(mdp.V))], mdp.V, label=label)
     
+    plt.title(f"SIMPLE DOOR MAP")
+    plt.xlabel("State index")
+    plt.ylabel("V(s)")
     plt.legend()
     plt.show()
     

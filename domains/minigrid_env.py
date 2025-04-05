@@ -283,11 +283,13 @@ class MinigridMDP(MDP):
             
             # If the agent has a mixed behaviour, we have to make navigation actions deterministic.
             if self.behaviour == "mixed":
-                for state in range(self.num_non_terminal_states):
-                    manipulation_probs = self.P[state, MinigridActions.PICKUP:, :]
-                    max_indices = np.argmax(manipulation_probs, axis=1)
-                    self.P[state, MinigridActions.PICKUP:, :] = 0
-                    self.P[state, MinigridActions.PICKUP + np.arange(len(max_indices)), max_indices] = 1
+                manip_start = MinigridActions.PICKUP
+                states = np.arange(self.num_non_terminal_states)
+                manip_probs = self.P[states, manip_start:, :]
+                max_indices = np.argmax(manip_probs, axis=2)
+
+                self.P[states[:, None], manip_start + np.arange(max_indices.shape[1]), :] = 0
+                self.P[states[:, None], manip_start + np.arange(max_indices.shape[1]), max_indices] = 1
 
 
             self._generate_R()
