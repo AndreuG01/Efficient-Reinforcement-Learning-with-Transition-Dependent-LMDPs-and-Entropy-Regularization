@@ -16,6 +16,7 @@ from utils.state import State
 from typing import Literal
 from sys import getsizeof
 from scipy.sparse import csr_matrix
+from utils.maps import Map
                 
 class GridWorldMDP(MDP):
     """
@@ -50,7 +51,7 @@ class GridWorldMDP(MDP):
     def __init__(
         self,
         grid_size: int = 3,
-        map: list[str] = None,
+        map: Map = None,
         deterministic: bool = True,
         stochastic_prob: float = 0.9,
         mdp: MDP = None
@@ -133,7 +134,7 @@ class GridWorldLMDP(LMDP):
     def __init__(
         self,
         grid_size: int = 3,
-        map: list[str] = None,
+        map: Map = None,
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
         threads: int = 4,
@@ -222,7 +223,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
     def __init__(
         self,
         grid_size: int = 3,
-        map: list[str] = None,
+        map: Map = None,
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
         threads: int = 4

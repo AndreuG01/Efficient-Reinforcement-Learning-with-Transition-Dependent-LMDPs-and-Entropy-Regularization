@@ -1,4 +1,5 @@
 from typing import Literal, Dict, Tuple
+from .coloring import TerminalColor
 
 class Object:
     def __init__(self, y: int, x: int, color: Literal["red", "green", "blue", "purple", "yellow", "grey"], 
@@ -8,6 +9,10 @@ class Object:
         self.color = color
         self.type = type
         self.id = id
+    
+    def symbol(self) -> str:
+        return TerminalColor.colorize(self.type[0].upper(), self.color)
+
     
     def __str__(self):
         return f"{self.color}_{self.type}_{self.id}"

@@ -287,7 +287,7 @@ class MDP(ABC):
             s0=self.s0
         )
         
-        if self.deterministic and False:
+        if self.deterministic and False:   
             pass
             
         else:
@@ -316,13 +316,12 @@ class MDP(ABC):
                 lmdp.R[state] = R
                 lmdp.P[state, ~zero_cols] = np.exp(x)
                 
-        
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, _ = lmdp.power_iteration()
         V_lmdp = lmdp.get_value_function(z)
         V_mdp, _ = self.value_iteration()
         
-        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))
         return lmdp
     
     

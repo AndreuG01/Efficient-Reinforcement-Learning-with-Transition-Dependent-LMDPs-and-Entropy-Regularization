@@ -3,6 +3,7 @@ from itertools import product, combinations, permutations
 from copy import deepcopy
 import copy
 from typing import Literal
+from utils.maps import Map
 
 class MinigridActions:
     """
@@ -78,8 +79,7 @@ class CustomGrid:
     def __init__(
         self,
         type: Literal["gridworld", "minigrid"],
-        map: list[str] = None,
-        objects: list[Object] = None,
+        map: Map = None,
         grid_size: int = 3,
         properties: dict[str, list] = None
     ):
@@ -95,7 +95,7 @@ class CustomGrid:
         self.char_positions = {v: k for k, v in self.POSITIONS_CHAR.items()}
         
         self.positions = {k: [] for k in self.POSITIONS_CHAR.values()}
-        self.objects = objects if objects is not None else []
+        self.objects = map.objects if self.map and map.objects is not None else []
         
         for id, object in enumerate(self.objects):
             object.id = id
@@ -241,8 +241,9 @@ class CustomGrid:
         Raises:
         - AssertionError: If the map rows are not of equal length.
         """
-        assert all(len(row) == len(self.map[0]) for row in self.map), "Not all rows have the same length"
-        for j, row in enumerate(self.map):
+        layout = self.map.layout
+        assert all(len(row) == len(layout[0]) for row in layout), "Not all rows have the same length"
+        for j, row in enumerate(layout):
             for i, cell in enumerate(row):
                 if cell == self.char_positions[CellType.START]: self.positions[CellType.NORMAL].append((i, j))
                 if cell == self.char_positions[CellType.CLIFF]: self.positions[CellType.NORMAL].append((i, j))
@@ -252,8 +253,8 @@ class CustomGrid:
         goal_states = self.positions[CellType.GOAL]
         self.start_pos: tuple[int, int] = self.positions[CellType.START][0]
         self.goal_pos = [(goal_state[0], goal_state[1]) for goal_state in goal_states]
-        self.size_x = len(self.map)
-        self.size_y = len(self.map[0])
+        self.size_x = len(layout)
+        self.size_y = len(layout[0])
     
     
     def move(self, state: State, action: int):

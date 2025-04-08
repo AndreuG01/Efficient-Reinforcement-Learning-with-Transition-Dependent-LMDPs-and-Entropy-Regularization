@@ -12,6 +12,7 @@ from models.LMDP_TDR import LMDP_TDR
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from utils.state import State, Object
+from utils.maps import Map
 from tqdm import tqdm
 from collections.abc import Callable
 from scipy.sparse import csr_matrix
@@ -42,18 +43,19 @@ class CustomMinigridEnv(MiniGridEnv):
     def __init__(
         self,
         properties: dict[str, list] = None,
-        map:list[str] = None,
+        map: Map = None,
         grid_size: int = 3,
         agent_start_dir=0,
         max_steps: int | None = None,
-        objects: list[Object] = None,
         **kwargs,
     ):
         
         self.num_directions = 4
-        self.custom_grid = CustomGrid("minigrid", map=map, grid_size=grid_size, properties=properties, objects=objects)
+        self.custom_grid = CustomGrid("minigrid", map=map, grid_size=grid_size, properties=properties)
         self.agent_start_pos = self.custom_grid.start_pos
         self.agent_start_dir = agent_start_dir
+        
+        self.title = map.name if map else f"{grid_size}x{grid_size} Simple Grid"
 
         mission_space = MissionSpace(mission_func=self._gen_mission)
         self.max_steps = max_steps
@@ -114,7 +116,7 @@ class CustomMinigridEnv(MiniGridEnv):
         # else:
         #     self.place_agent()
 
-        self.mission = "grand mission"
+        self.mission = self.title
     
         
     
@@ -236,10 +238,9 @@ class MinigridMDP(MDP):
     def __init__(
         self,
         grid_size: int = 3,
-        map: list[str] = None,
+        map: Map = None,
         allowed_actions: list[int] = None,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
-        objects: list[Object] = None,
         stochastic_prob: float = 0.9,
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         mdp: MDP = None
@@ -257,7 +258,7 @@ class MinigridMDP(MDP):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties)
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
@@ -421,10 +422,9 @@ class MinigridLMDP(LMDP):
     def __init__(
         self,
         grid_size: int = 3,
-        map: list[str] = None,
+        map: Map = None,
         allowed_actions: list[int] = None,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
-        objects: list[Object] = None,
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
         threads: int = 4,
@@ -438,7 +438,7 @@ class MinigridLMDP(LMDP):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties)
         
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
@@ -472,7 +472,7 @@ class MinigridLMDP(LMDP):
                 num_terminal_states=lmdp.num_terminal_states,
                 s0=lmdp.s0,
                 lmbda=lmdp.lmbda,
-                sparse_optimization=False # TODO: update
+                sparse_optimization=lmdp.sparse_optimization
             )
             self.P = lmdp.P
             self.R = lmdp.R
@@ -575,10 +575,9 @@ class MinigridLMDP_TDR(LMDP_TDR):
     def __init__(
         self,
         grid_size: int = 3,
-        map: list[str] = None,
+        map: Map = None,
         allowed_actions: list[int] = None,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
-        objects: list[Object] = None,
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
         threads: int = 4
@@ -591,7 +590,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties, objects=objects)
+        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties)
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         self.remove_unreachable_states()
