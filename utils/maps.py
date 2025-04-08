@@ -251,3 +251,18 @@ class Maps:
             Object(3, 6, "red", "door", 1)
         ]
     )
+    
+    USELESS_OBJECTS = Map(
+        name="USELESS OBJECTS",
+        layout=[
+            "########",
+            "#S  G# #",
+            "#C ### #",
+            "#C     #",
+            "########",
+        ],
+        objects=[
+            Object(3, 2, "green", "key", 0),
+            Object(1, 6, "purple", "door", 0),
+        ]
+    )

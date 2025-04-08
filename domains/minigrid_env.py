@@ -118,8 +118,6 @@ class CustomMinigridEnv(MiniGridEnv):
 
         self.mission = self.title
     
-        
-    
     
     def visualize_policy(
         self,

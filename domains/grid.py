@@ -81,7 +81,7 @@ class CustomGrid:
         type: Literal["gridworld", "minigrid"],
         map: Map = None,
         grid_size: int = 3,
-        properties: dict[str, list] = None
+        properties: dict[str, list] = {}
     ):
         """
         Initializes the grid with either a predefined map or generates a simple grid.
@@ -100,7 +100,7 @@ class CustomGrid:
         for id, object in enumerate(self.objects):
             object.id = id
         
-        self.state_properties = {} if properties is None else self.__extend_properties(properties)
+        self.state_properties = self.__extend_properties(properties)
         
         
         if self.map is None:
@@ -230,7 +230,7 @@ class CustomGrid:
                 elif (i, j) != self.goal_pos[0]:
                     self.positions[CellType.NORMAL].append((i, j))
                 
-        self.positions[CellType.START] = ((self.start_pos[0], self.start_pos[1]))
+        self.positions[CellType.START] = [((self.start_pos[0], self.start_pos[1]))]
         self.positions[CellType.GOAL] = [(self.goal_pos[0][0], self.goal_pos[0][1])]
         
     
@@ -278,7 +278,7 @@ class CustomGrid:
         y = state.y
         x = state.x
         dy, dx = offsets[action]
-        next_state = State(y + dy, x + dx, layout=state.layout)
+        next_state = State(y + dy, x + dx, layout=state.layout, **state.properties)
         
         in_bounds = self.is_valid(next_state)
         if not in_bounds: next_state = state

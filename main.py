@@ -23,14 +23,19 @@ import seaborn as sns
 
 if __name__ == "__main__":
     
-    size = 2
-    mdp = GridWorldMDP(
+    size = 4
+    mdp = GridWorldLMDP(
         grid_size=size,
-        map=Maps.CLIFF,
+        map=Maps.USELESS_OBJECTS,
         # behaviour="stochastic",
         # behaviour="deterministic",
+        # deterministic=False,
         # stochastic_prob=0.8
     )
+    
+    
+    mdp.visualize_policy(num_times=1, save_gif=True, save_path="assets/gridworld_UselessObjects.gif")
+    exit()
     
     # mdp.to_LMDP_TDR_3()
     
