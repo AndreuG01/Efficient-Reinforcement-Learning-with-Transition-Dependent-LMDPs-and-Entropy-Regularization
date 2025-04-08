@@ -18,7 +18,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
-from .grid import CustomGrid, CellType
+from .grid import CustomGrid, CellType, GridWorldActions
 from utils.state import State
 from typing import Literal
 from sys import getsizeof
@@ -48,6 +48,29 @@ class GridWorldEnv:
         
         if max_steps is None:
             self.max_steps = 200
+
+    
+    def __get_manual_action(self):
+        key_to_action = {
+            "up": GridWorldActions.UP, "w": GridWorldActions.UP,
+            "down": GridWorldActions.DOWN, "s": GridWorldActions.DOWN,
+            "left": GridWorldActions.LEFT, "a": GridWorldActions.LEFT,
+            "right": GridWorldActions.RIGHT, "d": GridWorldActions.RIGHT,
+            "tab": GridWorldActions.PICKUP,
+            "left shift": GridWorldActions.DROP,
+            "space": GridWorldActions.TOGGLE
+        }
+
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                elif event.type == pygame.KEYDOWN:
+                    key_name = pygame.key.name(event.key).lower()
+                    print(key_name)
+                    if key_name in key_to_action:
+                        return key_to_action[key_name]
     
     
     def state_to_image(self, state: State, plotter: GridWorldPlotter, direction: int) -> pygame.Surface:
@@ -65,10 +88,11 @@ class GridWorldEnv:
         return img
     
     
-    def visualize_policy(
+    def play_game(
         self,
         model: GridWorldMDP | GridWorldLMDP,
         policies: list[tuple[int, np.ndarray]],
+        manual_play: bool = False,
         num_times: int = 10,
         save_gif: bool = False,
         save_path: str = None
@@ -117,22 +141,25 @@ class GridWorldEnv:
                     done = self.custom_grid.is_terminal(state)
                     if done: break
                     
-                    if isinstance(model, GridWorldMDP):
-                        if model.deterministic:
-                            action = policy[state_idx]
+                    if manual_play:
+                        action = self.__get_manual_action()
+                    else:
+                        if isinstance(model, GridWorldMDP):
+                            if model.deterministic:
+                                action = policy[state_idx]
+                            else:
+                                next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, policy[state_idx], :])
+                                if next_state != np.argmax(model.P[state_idx, policy[state_idx], :]):
+                                    print(f"MISTAKE {num_mistakes}")
+                                    num_mistakes += 1
+                                # We need to get the action that leads to the next state
+                                action = model.transition_action(state_idx, next_state)
                         else:
-                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, policy[state_idx], :])
-                            if next_state != np.argmax(model.P[state_idx, policy[state_idx], :]):
+                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx])
+                            if next_state != np.argmax(policy[state_idx]):
                                 print(f"MISTAKE {num_mistakes}")
                                 num_mistakes += 1
-                            # We need to get the action that leads to the next state
                             action = model.transition_action(state_idx, next_state)
-                    else:
-                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx])
-                        if next_state != np.argmax(policy[state_idx]):
-                            print(f"MISTAKE {num_mistakes}")
-                            num_mistakes += 1
-                        action = model.transition_action(state_idx, next_state)
                     
                     next_state, _, _ = self.custom_grid.move(state, action)
                     
@@ -148,7 +175,11 @@ class GridWorldEnv:
                         # Vertical
                         direction = 0
                     
-                    self.__agent_pos = (next_state.y, next_state.x)
+                    if self.custom_grid.is_cliff(state):    
+                        break
+                    else:
+                        self.__agent_pos = (next_state.y, next_state.x)
+                    
                     
                     next_properties = next_state.properties
                     next_layout = next_state.layout
@@ -240,6 +271,7 @@ class GridWorldMDP(MDP):
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
         # TODO: remove unreachable states in case that I add the possibilities for GridWorld to support objects (e.g. keys, doors, etc.)
+        self.remove_unreachable_states()
         
         self.num_states = self.gridworld_env.custom_grid.get_num_states()
         
@@ -281,7 +313,35 @@ class GridWorldMDP(MDP):
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=np.float64)
             else:
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float64)
+    
+    def remove_unreachable_states(self):
+        print("Going to remove unreachable states")
+        
+        reachable_states = set()
+        queue = [self.start_state]
 
+        for terminal_state in queue:
+            reachable_states.add(terminal_state)
+
+        while queue:
+            current_state = queue.pop(0)
+            for action in self.allowed_actions:
+                next_state, _, _ = self.gridworld_env.custom_grid.move(current_state, action)
+                if next_state not in reachable_states:
+                    reachable_states.add(next_state)
+                    queue.append(next_state)
+
+        
+        states = [state for state in self.gridworld_env.custom_grid.states if state in reachable_states]
+        terminal_states = [state for state in self.gridworld_env.custom_grid.terminal_states if state in reachable_states]
+
+        removed_states = len(self.gridworld_env.custom_grid.states) - len(states)
+        print(f"Removing {removed_states} states")
+
+        self.gridworld_env.custom_grid.states = states
+        self.gridworld_env.custom_grid.terminal_states = terminal_states
+        self.gridworld_env.custom_grid.generate_state_index_mapper()
+    
     
     def transition_action(self, state_idx, next_state_idx):
         curr_state = self.gridworld_env.custom_grid.state_index_mapper[state_idx]
@@ -297,16 +357,18 @@ class GridWorldMDP(MDP):
                 
         return 0
 
+
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
             print("Computing value function...")
             self.compute_value_function()
-            self.gridworld_env.visualize_policy(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
         else:
-            self.gridworld_env.visualize_policy(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
             
-    
+    def play_map(self):
+        self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
     
 class GridWorldLMDP(LMDP):
     
@@ -423,6 +485,10 @@ class GridWorldLMDP(LMDP):
             self.gridworld_env.visualize_policy(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
         else:
             self.gridworld_env.visualize_policy(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
+
+            
+    def play_map(self):
+        self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
 
 class GridWorldLMDP_TDR(LMDP_TDR):
     OFFSETS = {
@@ -619,6 +685,17 @@ class GridWorldPlotter:
         prob_size: float, 
         color_probs: bool
     ):
+        
+        if policy is None:
+            if self.is_mdp:
+                policy = self.gridworld.policy if not multiple_actions else self.gridworld.policy_multiple_actions
+            else:
+                policy = self.gridworld.policy if not multiple_actions else self.gridworld.policy_multiple_states
+        else:
+            if not multiple_actions and isinstance(policy[0], list):
+                print("WARNING: multiple actions in the policy found but `multiple_actions` parameter not set appropriately. Changing...")
+                multiple_actions = True
+                
         grid_positions = self.gridworld_env.custom_grid.positions
         prob_cmap = plt.get_cmap("Greens")
 
@@ -689,33 +766,25 @@ class GridWorldPlotter:
         policy: np.ndarray = None,
         multiple_actions: bool = False,
         show_prob: bool = False,
-        show_actions: bool = True,
+        show_actions: bool = False,
         prob_size: float = None,
         color_probs: bool = True
     ):
         if prob_size is None:
             prob_size = self.figsize[0] / 1
 
-        if policy is None:
-            if self.is_mdp:
-                policy = self.gridworld.policy if not multiple_actions else self.gridworld.policy_multiple_actions
-            else:
-                policy = self.gridworld.policy if not multiple_actions else self.gridworld.policy_multiple_states
-        else:
-            if not multiple_actions and isinstance(policy[0], list):
-                print("WARNING: multiple actions in the policy found but `multiple_actions` parameter not set appropriately. Changing...")
-                multiple_actions = True
 
         fig, ax = plt.subplots(figsize=self.figsize)
         divider = make_axes_locatable(ax)
         grid_positions = self.gridworld_env.custom_grid.positions
 
         self.plot_base_grid(ax, grid_positions)
-        self.__plot_grid_overlays(
-            ax, divider,
-            show_value_function, policy, multiple_actions,
-            show_prob, show_actions, prob_size, color_probs
-        )
+        if show_value_function or show_prob or show_actions:
+            self.__plot_grid_overlays(
+                ax, divider,
+                show_value_function, policy, multiple_actions,
+                show_prob, show_actions, prob_size, color_probs
+            )
 
         if savefig:
             if save_title is None:

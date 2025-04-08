@@ -30,6 +30,30 @@ class MinigridActions:
     def get_actions(cls) -> list[int]:
         return [value for key, value in cls.__dict__.items() if type(value) == int]
 
+class GridWorldActions:
+    """
+    Possible actions:
+        Action number   |   Action type | Action description     |   Keyboard key     
+        ------------------------------------------------------------------------
+              0         |   up          |   move up              |   Up / w
+              1         |   right       |   move right           |   Right / d
+              2         |   left        |   move left            |   Left / a
+              3         |   down        |   move down            |   Down / s
+              4         |   pickup      |   Pickup an object     |   Tab
+              5         |   drop        |   Drop an object       |   Left shift
+              6         |   toggle      |   Toggle               |   Space
+    """
+    UP = 0
+    RIGHT = 1
+    DOWN = 2
+    LEFT = 3
+    PICKUP = 4
+    DROP = 5
+    TOGGLE = 6
+    
+    @classmethod
+    def get_actions(cls) -> list[int]:
+        return [value for key, value in cls.__dict__.items() if type(value) == int]
 
 class CellType:
     """
@@ -275,15 +299,82 @@ class CustomGrid:
         Returns:
         - tuple[tuple[int, int], bool, bool]: The next position, whether the move is valid, and whether the position is terminal.
         """
-        y = state.y
-        x = state.x
-        dy, dx = offsets[action]
-        next_state = State(y + dy, x + dx, layout=state.layout, **state.properties)
+        y, x, curr_layout = state.y, state.x, state.layout
+        next_state = State(y, x, layout=deepcopy(state.layout), **state.properties)
         
-        in_bounds = self.is_valid(next_state)
-        if not in_bounds: next_state = state
+        if action == GridWorldActions.UP or action == GridWorldActions.RIGHT or action == GridWorldActions.DOWN or action == GridWorldActions.LEFT:
+            dy, dx = offsets[action]
+            next_object = curr_layout.get((next_state.x + dx, next_state.y + dy)) if curr_layout else None
+            if next_object is not None and next_object.type == "key":
+                # If there is a key in the next state, the agent remains at the same state.
+                in_bounds = True
+            
+            elif next_object is not None and next_object.type == "door" and not state.properties[f"{next_object.color}_door_{next_object.id}"]:
+                # If in the next state there is a door and it is not opened, the agent remains where it is
+                in_bounds = True
+            else:
+                next_state.y = next_state.y + dy
+                next_state.x = next_state.x + dx
+                
+                in_bounds = self.is_valid(next_state)
+                if not in_bounds: next_state = state
 
-        return next_state, in_bounds, self.is_terminal(next_state)
+            return next_state, in_bounds, self.is_terminal(next_state)
+        
+        elif action == GridWorldActions.PICKUP:
+            # If the agent is facing a key, it gets it. Otherwise, it remains at the same state
+            if not curr_layout: return next_state, True, False
+            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
+            agent_has_key = len(layout_keys) == self.get_num_keys() - 1
+            
+            for dy, dx in offsets.values():
+                new_x = next_state.x + dx
+                new_y = next_state.y + dy
+                next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
+                if next_object is not None and next_object.type == "key" and not agent_has_key:
+                    # An object has been found
+                    next_state.layout[(new_x, new_y)] = None
+                    break
+            
+            return next_state, True, False
+                
+        elif action == GridWorldActions.TOGGLE:
+            # If the agent is facing a door for which it has the key:
+            #   - If the door is closed: it opens it.
+            #   - If the door is opened: it closes it.
+            # If the agent does not have the key, it remains where it is.
+            if not curr_layout: return next_state, True, False
+            missing_key = [obj for obj in self.objects if obj not in curr_layout.values()]
+            if len(missing_key) == 0:
+                return next_state, True, False
+            
+            missing_key: Object = missing_key[0]
+            for dy, dx in offsets.values():
+                new_x, new_y = next_state.x + dx, next_state.y + dy
+                next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
+                if next_object is not None and next_object.type == "door" and missing_key.color == next_object.color:
+
+                    next_state.properties[f"{next_object.color}_door_{next_object.id}"] = not next_state.properties[f"{next_object.color}_door_{next_object.id}"]
+            
+            return next_state, True, False
+        
+        elif action == GridWorldActions.DROP:
+            # If the agent is wearing a key and the position towards which it is facing is an empty square, then the agent can drop the object
+            if not curr_layout: return next_state, True, False
+            layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
+            agent_has_key = len(layout_keys) == self.get_num_keys() - 1
+
+            for dy, dx in offsets.values():
+                new_x, new_y = next_state.x + dx, next_state.y + dy
+                next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
+            
+                if next_object is None and agent_has_key and self.is_normal(State(new_y, new_x, curr_layout, **state.properties)):
+                    carrying_object = [obj for obj in self.objects if obj.type == "key" and obj not in layout_keys][0]
+                
+                    next_state.layout[(new_x, new_y)] = carrying_object
+                    break
+            
+            return next_state, True, False
     
     def __move_minigrid(self, state: State, action: int, offsets: dict ={0: (1, 0), 1: (0, 1), 2: (-1, 0), 3: (0, -1)}):
         orientation = state.properties["orientation"]

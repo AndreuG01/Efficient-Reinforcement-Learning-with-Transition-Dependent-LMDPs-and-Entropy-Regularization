@@ -1,4 +1,4 @@
-from domains.grid import MinigridActions
+from domains.grid import MinigridActions, GridWorldActions
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP, GridWorldLMDP_TDR
 from domains.minigrid_env import MinigridMDP, MinigridLMDP, MinigridLMDP_TDR
 from algorithms import QLearning, QLearningPlotter, QLearningHyperparameters, QLearningHyperparameterExplorer
@@ -24,9 +24,18 @@ import seaborn as sns
 if __name__ == "__main__":
     
     size = 4
-    mdp = GridWorldLMDP(
+    mdp = GridWorldMDP(
         grid_size=size,
-        map=Maps.USELESS_OBJECTS,
+        map=Maps.DOUBLE_KEY,
+        allowed_actions=[
+            GridWorldActions.UP,
+            GridWorldActions.RIGHT,
+            GridWorldActions.DOWN,
+            GridWorldActions.LEFT,
+            GridWorldActions.PICKUP,
+            GridWorldActions.DROP,
+            GridWorldActions.TOGGLE,
+        ]
         # behaviour="stochastic",
         # behaviour="deterministic",
         # deterministic=False,
@@ -34,7 +43,7 @@ if __name__ == "__main__":
     )
     
     
-    mdp.visualize_policy(num_times=1, save_gif=True, save_path="assets/gridworld_UselessObjects.gif")
+    mdp.visualize_policy(num_times=3, save_gif=False, save_path="assets/gridworld_UselessObjects.gif")
     exit()
     
     # mdp.to_LMDP_TDR_3()

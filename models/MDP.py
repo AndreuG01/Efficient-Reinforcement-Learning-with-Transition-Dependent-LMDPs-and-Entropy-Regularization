@@ -196,7 +196,7 @@ class MDP(ABC):
         return V, ModelBasedAlgsStats(elapsed_time, rewards, iterations, deltas, self.num_states)
     
     
-    def value_iteration(self, epsilon=1e-10) -> tuple[np.ndarray, ModelBasedAlgsStats]:
+    def value_iteration(self, epsilon=1e-10, max_iterations=100000) -> tuple[np.ndarray, ModelBasedAlgsStats]:
         """
         Perform value iteration to compute the optimal value function.
         Efficiently implemented with matrix operations
@@ -231,7 +231,7 @@ class MDP(ABC):
                 print(f"Iter: {iterations}. Delta: {delta}")
             
             
-            if delta < epsilon:
+            if delta < epsilon or iterations == max_iterations:
                 break
 
             V = V_new

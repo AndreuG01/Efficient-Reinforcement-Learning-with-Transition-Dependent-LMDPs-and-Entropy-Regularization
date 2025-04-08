@@ -23,7 +23,7 @@ class ModelBasedAlgsStats:
     def value_fun_evolution_gif(self, out_path: str, out_name: str, other_stats: Self = None):
         custom_palette = CustomPalette()
         self_color = custom_palette[3] if self.descriptor == "PI" else custom_palette[4]
-        other_color = custom_palette[3] if other_stats.descriptor == "PI" else custom_palette[4]
+        other_color = custom_palette[3] if other_stats and other_stats.descriptor == "PI" else custom_palette[4]
         
         tmp_dir_path = os.path.join(out_path, "__tmp")
         os.mkdir(tmp_dir_path)

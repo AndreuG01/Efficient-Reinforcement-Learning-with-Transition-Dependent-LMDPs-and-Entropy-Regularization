@@ -182,7 +182,7 @@ class LMDP:
         raise NotImplementedError("Implement in the subclass")
     
     
-    def power_iteration(self, epsilon=1e-10) -> np.ndarray:
+    def power_iteration(self, epsilon=1e-10, max_iterations=100000) -> np.ndarray:
         """
         Perform power iteration to compute the value function approximation.
 
@@ -216,7 +216,7 @@ class LMDP:
             if iterations % 100 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
 
-            if delta < epsilon:
+            if delta < epsilon or iterations == max_iterations:
                 break
 
             z = z_new

@@ -262,7 +262,7 @@ class Maps:
             "########",
         ],
         objects=[
-            Object(3, 2, "green", "key", 0),
+            Object(3, 2, "purple", "key", 0),
             Object(1, 6, "purple", "door", 0),
         ]
     )
