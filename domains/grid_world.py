@@ -156,11 +156,13 @@ class GridWorldEnv:
                                 action = model.transition_action(state_idx, next_state)
                         else:
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx])
+                            print(next_state)
                             if next_state != np.argmax(policy[state_idx]):
                                 print(f"MISTAKE {num_mistakes}")
                                 num_mistakes += 1
                             action = model.transition_action(state_idx, next_state)
                     
+                    print(action)
                     next_state, _, _ = self.custom_grid.move(state, action)
                     
                     dx = state.x - next_state.x
@@ -237,8 +239,8 @@ class GridWorldMDP(MDP):
         grid_size: int = 3,
         map: Map = None,
         allowed_actions: list[int] = None,
-        deterministic: bool = True,
         stochastic_prob: float = 0.9,
+        behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         mdp: MDP = None
     ):
         """
@@ -264,7 +266,10 @@ class GridWorldMDP(MDP):
             self.allowed_actions = [i for i in range(self.num_actions)]
 
         self.stochastic_prob = stochastic_prob
-        self.deterministic = deterministic
+        
+        assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
+        self.behaviour = behaviour
+        deterministic = self.behaviour == "deterministic"
         
         self.gridworld_env = GridWorldEnv(grid_size=grid_size, map=map)
         start_pos = self.gridworld_env.custom_grid.start_pos
@@ -283,7 +288,8 @@ class GridWorldMDP(MDP):
                 num_terminal_states=self.gridworld_env.custom_grid.get_num_terminal_states(),
                 allowed_actions=self.allowed_actions,
                 s0=self.gridworld_env.custom_grid.states.index(self.start_state),
-                deterministic=self.deterministic
+                deterministic=deterministic,
+                behaviour=self.behaviour
             )
             
             self.generate_P(self.gridworld_env.custom_grid, stochastic_prob=self.stochastic_prob)
@@ -297,7 +303,8 @@ class GridWorldMDP(MDP):
                 num_terminal_states=mdp.num_terminal_states,
                 allowed_actions=self.allowed_actions,
                 s0=mdp.s0,
-                deterministic=mdp.deterministic
+                deterministic=mdp.deterministic,
+                behaviour=self.behaviour
             )
             self.P = mdp.P
             self.R = mdp.R
@@ -482,9 +489,9 @@ class GridWorldLMDP(LMDP):
         if policies is None:
             print("Computing value function...")
             self.compute_value_function()
-            self.gridworld_env.visualize_policy(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
         else:
-            self.gridworld_env.visualize_policy(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
 
             
     def play_map(self):

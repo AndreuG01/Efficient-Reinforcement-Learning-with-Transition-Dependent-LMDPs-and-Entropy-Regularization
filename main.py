@@ -22,55 +22,68 @@ import pickle
 import seaborn as sns
 
 if __name__ == "__main__":
-    
     size = 4
     mdp = GridWorldMDP(
         grid_size=size,
-        map=Maps.DOUBLE_KEY,
-        allowed_actions=[
-            GridWorldActions.UP,
-            GridWorldActions.RIGHT,
-            GridWorldActions.DOWN,
-            GridWorldActions.LEFT,
-            GridWorldActions.PICKUP,
-            GridWorldActions.DROP,
-            GridWorldActions.TOGGLE,
-        ]
-        # behaviour="stochastic",
-        # behaviour="deterministic",
-        # deterministic=False,
-        # stochastic_prob=0.8
+        # map=Maps.CLIFF,
+        allowed_actions=GridWorldActions.get_actions()[:4],
+        # allowed_actions=[
+        #     MinigridActions.ROTATE_LEFT,
+        #     MinigridActions.ROTATE_RIGHT,
+        #     MinigridActions.FORWARD,
+        #     # MinigridActions.PICKUP,
+        #     # MinigridActions.DROP,
+        # ],
+        behaviour="deterministic",
+        stochastic_prob=0.85
     )
+    mdp.play_map()
+    # plotter = GridWorldPlotter(mdp)
+    # plotter.plot_grid_world(show_value_function=True, show_actions=True)
     
-    
-    mdp.visualize_policy(num_times=3, save_gif=False, save_path="assets/gridworld_UselessObjects.gif")
-    exit()
+    # mdp.visualize_policy(num_times=3, save_gif=False, save_path="assets/gridworld_UselessObjects.gif")
     
     # mdp.to_LMDP_TDR_3()
-    
+        
     embedded_lmdp = mdp.to_LMDP()
+    embedded_lmdp_tdr = mdp.to_LMDP_TDR_3()
     
     mdp.compute_value_function()
     embedded_lmdp.compute_value_function()
+    embedded_lmdp_tdr.compute_value_function()
+    
+    print(embedded_lmdp.R)
+    print(embedded_lmdp_tdr.R)
+    
+    print("LMDP", np.where(embedded_lmdp.policy[0] != 0), embedded_lmdp.policy[0, np.where(embedded_lmdp.policy[0] != 0)])
+    
+    # for state in range(embedded_lmdp_tdr.num_non_terminal_states):
+    #     print("LMDP-TDR", np.where(embedded_lmdp_tdr.policy[state] != 0), embedded_lmdp_tdr.policy[state, np.where(embedded_lmdp_tdr.policy[state] != 0)])
     
     palette = CustomPalette()
     
     plt.rcParams.update({"text.usetex": True})
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    axes[0].plot([i for i in range(len(mdp.V))], mdp.V, label="MDP $\mathcal{{M}}$", color=palette[15])
-    axes[0].plot([i for i in range(len(mdp.V))], embedded_lmdp.V, label="LMDP $\mathcal{{L}}$", color=palette[12])
+    axes[0].plot([i for i in range(len(mdp.V))], mdp.V, label=f"MDP $\mathcal{{M}}$", color=palette[16])
+    axes[0].plot([i for i in range(len(mdp.V))], embedded_lmdp.V, label=f"LMDP $\mathcal{{L}}$, MSE: {round(np.mean(np.square(mdp.V - embedded_lmdp.V)), 5)}", color=palette[5])
+    axes[0].plot([i for i in range(len(mdp.V))], embedded_lmdp_tdr.V, label=f"LMDP $\mathcal{{L}}$-TDR, MSE: {round(np.mean(np.square(mdp.V - embedded_lmdp_tdr.V)), 5)}", color=palette[6])
     axes[0].set_xlabel("State index")
     axes[0].set_ylabel("$V(s)$")
-    axes[0].set_title(f"MSE: {np.mean(np.square(mdp.V - embedded_lmdp.V))}")
+    # axes[0].set_title(f"")
     axes[0].legend()
     
-    axes[1].scatter(mdp.V, embedded_lmdp.V, color=palette[19], linewidths=0.2, edgecolors="black")
-    axes[1].plot(mdp.V, mdp.V, color="gray", linestyle="--", lw=1)
+    axes[1].scatter(mdp.V, embedded_lmdp.V, color=palette[5], linewidths=0.2, edgecolors="black", label=f"LMDP, $R^2$: {round(r2_score(mdp.V, embedded_lmdp.V), 3)}. Corrcoef: {round(np.corrcoef(mdp.V, embedded_lmdp.V)[0, 1], 4)}. Spearman: {round(spearmanr(mdp.V, embedded_lmdp.V)[0], 4)}")
+    axes[1].scatter(mdp.V, embedded_lmdp_tdr.V, color=palette[6], linewidths=0.2, edgecolors="black", label=f"LMDP-TDR, $R^2$: {round(r2_score(mdp.V, embedded_lmdp_tdr.V), 3)}. Corrcoef: {round(np.corrcoef(mdp.V, embedded_lmdp_tdr.V)[0, 1], 4)}. Spearman: {round(spearmanr(mdp.V, embedded_lmdp_tdr.V)[0], 4)}")
+    axes[1].plot(mdp.V, mdp.V, color="gray", linestyle="--", lw=1, label="Ideal")
     axes[1].set_xlabel("$V_{\mathcal{M}}(s)$")
     axes[1].set_ylabel("$V_{\mathcal{L}}(s)$")
-    axes[1].set_title(f"$R^2$: {r2_score(mdp.V, embedded_lmdp.V)}. Corrcoef: {np.corrcoef(mdp.V, embedded_lmdp.V)[0, 1]}.\nSpearman: {spearmanr(mdp.V, embedded_lmdp.V)[0]}")
+    axes[1].set_title(f". ")
+    axes[1].legend()
     
-    plt.suptitle(f"Stochastic prob $p = {mdp.stochastic_prob}$")
+    if isinstance(mdp, GridWorldMDP):
+        plt.suptitle(f"{mdp.gridworld_env.title}. Stochastic prob $p = {f'{mdp.stochastic_prob}$' if not mdp.deterministic else f'1$ (deterministic)'}")
+    else:
+        plt.suptitle(f"{mdp.minigrid_env.title}. Stochastic prob $p = {f'{mdp.stochastic_prob}$' if not mdp.deterministic else f'1$ (deterministic)'}")
     # plt.savefig(f"assets/size_{size}_p_{str(p).replace('.', '_')}", dpi=300, bbox_inches="tight")
     plt.show()
     

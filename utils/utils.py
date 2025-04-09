@@ -6,10 +6,11 @@ from domains.minigrid_env import MinigridMDP, MinigridLMDP
 from domains.grid import MinigridActions
 from models.LMDP import LMDP
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP, GridWorldLMDP_TDR
-from utils.maps import Maps
+from utils.maps import Maps, Map
 import os
 import seaborn as sns
 import scipy.stats as stats
+from scipy.sparse import csr_matrix
 from sklearn.metrics import r2_score
 
 def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map=None, objects=None, grid_size: int = 3, save_fig: bool = True):
@@ -55,8 +56,7 @@ def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map
             grid_size=grid_size,
             allowed_actions=MinigridActions.get_actions()[:num_actions],
             map=map,
-            objects=objects,
-            deterministic=False,
+            behaviour="stochastic",
             stochastic_prob=main_prob
         )
         
@@ -125,7 +125,7 @@ def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map
 
 
 
-def compare_value_function_by_stochasticity(map=None, objects=None, grid_size: int = 3, map_name: str = None, save_fig: bool = True):
+def compare_value_function_by_stochasticity(map: Map = None, grid_size: int = 3, save_fig: bool = True):
     """
     Compares the value function of an MDP under different stochasticity levels.
     
@@ -138,6 +138,7 @@ def compare_value_function_by_stochasticity(map=None, objects=None, grid_size: i
     - grid_size (int, default=3): The size of the grid for the MDP environment.
     """
     palette = CustomPalette()
+    map_name = map.name if map else f"Simple Grid {grid_size}x{grid_size}"
     if map_name is not None:
         assert map_name is not None, "Must provide a name for the map"
     
@@ -148,17 +149,9 @@ def compare_value_function_by_stochasticity(map=None, objects=None, grid_size: i
     for i, stochasticity in enumerate(np.arange(0.1, 1.0, 0.1)):
         mdp = MinigridMDP(
             grid_size=grid_size,
-            allowed_actions=[
-                MinigridActions.ROTATE_LEFT,
-                MinigridActions.ROTATE_RIGHT,
-                MinigridActions.FORWARD,
-                MinigridActions.PICKUP,
-                MinigridActions.DROP,
-                MinigridActions.TOGGLE
-            ],
+            allowed_actions=MinigridActions.get_actions(),
             map=map,
-            objects=objects,
-            deterministic=True if stochasticity == 1 else False,
+            behaviour="deterministic" if stochasticity == 1 else "stochastic",
             stochastic_prob=stochasticity
         )
         mdp.compute_value_function()
@@ -285,7 +278,7 @@ def lmdp_tdr_advantage():
     plt.savefig(os.path.join(f"assets/{output_dir}", "correlation_plots.png"), dpi=300, bbox_inches="tight")
 
 
-def uniform_assumption_plot():
+def uniform_assumption_plot(save_fig: bool = True):
     lmdp = GridWorldLMDP(
             grid_size=15,
             # allowed_actions=[
@@ -300,7 +293,7 @@ def uniform_assumption_plot():
     state = {}
     for s in range(lmdp.num_non_terminal_states):
         non_zero = np.where(lmdp.P[s] != 0)[0]
-        state[s] = np.random.randint(0, len(non_zero))
+        state[s] = np.random.choice(non_zero)
     
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     palette = CustomPalette()
@@ -313,9 +306,8 @@ def uniform_assumption_plot():
         for s in range(lmdp.num_non_terminal_states):
             non_zero = np.where(lmdp.P[s] != 0)[0]
             lmdp.P[s, non_zero] = (1 - stochastic_prob) / max(len(non_zero) - 1, 1)
-            lmdp.P[s, state[s]] = stochastic_prob
+            lmdp.P[s, non_zero[0]] = stochastic_prob
 
-        
         lmdp.compute_value_function()
         value_functions.append(lmdp.V)
         iters = lmdp.stats.iterations
@@ -332,4 +324,8 @@ def uniform_assumption_plot():
     axes[1].set_title("Pearson correlation matrix")
     plt.suptitle("Impact of Transition Probability Bias on Value Functions and Convergence in LMDPs", fontsize=14)
     plt.tight_layout()
-    plt.savefig("assets/impact_transition_probability.png", dpi=300, bbox_inches="tight")
+    
+    if save_fig:
+        plt.savefig("assets/impact_transition_probability.png", dpi=300, bbox_inches="tight")
+    else:
+        plt.show()

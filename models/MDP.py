@@ -309,6 +309,8 @@ class MDP(ABC):
                 y = self.R[state] + np.sum(B * log_B, axis=1)
                 B_dagger = np.linalg.pinv(B)
                 c = B_dagger @ y
+                res = np.linalg.lstsq(B, y)
+                print(res[1])
                 
                 
                 R = np.log(np.sum(np.exp(c)))
@@ -321,7 +323,7 @@ class MDP(ABC):
         V_lmdp = lmdp.get_value_function(z)
         V_mdp, _ = self.value_iteration()
         
-        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))
+        print("EMBEDDING ERROR MDP to LMDP:", np.mean(np.square(V_lmdp - V_mdp)))
         return lmdp
     
     
@@ -460,7 +462,7 @@ class MDP(ABC):
     def to_LMDP_TDR_3(self):
         print(f"Computing the LMDP-TDR embedding of this MDP...")
         
-        
+        self.compute_value_function()
         lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
@@ -469,8 +471,6 @@ class MDP(ABC):
             s0=self.s0
         )
         
-        
-        
         if self.deterministic and False:
             pass
             
@@ -478,31 +478,24 @@ class MDP(ABC):
             epsilon = 1e-10
             for state in range(self.num_non_terminal_states):
                 x = np.sum(self.P[state, :, :] * self.R[state, :].reshape(-1, 1), axis=0)
+                denominator = np.sum(self.P[state, :, :], axis=0)
                 nonzero_cols = np.where(x != 0)[0]
                 len_support = len(nonzero_cols)
                 
-                lmdp_tdr.P[state, nonzero_cols] = np.exp(-np.log(len_support))
+                x = np.where(denominator != 0, x / denominator, 0)
+                
+                if state == 0: print("x ldmp-tdr", x)
+                
+                # lmdp_tdr.P[state, nonzero_cols] = np.exp(-np.log(len_support))
+                lmdp_tdr.P[state] = self.P[state, self.policy[state]]
                 lmdp_tdr.R[state] = x + lmdp_tdr.lmbda * np.log(len_support)
-                
-                
-                
-            # numerator = np.einsum("sak,sa->sk", self.P, self.R[:self.num_non_terminal_states])
-            # denominator = np.sum(self.P, axis=1)
-            # with np.errstate(divide="ignore", invalid="ignore"):
-            #     x = np.where(denominator != 0, numerator / denominator, 0.0)
-            
-            # lmdp_tdr.x = x    # x[state] = 
-                
-                
-
-        # lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
-        # lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
+        
         
         z = lmdp_tdr.power_iteration()
         V_lmdp = lmdp_tdr.get_value_function(z)
         V_mdp, _ = self.value_iteration()
         
-        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
         return lmdp_tdr
 
     def print_rewards(self):
