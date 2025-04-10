@@ -1,27 +1,73 @@
 from .state import Object
 from typing import Optional
 from .coloring import TerminalColor
+import numpy as np
 
 class Map:
-    def __init__(self, name: str, layout: list[str], objects: Optional[list[Object]] = None):
-        self.name = name
-        self.layout = layout
+    def __init__(
+        self,
+        name: str = None,
+        grid_size: int = None,
+        layout: list[str] = None,
+        objects: Optional[list[Object]] = None,
+        R: np.ndarray = None,
+        P: np.ndarray = None
+    ):
+        if layout is None:
+            assert grid_size is not None, "If no layout is provided, either specify grid size or provide a layout"
+        else:
+            assert name is not None, "A name must be specified if a layout is given"
+        
+        if grid_size is not None:
+            assert grid_size > 0, f"Grid size ({grid_size}) must be strictly greater than 0"
+        
+        self.name = name if name else f"{grid_size} x {grid_size} Simple Grid"
+        
         self.objects = objects if objects else []
-        self.height = len(layout)
-        self.width = len(layout[0]) if layout else 0
+        self.grid_size = grid_size
+        
+        if layout:
+            self.__height = len(layout)
+            self.__width = len(layout[0]) if layout else 0
+        else:
+            self.__height = grid_size + 2
+            self.__width = grid_size + 2
+        
+        self.layout = layout if layout else self.__create_layout()
+        
+        self.R = R
+        self.P = P
+    
+    
+    def __create_layout(self):
+        layout = []
+        for x in range(self.__width):
+            curr_line = ""
+            for y in range(self.__height):
+                if x == 1 and y == 1:
+                    curr_line += "S"
+                elif x == self.grid_size and y == self.grid_size:
+                    curr_line += "G"
+                elif x == 0 or y == 0 or x == self.__width - 1 or y == self.__height - 1:
+                    curr_line += "#"
+                else:
+                    curr_line += " "    
+            layout.append(curr_line )
+        
+        return layout
     
     def __str__(self) -> str:
         TerminalColor.init()
         object_layer = { (obj.y, obj.x): obj.symbol() for obj in self.objects }
 
-        col_header = "   " + "".join(f" {i:^3}" for i in range(self.width))
-        separator = "   +" + "+".join(["---"] * self.width) + "+"
+        col_header = "   " + "".join(f" {i:^3}" for i in range(self.__width))
+        separator = "   +" + "+".join(["---"] * self.__width) + "+"
 
         lines = [f"{self.name}:", col_header, separator]
 
-        for y in range(self.height):
+        for y in range(self.__height):
             row = f"{y:2} |"
-            for x in range(self.width):
+            for x in range(self.__width):
                 if (y, x) in object_layer:
                     symbol = object_layer[(y, x)]
                     cell = f" {symbol} "
@@ -265,4 +311,79 @@ class Maps:
             Object(3, 2, "purple", "key", 0),
             Object(1, 6, "purple", "door", 0),
         ]
+    )
+    
+    MDP_NON_UNIFORM_REWARD = Map(
+        name="NONE UNIFORM REWARDS",
+        layout=[
+            "######",
+            "#S   #",
+            "#    #",
+            "#C   #",
+            "#   G#",
+            "######",
+        ],
+        R = np.array([
+            [-8, -5, -5, -10],
+            [-8, -7, -5, -5],
+            [-8, -5, -5, -5],
+            [-8, -10, -5, -5],
+            [-5, -5, -5, -5],
+            [-5, -5, -5, -5],
+            [-5, -5, -5, -5],
+            [-5, -10, -5, -5],
+            [-15, -15, -15, -15],
+            [-5, -5, -5, -5],
+            [-5, -5, -5, -5],
+            [-5, -10, -5, -5],
+            [-5, -5, -8, -10],
+            [-5, -5, -8, -5],
+            [-5, -5, -8, -5],
+            [0, 0, 0, 0],
+        ])
+    )
+
+    LMDP_CUSTOM_REWARDS = Map(
+        name="CUSTOM REWARDS",
+        layout=[
+            "######",
+            "#S   #",
+            "#  # #",
+            "# #  #",
+            "#   G#",
+            "######"
+        ],
+        R = np.array([
+            [-6], [-5], [-4], [-3],
+            [-5], [-4], [-2],
+            [-4], [-2], [-1],
+            [-3], [-2], [-1], [0]
+        ]).reshape(-1)
+    )
+    
+    LMDP_TDR_CUSTOM_REWARDS = Map(
+        name="CUSTOM REWARDS",
+        layout=[
+            "######",
+            "#S   #",
+            "#  # #",
+            "# #  #",
+            "#   G#",
+            "######"
+        ],
+        R = np.array([
+            [-6, -5, 0, 0, -5, 0, 0, 0, 0, 0, 0, 0 ,0, 0],
+            [-6, -5, -4, 0, 0, -4, 0, 0, 0, 0, 0, 0 ,0, 0],
+            [0, -5, -4, -3, 0, 0, 0, 0, 0, 0, 0, 0 ,0, 0],
+            [0, 0, -4, -3, 0, 0, -2, 0, 0, 0, 0, 0 ,0, 0],
+            [-6, 0, 0, 0, -5, -4, 0, -4, 0, 0, 0, 0 ,0, 0],
+            [0, -5, 0, 0, -5, -4, 0, 0, 0, 0, 0, 0 ,0, 0],
+            [0, 0, 0, -3, 0, 0, -2, 0, 0, -1, 0, 0 ,0, 0],
+            [0, 0, 0, 0, -5, 0, 0, -4, 0, 0, -3, 0 ,0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, -2, -1, 0, 0 , -1, 0],
+            [0, 0, 0, 0, 0, 0, -2, 0, -2, -1, 0, 0 ,0, 0],
+            [0, 0, 0, 0, 0, 0, 0, -4, 0, 0, -3, -2 ,0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -3, -2 ,-1, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, -2, 0, 0, -2, -1, 0],
+        ])
     )

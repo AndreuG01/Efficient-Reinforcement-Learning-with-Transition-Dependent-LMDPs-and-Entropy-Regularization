@@ -42,20 +42,19 @@ class CustomMinigridEnv(MiniGridEnv):
     """
     def __init__(
         self,
+        map: Map,
         properties: dict[str, list] = None,
-        map: Map = None,
-        grid_size: int = 3,
         agent_start_dir=0,
         max_steps: int | None = None,
         **kwargs,
     ):
         
         self.num_directions = 4
-        self.custom_grid = CustomGrid("minigrid", map=map, grid_size=grid_size, properties=properties)
+        self.custom_grid = CustomGrid("minigrid", map=map, properties=properties)
         self.agent_start_pos = self.custom_grid.start_pos
         self.agent_start_dir = agent_start_dir
         
-        self.title = map.name if map else f"{grid_size}x{grid_size} Simple Grid"
+        self.title = map.name
 
         mission_space = MissionSpace(mission_func=self._gen_mission)
         self.max_steps = max_steps
@@ -235,8 +234,7 @@ class MinigridMDP(MDP):
     
     def __init__(
         self,
-        grid_size: int = 3,
-        map: Map = None,
+        map: Map,
         allowed_actions: list[int] = None,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
         stochastic_prob: float = 0.9,
@@ -256,7 +254,7 @@ class MinigridMDP(MDP):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties)
+        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties)
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
@@ -277,8 +275,11 @@ class MinigridMDP(MDP):
                 behaviour=self.behaviour
                 # gamma=0.999
             )
-
-            self.generate_P(self.minigrid_env.custom_grid, stochastic_prob=self.stochastic_prob)
+            if map.P is not None:
+                assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
+                self.P = map.P
+            else:
+                self.generate_P(self.minigrid_env.custom_grid, stochastic_prob=self.stochastic_prob)
             
             # If the agent has a mixed behaviour, we have to make navigation actions deterministic.
             if self.behaviour == "mixed":
@@ -290,8 +291,12 @@ class MinigridMDP(MDP):
                 self.P[states[:, None], manip_start + np.arange(max_indices.shape[1]), :] = 0
                 self.P[states[:, None], manip_start + np.arange(max_indices.shape[1]), max_indices] = 1
 
-
-            self._generate_R()
+            if map.R is not None:
+                assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
+                self.R = map.R
+            else:
+                self._generate_R()
+            
             print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
         else:
             # Useful when wanting to create a MinigridMDP from an embedding of an LMDP into an MDP
@@ -419,8 +424,7 @@ class MinigridLMDP(LMDP):
     
     def __init__(
         self,
-        grid_size: int = 3,
-        map: Map = None,
+        map: Map,
         allowed_actions: list[int] = None,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
         sparse_optimization: bool = True,
@@ -436,7 +440,7 @@ class MinigridLMDP(LMDP):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties)
+        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties)
         
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
@@ -455,13 +459,23 @@ class MinigridLMDP(LMDP):
                 sparse_optimization=sparse_optimization
             )
 
-            self.p_time = self.generate_P(
-                self.minigrid_env.custom_grid,
-                self.allowed_actions,
-                benchmark=benchmark_p,
-                num_threads=threads
-            )
-            self._generate_R()
+            if map.P is not None:
+                assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
+                self.P = map.P
+            else:
+                self.p_time = self.generate_P(
+                    self.minigrid_env.custom_grid,
+                    self.allowed_actions,
+                    benchmark=benchmark_p,
+                    num_threads=threads
+                )
+            
+            if map.R is not None:
+                assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
+                self.R = map.R
+            else:
+                self._generate_R()
+            
             print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
                     
         else:
@@ -572,8 +586,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
     
     def __init__(
         self,
-        grid_size: int = 3,
-        map: Map = None,
+        map: Map,
         allowed_actions: list[int] = None,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
         sparse_optimization: bool = True,
@@ -588,7 +601,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(grid_size=grid_size, render_mode="rgb_array", map=map, properties=properties)
+        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties)
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         self.remove_unreachable_states()
@@ -602,13 +615,22 @@ class MinigridLMDP_TDR(LMDP_TDR):
             sparse_optimization=sparse_optimization
         )
 
-        self.p_time = self.generate_P(
-            self.minigrid_env.custom_grid,
-            self.allowed_actions,
-            benchmark=benchmark_p,
-            num_threads=threads
-        )
-        self._generate_R()
+        if map.P is not None:
+            assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
+            self.P = map.P
+        else:
+            self.p_time = self.generate_P(
+                self.minigrid_env.custom_grid,
+                self.allowed_actions,
+                benchmark=benchmark_p,
+                num_threads=threads
+            )
+            
+        if map.R is not None:
+            assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
+            self.R = map.R
+        else:
+            self._generate_R()
         print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
     
     

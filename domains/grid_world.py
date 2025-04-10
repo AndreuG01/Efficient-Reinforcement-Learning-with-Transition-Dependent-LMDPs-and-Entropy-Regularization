@@ -34,14 +34,14 @@ import io
 class GridWorldEnv:
     def __init__(
         self,
-        map: Map = None,
-        grid_size: int = 3,
+        map: Map,
         max_steps: int | None = None
     ):
-        self.custom_grid = CustomGrid("gridworld", map=map, grid_size=grid_size)
+        self.custom_grid = CustomGrid("gridworld", map=map)
         self.agent_start_pos = self.custom_grid.start_pos
         
-        self.title = map.name if map else f"{grid_size}x{grid_size} Simple Grid"
+        self.title = map.name
+        
         self.max_steps = max_steps
         
         self.__agent_pos = self.agent_start_pos
@@ -162,7 +162,6 @@ class GridWorldEnv:
                                 num_mistakes += 1
                             action = model.transition_action(state_idx, next_state)
                     
-                    print(action)
                     next_state, _, _ = self.custom_grid.move(state, action)
                     
                     dx = state.x - next_state.x
@@ -233,11 +232,9 @@ class GridWorldMDP(MDP):
         3: (-1, 0)   # LEFT
     }
 
-    #TODO: maybe include objects in the future?
     def __init__(
         self,
-        grid_size: int = 3,
-        map: Map = None,
+        map: Map,
         allowed_actions: list[int] = None,
         stochastic_prob: float = 0.9,
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
@@ -253,7 +250,6 @@ class GridWorldMDP(MDP):
         - deterministic (bool, optional): Whether the environment is deterministic (default is True).
         - mdp (MDP, optional): A possible instantiation of an MDP object to be used to initialize the superclass of the GridWorldMDP instance.
         """
-        assert grid_size > 0, "Grid size must be > 0"
         
         if mdp is not None:
             assert type(mdp) == MDP, "MDP must be of type mdp"
@@ -271,7 +267,7 @@ class GridWorldMDP(MDP):
         self.behaviour = behaviour
         deterministic = self.behaviour == "deterministic"
         
-        self.gridworld_env = GridWorldEnv(grid_size=grid_size, map=map)
+        self.gridworld_env = GridWorldEnv(map=map)
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
@@ -291,9 +287,17 @@ class GridWorldMDP(MDP):
                 deterministic=deterministic,
                 behaviour=self.behaviour
             )
+            if map.P is not None:
+                assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
+                self.P = map.P
+            else:
+                self.generate_P(self.gridworld_env.custom_grid, stochastic_prob=self.stochastic_prob)
             
-            self.generate_P(self.gridworld_env.custom_grid, stochastic_prob=self.stochastic_prob)
-            self._generate_R()
+            if map.R is not None:
+                assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
+                self.R = map.R
+            else:
+                self._generate_R()
             
             print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
         else:
@@ -388,8 +392,7 @@ class GridWorldLMDP(LMDP):
     
     def __init__(
         self,
-        grid_size: int = 3,
-        map: Map = None,
+        map: Map,
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
         threads: int = 4,
@@ -402,7 +405,7 @@ class GridWorldLMDP(LMDP):
         self.num_actions = len(self.allowed_actions)
         
         
-        self.gridworld_env = GridWorldEnv(grid_size=grid_size, map=map)
+        self.gridworld_env = GridWorldEnv(map=map)
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
@@ -417,13 +420,23 @@ class GridWorldLMDP(LMDP):
                 sparse_optimization=sparse_optimization
             )
             
-            self.p_time = self.generate_P(
-                self.gridworld_env.custom_grid,
-                self.allowed_actions,
-                benchmark=benchmark_p,
-                num_threads=threads
-            )
-            self._generate_R()
+            if map.P is not None:
+                assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
+                self.P = map.P
+            else:
+                self.p_time = self.generate_P(
+                    self.gridworld_env.custom_grid,
+                    self.allowed_actions,
+                    benchmark=benchmark_p,
+                    num_threads=threads
+                )
+            
+            if map.R is not None:
+                assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
+                self.R = map.R
+            else:
+                self._generate_R()
+            
         
         else:
             super().__init__(
@@ -507,9 +520,8 @@ class GridWorldLMDP_TDR(LMDP_TDR):
     
     def __init__(
         self,
-        grid_size: int = 3,
-        map: Map = None,
-        sparse_optimization: bool = True,
+        map: Map,
+        sparse_optimization: bool = False,  # TODO: check error and correct (does not work with True)
         benchmark_p: bool = False,
         threads: int = 4
     ):
@@ -517,7 +529,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         self.allowed_actions = [i for i in range(len(self.OFFSETS))] # It is not that the LMDP has actions, but to determine the transition probabilities, we need to know how the agent moves through the environment
         self.num_actions = len(self.allowed_actions)
         
-        self.gridworld_env = GridWorldEnv(grid_size=grid_size, map=map)
+        self.gridworld_env = GridWorldEnv(map=map)
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
@@ -531,14 +543,22 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             sparse_optimization=sparse_optimization
         )
         
-        self.p_time = self.generate_P(
-            self.gridworld_env.custom_grid,
-            self.allowed_actions,
-            benchmark=benchmark_p,
-            num_threads=threads
-        )
+        if map.P is not None:
+            assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
+            self.P = map.P
+        else:
+            self.p_time = self.generate_P(
+                self.gridworld_env.custom_grid,
+                self.allowed_actions,
+                benchmark=benchmark_p,
+                num_threads=threads
+            )
         
-        self._generate_R()
+        if map.R is not None:
+            assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
+            self.R = map.R
+        else:
+            self._generate_R()
         
         print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
 
@@ -552,6 +572,8 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         for i, j in zip(indices[0], indices[1]):
             if self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[j]) or self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[i]):
                 self.R[i, j] = np.float64(-50)
+            elif self.gridworld_env.custom_grid.is_terminal(self.gridworld_env.custom_grid.state_index_mapper[j]):
+                self.R[i, j] = np.float64(0)
             else:
                 self.R[i, j] = np.float64(-5)
         
@@ -589,7 +611,7 @@ class GridWorldPlotter:
     CLIFF_COLOR = "#3F043C"
     POLICY_COLOR = "#FF1010"
 
-    def __init__(self, gridworld: GridWorldMDP | GridWorldLMDP, figsize: tuple[int, int] = (5, 5), name: str = "", assets_path: str = None):
+    def __init__(self, gridworld: GridWorldMDP | GridWorldLMDP | GridWorldLMDP_TDR, figsize: tuple[int, int] = (5, 5), name: str = "", assets_path: str = None):
         """
         Initializes the GridWorldPlotter with the provided GridWorldMDP instance, figure size, and output directory.
 
@@ -609,7 +631,7 @@ class GridWorldPlotter:
         if not os.path.exists(self.__out_path): os.makedirs(self.__out_path)
         
         
-    def plot_base_grid(self, ax, grid_positions, state: State = None, direction: int = 0):
+    def plot_base_grid(self, ax, grid_positions, state: State = None, direction: int = 0, color_start: bool = True, color_goal: bool = True):
         grid = np.full((self.gridworld_env.custom_grid.size_x, self.gridworld_env.custom_grid.size_y), CellType.NORMAL)
 
         for wall_state in grid_positions[CellType.WALL]:
@@ -621,23 +643,25 @@ class GridWorldPlotter:
         colormap = {
             CellType.NORMAL: self.NORMAL_COLOR,
             CellType.WALL: self.WALL_COLOR,
-            CellType.GOAL: self.GOAL_COLOR
+            CellType.GOAL: self.NORMAL_COLOR
         }
         color_list = [colormap[k] for k in sorted(colormap)]
         cmap = plt.matplotlib.colors.ListedColormap(color_list)
         ax.imshow(grid, cmap=cmap, origin="upper")
 
         # Start
-        for pos in grid_positions[CellType.START]:
-            ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.START_COLOR))
+        if color_start:
+            for pos in grid_positions[CellType.START]:
+                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.START_COLOR))
 
         # Walls
         for pos in grid_positions[CellType.WALL]:
             ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.WALL_COLOR))
 
         # Goal
-        for pos in grid_positions[CellType.GOAL]:
-            ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.GOAL_COLOR))
+        if color_goal:
+            for pos in grid_positions[CellType.GOAL]:
+                ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.GOAL_COLOR))
 
         # Cliff
         for pos in grid_positions[CellType.CLIFF]:
@@ -848,5 +872,108 @@ class GridWorldPlotter:
         fig = self.gridworld.stats.plot_cum_reward(deterministic=self.gridworld.deterministic, mdp=True)
         if savefig:
             fig.savefig(os.path.join(self.__out_path, f"{'deterministic' if self.gridworld.deterministic else 'stochastic'}_cum_reward.png"))
+        else:
+            plt.show()
+
+    
+    def _get_common_reward_params(self, cmap_name: str = "jet"):
+        positions = [val for pos in self.gridworld_env.custom_grid.positions.values() for val in pos]
+        cmap = plt.get_cmap(cmap_name)
+        norm = mcolors.Normalize(vmin=np.min(self.gridworld.R), vmax=np.max(self.gridworld.R))
+        
+        return positions, cmap, norm
+    
+
+    def _get_state_index(self, x, y):
+        states = self.gridworld_env.custom_grid.get_state_pos(x, y)
+        if not states:
+            return None, None
+        state = states[0]
+        
+        return next(k for k, v in self.gridworld_env.custom_grid.state_index_mapper.items() if v == state), state
+
+
+    def __visualize_reward_mdp_lmdptdr(self, ax, cmap_name: str = "jet"):
+        positions, cmap, norm = self._get_common_reward_params(cmap_name=cmap_name)
+
+        for pos in positions:
+            y, x = pos
+            state_idx, state = self._get_state_index(x, y)
+            if state_idx is None or state_idx >= self.gridworld.R.shape[0]:
+                continue
+
+            quadrants = {
+                0: [(y + 0.5, x - 0.5), (y, x), (y - 0.5, x - 0.5)],
+                1: [(y + 0.5, x + 0.5), (y, x), (y + 0.5, x - 0.5)],
+                2: [(y - 0.5, x + 0.5), (y, x), (y + 0.5, x + 0.5)],
+                3: [(y - 0.5, x - 0.5), (y, x), (y - 0.5, x + 0.5)]
+            }
+
+
+            ax.plot([y - 0.5, y + 0.5], [x - 0.5, x + 0.5], color="black", linewidth=0.2)
+            ax.plot([y - 0.5, y + 0.5], [x + 0.5, x - 0.5], color="black", linewidth=0.2)
+
+            for i, verts in quadrants.items():
+                if isinstance(self.gridworld, GridWorldMDP):
+                    reward = self.gridworld.R[state_idx]
+                    reward = reward[i]
+                else:
+                    if type(self.gridworld.R) == csr_matrix:
+                        tmp_R = self.gridworld.R.toarray()
+                    else:
+                        tmp_R = self.gridworld.R
+                    # Will only consider states reached with navigation actions
+                    next_state, _, _ = self.gridworld_env.custom_grid.move(state, i)
+                    next_state_idx, _ = self._get_state_index(next_state.x, next_state.y)
+                    if self.gridworld_env.custom_grid.is_cliff(state):
+                        reward = tmp_R[state_idx, np.where(tmp_R[state_idx] != 0)[0]]
+                    else:
+                        reward = tmp_R[state_idx, next_state_idx]
+                    
+                triangle = plt.Polygon(verts, color=cmap(norm(reward)), alpha=1)
+                ax.add_patch(triangle)
+
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label("Reward")
+
+
+    def __visualize_reward_lmdp(self, ax, cmap_name: str = "jet"):
+        positions, cmap, norm = self._get_common_reward_params(cmap_name=cmap_name)
+
+        for pos in positions:
+            y, x = pos
+            state_idx, _ = self._get_state_index(x, y)
+            if state_idx is None:
+                continue
+
+            reward = self.gridworld.R[state_idx]
+            ax.add_patch(plt.Rectangle((y - 0.5, x - 0.5), 1, 1, color=cmap(norm(reward))))
+
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label("Reward")
+    
+    
+    def visualize_reward(self, savefig: bool = False):
+        assert self.gridworld.num_actions == 4, "Gridworld can only have four navigation actions"
+        
+        plt.rcParams.update({"text.usetex": True})
+        fig, ax = plt.subplots(figsize=self.figsize)
+        grid_positions = self.gridworld_env.custom_grid.positions
+
+        self.plot_base_grid(ax, grid_positions, color_start=False, color_goal=False)
+        
+        if isinstance(self.gridworld, GridWorldLMDP):
+            self.__visualize_reward_lmdp(ax)
+        elif isinstance(self.gridworld, GridWorldMDP) or isinstance(self.gridworld, GridWorldLMDP_TDR):
+            self.__visualize_reward_mdp_lmdptdr(ax)
+        
+        plt.title(self.gridworld_env.title)
+        print()
+        if savefig:
+            plt.savefig(f"assets/reward_{self.gridworld_env.title}_{type(self.gridworld).__name__}.png", dpi=300, bbox_inches="tight")
         else:
             plt.show()

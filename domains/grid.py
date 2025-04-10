@@ -103,8 +103,7 @@ class CustomGrid:
     def __init__(
         self,
         type: Literal["gridworld", "minigrid"],
-        map: Map = None,
-        grid_size: int = 3,
+        map: Map,
         properties: dict[str, list] = {}
     ):
         """
@@ -119,7 +118,7 @@ class CustomGrid:
         self.char_positions = {v: k for k, v in self.POSITIONS_CHAR.items()}
         
         self.positions = {k: [] for k in self.POSITIONS_CHAR.values()}
-        self.objects = map.objects if self.map and map.objects is not None else []
+        self.objects = self.map.objects
         
         for id, object in enumerate(self.objects):
             object.id = id
@@ -127,10 +126,7 @@ class CustomGrid:
         self.state_properties = self.__extend_properties(properties)
         
         
-        if self.map is None:
-            self.generate_simple_grid(grid_size=grid_size)
-        else:
-            self.load_from_map()
+        self.load_from_map()
             
 
         self.layout_combinations = self._get_layout_combinations()
@@ -231,31 +227,6 @@ class CustomGrid:
         combinations = product(*property_values)
         
         return combinations
-    
-    
-
-    def generate_simple_grid(self, grid_size: int):
-        """
-        Generates a simple grid with a border of walls, a start position (top left), and a single goal (bottom right).
-
-        Args:
-        - grid_size (int): The size of the inner grid (excluding walls).
-        """
-        
-        self.start_pos = (1, 1)
-        self.goal_pos = [(grid_size, grid_size)]
-        self.size_x = grid_size + 2
-        self.size_y = grid_size + 2
-        
-        for j in range(self.size_x):
-            for i in range(self.size_y):
-                if (i == 0 or i == self.size_y - 1) or (j == 0 or j == self.size_x - 1):
-                    self.positions[CellType.WALL].append((i, j))
-                elif (i, j) != self.goal_pos[0]:
-                    self.positions[CellType.NORMAL].append((i, j))
-                
-        self.positions[CellType.START] = [((self.start_pos[0], self.start_pos[1]))]
-        self.positions[CellType.GOAL] = [(self.goal_pos[0][0], self.goal_pos[0][1])]
         
     
     def load_from_map(self):
@@ -485,6 +456,15 @@ class CustomGrid:
         for count, pos in enumerate(self.states + self.terminal_states):
             self.state_index_mapper[count] = pos
     
+    
+    def get_state_pos(self, x: int, y: int) -> list[State]:
+        return_states = []
+        
+        for state in self.states + self.terminal_states:
+            if state.y == y and state.x == x:
+                return_states.append(state)
+        
+        return return_states
         
     
     def is_valid(self, state: State) -> bool:
