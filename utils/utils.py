@@ -13,7 +13,7 @@ import scipy.stats as stats
 from scipy.sparse import csr_matrix
 from sklearn.metrics import r2_score
 
-def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map=None, objects=None, grid_size: int = 3, save_fig: bool = True):
+def visualize_stochasticity_rewards_embedded_lmdp(state: int, map: Map, num_actions=3, save_fig: bool = True):
     """
     Visualizes the impact of stochasticity on the reward function of a state in an embedded minigrid LMDP.
     
@@ -25,8 +25,6 @@ def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map
     - state (int): The state for which the reward is analyzed.
     - num_actions (int): The number of actions that will be considered
     - map (optional): The layout of the minigrid environment.
-    - objects (optional): Objects present in the minigrid.
-    - grid_size (int, default=3): The size of the minigrid.
     - save_fig (bool, default=True): Whether to save the generated figure or show it.
     
     The function generates three plots:
@@ -53,7 +51,6 @@ def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map
     zero_cols_idx = None
     for main_prob in probs:
         minigrid_mdp = MinigridMDP(
-            grid_size=grid_size,
             allowed_actions=MinigridActions.get_actions()[:num_actions],
             map=map,
             behaviour="stochastic",
@@ -125,7 +122,7 @@ def visualize_stochasticity_rewards_embedded_lmdp(state: int, num_actions=3, map
 
 
 
-def compare_value_function_by_stochasticity(map: Map = None, grid_size: int = 3, save_fig: bool = True):
+def compare_value_function_by_stochasticity(map: Map, save_fig: bool = True):
     """
     Compares the value function of an MDP under different stochasticity levels.
     
@@ -134,13 +131,10 @@ def compare_value_function_by_stochasticity(map: Map = None, grid_size: int = 3,
 
     Parameters:
     - map (optional): The environment map, if applicable.
-    - objects (optional): A list of objects or entities within the environment.
     - grid_size (int, default=3): The size of the grid for the MDP environment.
     """
     palette = CustomPalette()
-    map_name = map.name if map else f"Simple Grid {grid_size}x{grid_size}"
-    if map_name is not None:
-        assert map_name is not None, "Must provide a name for the map"
+    map_name = map.name
     
     plt.rcParams.update({"text.usetex": True})
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
@@ -148,9 +142,8 @@ def compare_value_function_by_stochasticity(map: Map = None, grid_size: int = 3,
 
     for i, stochasticity in enumerate(np.arange(0.1, 1.0, 0.1)):
         mdp = MinigridMDP(
-            grid_size=grid_size,
-            allowed_actions=MinigridActions.get_actions(),
             map=map,
+            allowed_actions=MinigridActions.get_actions(),
             behaviour="deterministic" if stochasticity == 1 else "stochastic",
             stochastic_prob=stochasticity
         )
@@ -174,7 +167,7 @@ def compare_value_function_by_stochasticity(map: Map = None, grid_size: int = 3,
         plt.show()
 
 
-def lmdp_tdr_advantage():
+def lmdp_tdr_advantage(save_fig: bool = True):
     """
     A function that has been created to illustrate the advantages of the LMDP with transition-dependent rewards over
     an LMDP with state-dependent rewards.
@@ -182,8 +175,7 @@ def lmdp_tdr_advantage():
     map = Maps.CLIFF_WALKING
     mdp = GridWorldMDP(
         map=map,
-        deterministic=True,
-        stochastic_prob=0.4
+        behaviour="deterministic"
     )
     lmdp = GridWorldLMDP(
         map=map,
@@ -250,7 +242,9 @@ def lmdp_tdr_advantage():
     ax.set_ylabel("$V(s)$")
     ax.legend()
     ax.grid()
-    plt.savefig(os.path.join(f"assets/{output_dir}", "value_functions.png"), dpi=300, bbox_inches="tight")
+    
+    if save_fig:
+        plt.savefig(os.path.join(f"assets/{output_dir}", "value_functions.png"), dpi=300, bbox_inches="tight")
 
 
     # Calculate R^2 values
@@ -275,12 +269,15 @@ def lmdp_tdr_advantage():
     axes[1].set_xlabel("$V_{\mathcal{M}}(s)$")
     axes[1].set_ylabel("$V_{\mathcal{L\'}}(s)$")
     
-    plt.savefig(os.path.join(f"assets/{output_dir}", "correlation_plots.png"), dpi=300, bbox_inches="tight")
+    if save_fig:
+        plt.savefig(os.path.join(f"assets/{output_dir}", "correlation_plots.png"), dpi=300, bbox_inches="tight")
+    else:
+        plt.show()
 
 
 def uniform_assumption_plot(save_fig: bool = True):
     lmdp = GridWorldLMDP(
-            grid_size=15,
+            map=Map(grid_size=15),
             # allowed_actions=[
             #     MinigridActions.ROTATE_LEFT,
             #     MinigridActions.ROTATE_RIGHT,
