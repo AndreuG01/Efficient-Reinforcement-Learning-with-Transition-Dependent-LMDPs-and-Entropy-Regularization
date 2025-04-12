@@ -6,8 +6,10 @@
 # or GridWorldLMDP in the GridworldEnv class without them having been defined yet.
 from __future__ import annotations
 
+import matplotlib.axes
 import matplotlib.cm as cm
 import matplotlib.image as mpimg
+import matplotlib
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import matplotlib.colors as mcolors
 from matplotlib import colorbar
@@ -32,11 +34,28 @@ import io
 
 
 class GridWorldEnv:
+    """
+    A class that represents the environment for a GridWorld agent to interact with.
+
+    Attributes:
+        custom_grid (CustomGrid): The grid representing the world in which the agent navigates.
+        agent_start_pos (tuple[int, int]): The starting position of the agent in the grid.
+        title (str): The name of the map.
+        max_steps (int): The maximum number of steps the agent can take in one episode.
+        __agent_pos (tuple[int, int]): The current position of the agent.
+    """
     def __init__(
         self,
         map: Map,
-        max_steps: int | None = None
+        max_steps: int = 200
     ):
+        """
+        Initializes the GridWorld environment with the provided map and the maximum number of steps.
+
+        Args:
+            map (Map): The map representing the environment layout.
+            max_steps (int, optional): The maximum number of steps the agent can take. Defaults to 200.
+        """
         self.custom_grid = CustomGrid("gridworld", map=map)
         self.agent_start_pos = self.custom_grid.start_pos
         
@@ -46,11 +65,16 @@ class GridWorldEnv:
         
         self.__agent_pos = self.agent_start_pos
         
-        if max_steps is None:
-            self.max_steps = 200
+        self.max_steps = max_steps
 
     
     def __get_manual_action(self):
+        """
+        Retrieves a manual action input from the user through keyboard events.
+
+        Returns:
+            int: The action corresponding to the user's input.
+        """
         key_to_action = {
             "up": GridWorldActions.UP, "w": GridWorldActions.UP,
             "down": GridWorldActions.DOWN, "s": GridWorldActions.DOWN,
@@ -74,8 +98,19 @@ class GridWorldEnv:
     
     
     def state_to_image(self, state: State, plotter: GridWorldPlotter, direction: int) -> pygame.Surface:
-        fig, ax = plt.subplots(figsize=plotter.figsize)
-        plotter.plot_base_grid(ax, self.custom_grid.positions, state=state, direction=direction)
+        """
+        Converts the current state into an image for visualization.
+
+        Args:
+            state (State): The current state of the agent.
+            plotter (GridWorldPlotter): The plotter used to visualize the state.
+            direction (int): The direction of the agent (0 = vertical, 1 = right, 2 = left).
+
+        Returns:
+            pygame.Surface: A surface containing the state visualized as an image.
+        """
+        fig, axes = plt.subplots(figsize=plotter.figsize)
+        plotter.plot_base_grid(axes, self.custom_grid.positions, state=state, direction=direction)
         canvas = FigureCanvas(fig)
         canvas.draw()
         
@@ -97,6 +132,21 @@ class GridWorldEnv:
         save_gif: bool = False,
         save_path: str = None
     ):
+        """
+        It allows to visualize the control policy of an agent inf `manual_play` is set to False. Otherwise, the user can
+        manually control the agent with the keyboard keys.
+
+        Args:
+            model (GridWorldMDP | GridWorldLMDP): The model to use for decision-making (MDP or LMDP).
+            policies (list[tuple[int, np.ndarray]]): A list of policies generated at different training epochs.
+            manual_play (bool, optional): If True, allows manual control of the agent. Defaults to False.
+            num_times (int, optional): The number of times to play the game. Defaults to 10.
+            save_gif (bool, optional): If True, saves the game sequence as a GIF. Defaults to False.
+            save_path (str, optional): Path to save the GIF if `save_gif` is True.
+
+        Returns:
+            None
+        """
         if not save_gif:
             pygame.init()
             screen = None
@@ -156,7 +206,6 @@ class GridWorldEnv:
                                 action = model.transition_action(state_idx, next_state)
                         else:
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx])
-                            print(next_state)
                             if next_state != np.argmax(policy[state_idx]):
                                 print(f"MISTAKE {num_mistakes}")
                                 num_mistakes += 1
@@ -164,7 +213,6 @@ class GridWorldEnv:
                     
                     next_state, _, _ = self.custom_grid.move(state, action)
                     
-                    dx = state.x - next_state.x
                     dy = state.y - next_state.y
                     if dy > 0:
                         # Left
@@ -207,22 +255,19 @@ class GridWorldMDP(MDP):
     """
     A class representing a GridWorld Markov Decision Process (MDP).
 
-    This class models a grid world environment where an agent navigates through a grid to reach a goal. The grid consists of various types of cells, such as normal cells, walls, a start position, and a goal position. The agent's task is to move from the start position to the goal while avoiding walls. The class supports both deterministic and stochastic dynamics for movement.
+    This class models a grid world environment where an agent navigates through a grid to reach a goal.
+    The grid consists of various types of cells, such as normal cells, walls, a start position, and a goal position.
+    The agent's task is to move from the start position to the goal while avoiding walls. The class supports both deterministic and stochastic dynamics for movement.
 
     Attributes:
-    - OFFSETS (dict): A dictionary mapping actions to directional offsets.
-    - size_x (int): The number of rows in the grid.
-    - size_y (int): The number of columns in the grid.
-    - num_states (int): The total number of states (excluding terminal states).
-    - start_pos (tuple[int, int]): The start position of the agent.
-    - goal_pos (list[tuple[int, int]]): A list of goal positions.
-    - agent_pos (tuple[int, int]): The current position of the agent.
-    - num_actions (int): The number of possible actions the agent can take.
-    - deterministic (bool): Whether the environment is deterministic or stochastic.
-    - policy (list[int]): The optimal policy for each state.
-    - policy_multiple_actions (list[list[int]]): The optimal policy for each state considering all the actions that maximize the reward.
-    - V (list[float]): The value function for each state.
-    - stats (Statistics): The statistics associated with the value iteration process.
+        OFFSETS (dict): A dictionary mapping actions to directional offsets.
+        num_actions (int): The number of possible actions the agent can take.
+        allowed_actions (list[int]): List of allowed actions.
+        stochastic_prob (float): Probability of stochastic transitions.
+        behaviour (str): The behaviour type for the environment ("deterministic", "stochastic", or "mixed").
+        gridworld_env (GridWorldEnv): The environment object representing the grid world.
+        start_state (State): The starting state of the agent.
+        num_states (int): The total number of states (excluding terminal states).
     """
 
     OFFSETS = {
@@ -241,14 +286,15 @@ class GridWorldMDP(MDP):
         mdp: MDP = None
     ):
         """
-        Initializes the grid world based on the provided map or generates a simple grid. Also initializes matrices for state transitions (P) and rewards (R).
+        Initializes the grid world based on the provided map. Based on the allowed actions of the agent, it removes any state from the state space that cannot be reached by the agent.
+        If an MDP object is provided, it sets the dynamics to the one from the provided mdp object. Otherwise, it creates default transition probability density and reward function.
 
         Args:
-        - grid_size (int, optional): The size of the grid (default is 3). The grid will have a size of grid_size x grid_size.
-        - start_pos (tuple[int, int], optional): The starting position of the agent (default is (1, 1)).
-        - map (list[str], optional): A custom map represented by a list of strings (default is None). If provided, the grid is loaded from this map.
-        - deterministic (bool, optional): Whether the environment is deterministic (default is True).
-        - mdp (MDP, optional): A possible instantiation of an MDP object to be used to initialize the superclass of the GridWorldMDP instance.
+            map (Map): The map for the environment.
+            allowed_actions (list[int], optional): List of allowed actions. Defaults to None.
+            stochastic_prob (float, optional): Probability of stochastic transitions. Defaults to 0.9.
+            behaviour (Literal["deterministic", "stochastic", "mixed"], optional): Behaviour type for the environment. Defaults to "deterministic".
+            mdp (MDP, optional): An existing MDP object to initialize the superclass. Defaults to None.
         """
         
         if mdp is not None:
@@ -271,12 +317,10 @@ class GridWorldMDP(MDP):
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
-        # TODO: remove unreachable states in case that I add the possibilities for GridWorld to support objects (e.g. keys, doors, etc.)
         self.remove_unreachable_states()
         
         self.num_states = self.gridworld_env.custom_grid.get_num_states()
-        
-        
+
         
         if mdp is None:
             super().__init__(
@@ -316,7 +360,10 @@ class GridWorldMDP(MDP):
 
     def _generate_R(self) -> None:
         """
-        Generates the reward matrix (R) for the grid world, setting the default reward to -1 for all actions.
+        Generates the reward matrix (R) for the grid world, setting the default reward to -50 for all actions for cliff states and to -5 for normal states. Terminal states get a reward of 0.
+        
+        Returns:
+            None
         """
         for state in range(self.num_non_terminal_states):
             state_repr = self.gridworld_env.custom_grid.states[state]
@@ -325,7 +372,15 @@ class GridWorldMDP(MDP):
             else:
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float64)
     
-    def remove_unreachable_states(self):
+    def remove_unreachable_states(self) -> None:
+        """
+        Removes states that are unreachable from the start state.
+
+        This function uses a breadth-first search (BFS) approach to find all reachable states and then removes the unreachable ones.
+
+        Returns:
+            None
+        """
         print("Going to remove unreachable states")
         
         reachable_states = set()
@@ -354,7 +409,17 @@ class GridWorldMDP(MDP):
         self.gridworld_env.custom_grid.generate_state_index_mapper()
     
     
-    def transition_action(self, state_idx, next_state_idx):
+    def transition_action(self, state_idx, next_state_idx) -> int:
+        """
+        Determines the action that transitions the agent from the current state to the next state.
+
+        Args:
+            state_idx (int): The index of the current state.
+            next_state_idx (int): The index of the next state.
+
+        Returns:
+            int: The action that leads to the next state. If there is no valid action for the transition, -1 is returned.
+        """
         curr_state = self.gridworld_env.custom_grid.state_index_mapper[state_idx]
         for action in self.allowed_actions:
             move_state, _, _ = self.gridworld_env.custom_grid.move(curr_state, action)
@@ -366,10 +431,24 @@ class GridWorldMDP(MDP):
                 if move_state.y == next_state[0] and move_state.x == next_state[1]:
                     return action
                 
-        return 0
+        return -1
 
 
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
+        """
+        Visualizes the policy by running the environment with the given policies. If there are no policies, the optimal one is computed.
+        If the `save_gif` parameter is set to true, a GIF with the visualization is stored in the specified path. Otherwise, the policy is displayed to
+        the user through the screen.
+
+        Args:
+            policies (list[tuple[int, np.ndarray]], optional): List of policies from different epochs. Defaults to None
+            num_times (int, optional): Number of times to run the game. Defaults to 10.
+            save_gif (bool, optional): If True, saves the game sequence as a GIF. Defaults to False
+            save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+
+        Returns:
+            None
+        """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
             print("Computing value function...")
@@ -378,10 +457,32 @@ class GridWorldMDP(MDP):
         else:
             self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
             
-    def play_map(self):
+    def play_map(self) -> None:
+        """
+        Allows the user to play with the agent manually through the map.
+
+        Returns:
+            None
+        """
         self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
     
 class GridWorldLMDP(LMDP):
+    """
+    A class representing a GridWorld linearly-sovable MDP (LMDP).
+
+    This class models a grid world environment where the agent navigates the grid with the objective of maximizing rewards while avoiding cliffs.
+    The grid consists of various types of cells, such as normal cells, walls, a start position, and a goal position.
+    The agent's task is to move from the start position to the goal while avoiding walls.
+
+    Attributes:
+        OFFSETS (dict): A dictionary mapping actions to directional offsets.
+        num_actions (int): The number of possible actions the agent can take.
+        allowed_actions (list[int]): List of allowed actions.
+        gridworld_env (GridWorldEnv): The environment object representing the grid world.
+        start_state (State): The starting state of the agent.
+        num_sates (int): The total number of states in the grid world (excluding terminal states).
+        p_time (float): The time it takes to generate the transition matrix (if applicable).
+    """
     
     OFFSETS = {
         0: (0, -1),  # UP
@@ -398,8 +499,16 @@ class GridWorldLMDP(LMDP):
         threads: int = 4,
         lmdp: LMDP = None
     ) -> None:
-        
-        self.deterministic = False
+        """
+        Initializes the grid world based on the provided map and optionally inherits from an existing LMDP.
+
+        Args:
+            map (Map): The map for the environment.
+            sparse_optimization (bool, optional): Flag indicating whether sparse optimization is enabled. Defaults to True.
+            benchmark_p (bool, optional): Flag indicating whether to benchmark the transition probabilities. Defaults to False.
+            threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
+            lmdp (LMDP, optional): An existing LMDP object to initialize the superclass. Defaults to None.
+        """
         
         self.allowed_actions = [i for i in range(len(self.OFFSETS))] # It is not that the LMDP has actions, but to determine the transition probabilities, we need to know how the agent moves through the environment
         self.num_actions = len(self.allowed_actions)
@@ -453,7 +562,10 @@ class GridWorldLMDP(LMDP):
     
     def _generate_R(self) -> None:
         """
-        Generates the reward matrix (R) for the grid world, setting the default reward to -1 for all actions.
+        Generates the reward matrix (R) for the grid world, setting the default reward to -50 for all actions for cliff states and to -5 for normal states. Terminal states get a reward of 0.
+
+        Returns:
+            None
         """
         self.R[:] = np.float64(-5)
         cliff_states = [i for i in range(self.num_states) if self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[i])]
@@ -461,7 +573,17 @@ class GridWorldLMDP(LMDP):
         self.R[self.num_non_terminal_states:] = np.float64(0)
     
     
-    def transition_action(self, state_idx, next_state_idx):
+    def transition_action(self, state_idx, next_state_idx) -> int:
+        """
+        Determines the action that transitions the agent from the current state to the next state.
+
+        Args:
+            state_idx (int): The index of the current state.
+            next_state_idx (int): The index of the next state.
+
+        Returns:
+            int: The action that leads to the next state. If there is no valid action for the transition, -1 is returned.
+        """
         curr_state = self.gridworld_env.custom_grid.state_index_mapper[state_idx]
         for action in self.allowed_actions:
             move_state, _, _ = self.gridworld_env.custom_grid.move(curr_state, action)
@@ -473,31 +595,24 @@ class GridWorldLMDP(LMDP):
                 if move_state.y == next_state[0] and move_state.x == next_state[1]:
                     return action
                 
-        return 0
-        
-    
-    def policy_to_action(self, state: int, next_state: list[int]) -> list[int]:
-        origin_x = self.gridworld_env.custom_grid.state_index_mapper[state].x
-        origin_y = self.gridworld_env.custom_grid.state_index_mapper[state].y
-        actions = []
-        for state_idx, state_prob in enumerate(next_state):
-            if state_idx < self.num_non_terminal_states:
-                tmp_state = self.gridworld_env.custom_grid.states[state_idx]
-            else:
-                tmp_state = self.gridworld_env.custom_grid.terminal_states[state_idx - self.num_non_terminal_states]
-            
-            if state_prob == 0: continue
-            for action in range(len(self.OFFSETS)):
-                dy, dx = self.OFFSETS[action]
-                x = tmp_state.x
-                y = tmp_state.y
-                if (origin_x + dx == x) and (origin_y + dy == y):
-                    actions.append(action)
-        
-        return actions
+        return -1
     
     
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
+        """
+        Visualizes the policy by running the environment with the given policies. If there are no policies, the optimal one is computed.
+        If the `save_gif` parameter is set to true, a GIF with the visualization is stored in the specified path. Otherwise, the policy is displayed to
+        the user through the screen.
+
+        Args:
+            policies (list[tuple[int, np.ndarray]], optional): List of policies from different epochs. Defaults to None
+            num_times (int, optional): Number of times to run the game. Defaults to 10.
+            save_gif (bool, optional): If True, saves the game sequence as a GIF. Defaults to False
+            save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+
+        Returns:
+            None
+        """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
             print("Computing value function...")
@@ -507,10 +622,32 @@ class GridWorldLMDP(LMDP):
             self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
 
             
-    def play_map(self):
+    def play_map(self) -> None:
+        """
+        Allows the user to play with the agent manually through the map.
+
+        Returns:
+            None
+        """
         self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
 
 class GridWorldLMDP_TDR(LMDP_TDR):
+    """
+    A class representing a GridWorld LMDP with transition-dependent rewards.
+
+    This class models a grid world environment where the agent navigates through the environment with transition-dependent rewards.
+    The grid includes various elements such as cliffs, walls, a start position, and a goal position. The reward function is 
+    defined between state transitions and varies depending on the presence of cliffs or goal states.
+
+    Attributes:
+        OFFSETS (dict): A dictionary mapping actions to directional offsets.
+        num_actions (int): The number of possible actions the agent can take.
+        allowed_actions (list[int]): List of allowed actions.
+        gridworld_env (GridWorldEnv): The environment object representing the grid world.
+        start_state (State): The starting state of the agent.
+        num_sates (int): The total number of states in the grid world (excluding terminal states).
+        p_time (float): The time it takes to generate the transition matrix (if applicable).
+    """
     OFFSETS = {
         0: (0, -1),  # UP
         1: (1, 0),   # RIGHT
@@ -525,7 +662,15 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         benchmark_p: bool = False,
         threads: int = 4
     ):
-        self.deterministic = False
+        """
+        Initializes the GridWorldTDR environment using the provided map, and sets up the LMDP-TDR structure.
+
+        Args:
+            map (Map): The map for the environment.
+            sparse_optimization (bool, optional): Flag indicating whether sparse optimization is enabled. Defaults to False.
+            benchmark_p (bool, optional): Flag indicating whether to benchmark the transition probabilities. Defaults to False.
+            threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
+        """
         self.allowed_actions = [i for i in range(len(self.OFFSETS))] # It is not that the LMDP has actions, but to determine the transition probabilities, we need to know how the agent moves through the environment
         self.num_actions = len(self.allowed_actions)
         
@@ -563,7 +708,19 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
 
 
-    def _generate_R(self):
+    def _generate_R(self) -> None:
+        """
+        Generates the transition-based reward matrix (R) for the grid world. 
+        Rewards are set as follows:
+        - -50 for transitions into or from cliff states.
+        - -5 for regular transitions.
+        - 0 for transitions into terminal states.
+
+        If sparse optimization is enabled, the reward matrix is converted to a sparse matrix for memory efficiency.
+
+        Returns:
+            None
+        """
         if self.sparse_optimization:
             indices = self.P.nonzero()
         else:
@@ -583,7 +740,6 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             self.R = csr_matrix(self.R)
             print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
                 
-
 
 class GridWorldPlotter:
     """
@@ -613,14 +769,17 @@ class GridWorldPlotter:
 
     def __init__(self, gridworld: GridWorldMDP | GridWorldLMDP | GridWorldLMDP_TDR, figsize: tuple[int, int] = (5, 5), name: str = "", assets_path: str = None):
         """
-        Initializes the GridWorldPlotter with the provided GridWorldMDP instance, figure size, and output directory.
+        Initializes the GridWorldPlotter with a GridWorld environment, figure size, and output directory.
 
         Args:
-        - gridworld (GridWorldMDP): The GridWorldMDP instance that contains the grid world environment and its details.
-        - figsize (tuple[int, int], optional): The size of the figure for plotting (default is (5, 5)).
-        - name (str, optional): The name for the output directory where the plots will be saved.
+            gridworld (GridWorldMDP | GridWorldLMDP | GridWorldLMDP_TDR): An instance representing the GridWorld environment to visualize.
+            figsize (tuple[int, int], optional): Size of the matplotlib figure used for plotting. Defaults to (5, 5).
+            name (str, optional): Name of the output folder where plots will be saved. Defaults to "".
+            assets_path (str, optional): Path to additional assets used for visualization (e.g., icons). Defaults to "domains/res".
 
-        Creates the necessary directories for saving output if they do not exist.
+        Notes:
+            - Automatically creates the output directory if it doesn't exist.
+            - Determines if the environment is an MDP-type instance.
         """
         self.gridworld = gridworld
         self.gridworld_env = gridworld.gridworld_env
@@ -631,7 +790,32 @@ class GridWorldPlotter:
         if not os.path.exists(self.__out_path): os.makedirs(self.__out_path)
         
         
-    def plot_base_grid(self, ax, grid_positions, state: State = None, direction: int = 0, color_start: bool = True, color_goal: bool = True):
+    def plot_base_grid(
+        self,
+        ax: matplotlib.axes.Axes,
+        grid_positions: dict[CellType, list[tuple[int, int]]],
+        state: State = None,
+        direction: int = 0,
+        color_start: bool = True,
+        color_goal: bool = True
+    ) -> None:
+        """
+        Plots the base grid layout of the environment, including walls, goals, start positions, cliffs, and optionally the agent.
+
+        This method visualizes the structural elements of the grid (like cell types), and can optionally overlay the agent and
+        interactive objects (e.g. keys, doors) based on the current state.
+
+        Args:
+            ax (matplotlib.axes.Axes): The matplotlib axis on which the grid should be drawn.
+            grid_positions (dict[CellType, list[tuple[int, int]]]): A dictionary mapping CellType to lists of (x, y) positions for each cell category.
+            state (State, optional): The agent's current state, including position and layout of objects. If provided, the agent and its objects are drawn. Defaults to None.
+            direction (int, optional): Direction the agent is facing. 0 = vertical. 1 = right. 2 = left. Defaults to 0.
+            color_start (bool, optional): Whether to highlight the start position(s). Defaults to True.
+            color_goal (bool, optional): Whether to highlight the goal position(s). Defaults to True.
+            
+        Returns:
+            None
+        """
         grid = np.full((self.gridworld_env.custom_grid.size_x, self.gridworld_env.custom_grid.size_y), CellType.NORMAL)
 
         for wall_state in grid_positions[CellType.WALL]:
@@ -715,7 +899,28 @@ class GridWorldPlotter:
         show_actions: bool, 
         prob_size: float, 
         color_probs: bool
-    ):
+    ) -> None:
+        """
+        Overlays the value function, policy, and action probabilities on the grid environment.
+
+        This method visualizes the value function as a heatmap, overlays the policy at each state (either as arrows for deterministic 
+        environments or as multiple actions with probabilities for stochastic environments), and optionally displays action probabilities 
+        as text or color-coded polygons.
+
+        Args:
+            ax (matplotlib.axes.Axes): The matplotlib axis on which the grid will be drawn.
+            divider (mpl_toolkits.axes_grid1.inset_locator.AxesDivider): The divider for adjusting layout and colorbar placement.
+            show_value_function (bool): Whether to overlay the value function as a heatmap. Defaults to False.
+            policy (np.ndarray): The policy to be visualized. If None, the default policy is used. Defaults to None.
+            multiple_actions (bool): Whether to visualize multiple actions per state. Defaults to False.
+            show_prob (bool): Whether to display action probabilities at each state. Defaults to False.
+            show_actions (bool): Whether to display deterministic actions as arrows. Defaults to True.
+            prob_size (float): The font size for displaying action probabilities. Defaults to 10.
+            color_probs (bool): Whether to visualize action probabilities with color-coded polygons. Defaults to False.
+
+        Returns:
+            None
+        """
         
         if policy is None:
             if self.is_mdp:
@@ -788,7 +993,6 @@ class GridWorldPlotter:
             cbar.set_label("Action Probabilities", fontsize=12)
 
 
-
     def plot_grid_world(
         self,
         savefig: bool = False,
@@ -800,7 +1004,27 @@ class GridWorldPlotter:
         show_actions: bool = False,
         prob_size: float = None,
         color_probs: bool = True
-    ):
+    ) -> None:
+        """
+        Plots the grid world environment, optionally displaying the value function, policy, action probabilities, and other elements.
+
+        This method generates a visualization of the grid world, including the structural elements of the environment (e.g., walls, goals, etc.) 
+        and overlays the value function, policy, and action probabilities if requested. The resulting plot can either be shown or saved to a file.
+
+        Args:
+            savefig (bool, optional): Whether to save the plot as an image file. Defaults to False.
+            save_title (str, optional): The filename for saving the plot. If not provided, a default title based on the environment's type will be used. Defaults to None.
+            show_value_function (bool, optional): Whether to overlay the value function as a heatmap. Defaults to False.
+            policy (np.ndarray, optional): The policy to be visualized. If None, the default policy will be used. Defaults to None.
+            multiple_actions (bool, optional): Whether to visualize multiple actions per state. Defaults to False.
+            show_prob (bool, optional): Whether to display action probabilities at each state. Defaults to False.
+            show_actions (bool, optional): Whether to display deterministic actions as arrows. Defaults to False.
+            prob_size (float, optional): The font size for displaying action probabilities. Defaults to None.
+            color_probs (bool, optional): Whether to visualize action probabilities with color-coded polygons. Defaults to True.
+
+        Returns:
+            None
+        """
         if prob_size is None:
             prob_size = self.figsize[0] / 1
 
@@ -826,7 +1050,18 @@ class GridWorldPlotter:
         else:
             plt.show()
     
-    def plot_state(self, state: State):
+    def plot_state(self, state: State) -> None:
+        """
+        Plots the grid world environment for a specific state.
+
+        This method visualizes the current state of the environment, highlighting the agent's position and the structural elements of the grid.
+
+        Args:
+            state (State): The current state of the environment.
+
+        Returns:
+            None
+        """
         fig, ax = plt.subplots(figsize=self.figsize)
         grid_positions = self.gridworld_env.custom_grid.positions
 
@@ -835,8 +1070,21 @@ class GridWorldPlotter:
         plt.show()
 
 
-    def get_action_probs(self, curr_state: State, probs: list[float]):
-        
+    def get_action_probs(self, curr_state: State, probs: list[float]) -> dict[int, float]:
+        """
+        Computes the action probabilities for the given state.
+
+        This method calculates the probabilities of each action from the current state based on the provided probabilities. If the probability for 
+        a particular action is missing, it distributes the remaining probability equally among the other actions.
+
+        Args:
+            curr_state (State): The current state of the environment, including the agent's position and layout of objects.
+            probs (list[float]): A list of probabilities associated with each possible action from the current state.
+
+        Returns:
+            dict[int, float]:   A dictionary mapping each action to its respective probability, with actions that were not originally assigned probabilities 
+                                receiving an equal share of the remaining probability mass.
+        """
         x = curr_state.x
         y = curr_state.y
         mapping = {}
@@ -864,7 +1112,7 @@ class GridWorldPlotter:
         Plots statistics for the grid world, including cumulative rewards over time.
 
         Args:
-        - savefig (bool, optional): If True, the plot is saved to a file; otherwise, it is displayed (default is False).
+            savefig (bool, optional): If True, the plot is saved to a file; otherwise, it is displayed. Defaults to False.
 
         The statistics are based on the `GridWorldMDP` instance's `stats` attribute, which contains relevant data such as cumulative rewards.
         """
@@ -877,14 +1125,43 @@ class GridWorldPlotter:
 
     
     def _get_common_reward_params(self, cmap_name: str = "jet"):
+        """
+        Retrieves common parameters for visualizing rewards across different types of grid world environments.
+
+        This method gathers the necessary parameters (positions, colormap, and normalization) required for visualizing the reward values 
+        in a consistent manner across various grid world configurations.
+
+        Args:
+            cmap_name (str, optional): The name of the colormap to be used for visualizing the reward values. Defaults to "jet".
+
+        Returns:
+            tuple:
+                - list[tuple[int, int]]: A list of (x, y) positions representing the grid cells.
+                - matplotlib.colors.Colormap: The colormap object based on the specified cmap_name.
+                - matplotlib.colors.Normalize: The normalization object for scaling the reward values.
+        """
         positions = [val for pos in self.gridworld_env.custom_grid.positions.values() for val in pos]
         cmap = plt.get_cmap(cmap_name)
         norm = mcolors.Normalize(vmin=np.min(self.gridworld.R), vmax=np.max(self.gridworld.R))
         
         return positions, cmap, norm
     
+    # TODO: could be moved to the custom grid class
+    def _get_state_index(self, x, y) -> tuple[int | None, State | None]:
+        """
+        Retrieves the state index and the corresponding state at a given grid position.
 
-    def _get_state_index(self, x, y):
+        This method checks the grid position (x, y) and returns the index of the state within the environment’s state mapping.
+
+        Args:
+            x (int): The x-coordinate of the grid cell.
+            y (int): The y-coordinate of the grid cell.
+
+        Returns:
+            tuple:
+                - int or None: The state index, or None if the position does not correspond to a valid state.
+                - State or None: The state corresponding to the given position, or None if no state exists at that position.
+        """
         states = self.gridworld_env.custom_grid.get_state_pos(x, y)
         if not states:
             return None, None
@@ -893,7 +1170,20 @@ class GridWorldPlotter:
         return next(k for k, v in self.gridworld_env.custom_grid.state_index_mapper.items() if v == state), state
 
 
-    def __visualize_reward_mdp_lmdptdr(self, ax, cmap_name: str = "jet"):
+    def __visualize_reward_mdp_lmdptdr(self, ax: matplotlib.axes.Axes, cmap_name: str = "jet") -> None:
+        """
+        Visualizes the reward structure in MDP or LMDP_TDR environments.
+
+        This method visualizes the rewards for each state by drawing polygons with colors based on the reward values, 
+        for both MDP and LMDP_TDR environments.
+
+        Args:
+            ax (matplotlib.axes.Axes): The axis on which the reward visualization will be drawn.
+            cmap_name (str, optional): The name of the colormap used to visualize the reward values. Defaults to "jet".
+
+        Returns:
+            None
+        """
         positions, cmap, norm = self._get_common_reward_params(cmap_name=cmap_name)
 
         for pos in positions:
@@ -925,10 +1215,10 @@ class GridWorldPlotter:
                     # Will only consider states reached with navigation actions
                     next_state, _, _ = self.gridworld_env.custom_grid.move(state, i)
                     next_state_idx, _ = self._get_state_index(next_state.x, next_state.y)
-                    if self.gridworld_env.custom_grid.is_cliff(state):
-                        reward = tmp_R[state_idx, np.where(tmp_R[state_idx] != 0)[0]]
-                    else:
-                        reward = tmp_R[state_idx, next_state_idx]
+                    # if self.gridworld_env.custom_grid.is_cliff(state):
+                    #     reward = tmp_R[state_idx, np.where(tmp_R[state_idx] != 0)[0]]
+                    # else:
+                    reward = tmp_R[state_idx, next_state_idx]
                     
                 triangle = plt.Polygon(verts, color=cmap(norm(reward)), alpha=1)
                 ax.add_patch(triangle)
@@ -939,7 +1229,20 @@ class GridWorldPlotter:
         cbar.set_label("Reward")
 
 
-    def __visualize_reward_lmdp(self, ax, cmap_name: str = "jet"):
+    def __visualize_reward_lmdp(self, ax: matplotlib.axes.Axes, cmap_name: str = "jet") -> None:
+        """
+        Visualizes the reward structure in LMDP environments.
+
+        This method visualizes the rewards for each state in an LMDP environment by drawing colored rectangles, 
+        with colors based on the reward values for each state.
+
+        Args:
+            ax (matplotlib.axes.Axes): The axis on which the reward visualization will be drawn.
+            cmap_name (str, optional): The name of the colormap used to visualize the reward values. Defaults to "jet".
+
+        Returns:
+            None
+        """
         positions, cmap, norm = self._get_common_reward_params(cmap_name=cmap_name)
 
         for pos in positions:
@@ -957,7 +1260,20 @@ class GridWorldPlotter:
         cbar.set_label("Reward")
     
     
-    def visualize_reward(self, savefig: bool = False):
+    def visualize_reward(self, savefig: bool = False) -> None:
+        """
+        Visualizes the reward structure of the grid world environment.
+
+        This method generates a plot showing the rewards for each state in the environment. The reward values are visualized 
+        using color-coded polygons or rectangles, depending on the grid world configuration (MDP, LMDP, or LMDP_TDR). The plot 
+        can either be displayed or saved as an image file.
+
+        Args:
+            savefig (bool, optional): Whether to save the generated plot as an image file. Defaults to False.
+
+        Returns:
+            None
+        """
         assert self.gridworld.num_actions == 4, "Gridworld can only have four navigation actions"
         
         plt.rcParams.update({"text.usetex": True})

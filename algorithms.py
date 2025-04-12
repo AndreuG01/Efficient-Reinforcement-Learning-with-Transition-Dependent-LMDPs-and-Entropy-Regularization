@@ -20,11 +20,14 @@ class QLearning:
         alpha (float): The learning rate, controls how much newly acquired information overrides old information.
         gamma (float): The discount factor, controls the importance of future rewards.
         epsilon (float): Exploration rate, defines the probability of taking a random action.
-        epsilon_decay (float): The rate at which the exploration factor decays after each episode.
         curr_state (int): The current state of the agent in the MDP.
         reward (float): The reward obtained in the current step.
         episode_terminated (bool): Flag indicating whether the current episode has terminated.
         info_every (int): Frequency of logging training progress (in steps).
+        epsilon_decay (float): The rate at which the exploration factor decays after each episode.
+        alpha_decay (float): The rate at which the learning decays after each episode.
+        curr_epoch (int): The current epoch at which a q-learning execution is at.
+        V_optimal (np.ndarray): The optimal value function. Used to calculate the error of the derived value function at each iteration of the Q-learning algorithm.
     """
 
     def __init__(
@@ -47,6 +50,7 @@ class QLearning:
             epsilon (float, optional): Exploration rate. Defaults to 1.0.
             info_every (int, optional): Log training progress every 'info_every' steps. Defaults to 1000.
             epsilon_decay (float, optional): Decay rate of epsilon. Defaults to 0.995.
+            alpha_decay (float, optional): Decay rate of alpha. Defaults to 0.
         """
         self.mdp = mdp
         self.Q = np.zeros((self.mdp.num_states, self.mdp.num_actions))
@@ -110,16 +114,17 @@ class QLearning:
         Trains the agent by performing the Q-learning algorithm for a specified number of steps.
 
         Args:
-            num_steps (int): The number of steps to train.
-            multiple_actions (bool, optional): If True, the policy will allow multiple optimal actions for each state. Defaults to False.
-            multiple_policies (bool, optional): If True, every self.info_every training epochs, a policy will be computed and stored
+            num_steps (int): Total number of training steps to execute.
+            multiple_actions (bool, optional): If True, allows multiple optimal actions per state in the derived policy. Defaults to False.
+            multiple_policies (bool, optional): If True, stores a policy snapshot every `self.info_every` steps. Defaults to False.
 
         Returns:
-            tuple[np.ndarray, np.ndarray, list[float]]:
-                - Q (np.ndarray): The learned Q-value table.
-                - policies (list[tuple[int, np.ndarray]]): The derived policies during different episodes of the training process. It will contain only one policy if multiple_policies = False. Each element contains [epoch, policy]
-                - rewards (list[float]): A list of cumulative rewards per episode.
-                - errors (list[float]): A list of the error between the optimal value function and the estimated value function at each epoch.
+            tuple[np.ndarray, list[tuple[int, np.ndarray]], list[float], list[float]]:
+                - Q (np.ndarray): The learned Q-value table after training.
+                - policies (list[tuple[int, np.ndarray]]): List of tuples, each containing the epoch and the corresponding derived policy.
+                If `multiple_policies` is False, the list contains a single policy from the final epoch.
+                - rewards (list[float]): Cumulative reward for each step, constant within an episode.
+                - errors (list[float]): Mean squared error between the estimated and optimal value functions at each epoch.
         """
         self.curr_epoch = 0
         cumulative_reward = 0
@@ -165,7 +170,7 @@ class QLearning:
             multiple_actions (bool): If True, allows multiple optimal actions for each state.
 
         Returns:
-            np.ndarray: The derived policy.
+            policy (np.ndarray): The derived policy.
         """
         if multiple_actions:
             policy = np.empty(self.Q.shape[0], dtype=object)
@@ -178,19 +183,25 @@ class QLearning:
         return policy
 
 
-    def get_value_function(self):
+    def get_value_function(self) -> np.ndarray:
+        """
+        Computes the estimated state-value function based on the current Q-values.
+
+        Returns:
+            np.ndarray: The value of each state, computed as the maximum Q-value over all actions.
+        """
         return np.max(self.Q, axis=1)
 
 
 class QLearningHyperparameters:
     """
-    Represents the hyperparameters used for Q-Learning.
+    Stores and formats the hyperparameters used in the Q-Learning algorithm.
 
     Attributes:
-        alpha (float): The learning rate that determines the extent to which newly acquired information overrides old information.
-        alpha_decay (int): The rate at which the learning rate decays over time.
-        gamma (float): The discount factor that determines the importance of future rewards.
-        latex (bool): Whether to format the string representation in LaTeX style (default: True).
+        alpha (float): Learning rate that controls how much new information overrides old information.
+        alpha_decay (int): Step interval at which the learning rate decays.
+        gamma (float): Discount factor for future rewards.
+        latex (bool): If True, the string representation uses LaTeX formatting. Defaults to True.
     """
 
     def __init__(self, alpha: float, alpha_decay: int, gamma: float, latex: bool = True):
@@ -210,7 +221,8 @@ class QLearningHyperparameters:
 
     def __str__(self):
         """
-        Returns a formatted string representation of the hyperparameters in latex style, if self.latex is True.
+        Returns:
+            str: A formatted string representation of the hyperparameters, in LaTeX style if `latex` is True.
         """
         return "{} {}, {} {}, {} {}".format(
             '\\alpha =' if self.latex else 'Alpha:', self.alpha, 
@@ -241,7 +253,8 @@ class QLearningPlotter:
         self.save_path = save_path
         self.domain_name = domain_name
     
-    def plot(self, rewards: list[list[float]], errors: list[list[float]], hyperparameters: list[QLearningHyperparameters]):
+    
+    def plot(self, rewards: list[list[float]], errors: list[list[float]], hyperparameters: list[QLearningHyperparameters]) -> None:
         """
         Generates and saves a plot visualizing rewards and errors for various hyperparameter configurations.
 
@@ -318,27 +331,27 @@ class QLearningHyperparameterExplorer:
     Tests different combinations of Q-learning hyperparameters to determine which is the best one.
 
     Attributes:
-        mdp (MDP): the MDP instance that wants to be solved.
-        alphas (list[float]): the list of learning rates that want to be tested.
-        alphas_decays (list[int]): the learning rates decrease that want to be tested.
-        gammas (list[float]): the list of discount factor for future rewards that wants to be tested.
-        epochs (int): the number of epochs for which the MDP will be trained.
-        out_path (str): the path where the generated files and the plot will be stored.
-        domain_name (str): the name of the MDP domain that is being trained.
-        __q_plotter (QLearningPlotter): an instance of a Q-learning plotter, that is responsible of plotting the different errors and rewards obtained during training with each combination of hyperparamters.
+        mdp (MDP): The MDP instance that wants to be solved.
+        alphas (list[float]): The list of learning rates that want to be tested.
+        alphas_decays (list[int]): The learning rates decrease that want to be tested.
+        gammas (list[float]): The list of discount factor for future rewards that wants to be tested.
+        epochs (int): The number of epochs for which the MDP will be trained.
+        out_path (str): The path where the generated files and the plot will be stored.
+        domain_name (str): The name of the MDP domain that is being trained.
+        __q_plotter (QLearningPlotter): An instance of a Q-learning plotter, that is responsible of plotting the different errors and rewards obtained during training with each combination of hyperparamters.
     """
     def __init__(self, mdp: MDP, alphas: list[float], alphas_decays: list[int], gammas: list[float], epochs: int, out_path: str, domain_name: str):
         """
         Initializes a QLearningHyperparameterExplorer instance.
 
         Args:
-            mdp (MDP): the MDP instance that wants to be solved.
-            alphas (list[float]): the list of learning rates that want to be tested.
-            alphas_decays (list[int]): the learning rates decrease that want to be tested.
-            gammas (list[float]): the list of discount factor for future rewards that wants to be tested.
-            epochs (int): the number of epochs for which the MDP will be trained.
-            out_path (str): the path where the generated files and the plot will be stored.
-            domain_name (str): the name of the MDP domain that is being trained.
+            mdp (MDP): The MDP instance that wants to be solved.
+            alphas (list[float]): The list of learning rates that want to be tested.
+            alphas_decays (list[int]): The learning rates decrease that want to be tested.
+            gammas (list[float]): The list of discount factor for future rewards that wants to be tested.
+            epochs (int): The number of epochs for which the MDP will be trained.
+            out_path (str): The path where the generated files and the plot will be stored.
+            domain_name (str): The name of the MDP domain that is being trained.
         """
         self.mdp = mdp
         self.alphas = alphas
@@ -396,7 +409,7 @@ class QLearningHyperparameterExplorer:
         return reward, error, QLearningHyperparameters(alpha, alpha_decay, gamma), max_reward_local, max_reward_epoch_local, min_error_local, min_error_epoch_local
         
     
-    def test_hyperparameters(self):
+    def test_hyperparameters(self) -> None:
         """
         Tests various combinations of hyperparameters for Q-Learning and evaluates their performance. It stores the
         different errors and rewards obtained during training in case they want to be later used for other purposes.
@@ -456,6 +469,13 @@ class QLearningHyperparameterExplorer:
         self.__q_plotter.plot(rewards, errors, hyperparameters)
             
     
-    def __store_data(self, data, name: str):
+    def __store_data(self, data, name: str) -> None:
+        """
+        Serializes and saves data to a file using pickle.
+
+        Args:
+            data: The data object to be stored.
+            name (str): The filename to store the data under, relative to `self.out_path`.
+        """
         with open(os.path.join(self.out_path, name), "wb") as f:
             pickle.dump(data, f)
