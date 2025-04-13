@@ -209,26 +209,21 @@ def benchmark_mdp2lmdp_embedding(
         behaviour="stochastic", #TODO: change when embedding for deterministic MDP is implemented
     )
     
-    minigrid_mdp.compute_value_function()
-    mdp_v = minigrid_mdp.V
     
     cliff_states = [state for state in range(minigrid_mdp.num_states) if minigrid_mdp.minigrid_env.custom_grid.is_cliff(minigrid_mdp.minigrid_env.custom_grid.state_index_mapper[state])]
     
     embedded_lmdp = minigrid_mdp.to_LMDP()
-    embedded_lmdp.compute_value_function()
-    lmdp_v = embedded_lmdp.get_value_function()
-    error_all = np.mean(np.square(lmdp_v - mdp_v))
     
     stats_lmdp: ModelBasedAlgsStats = minigrid_mdp.stats
     stats_mdp: ModelBasedAlgsStats = embedded_lmdp.stats
-    print("LMDP stats")
-    stats_lmdp.print_statistics()
-    
-    print("MDP stats")
-    stats_mdp.print_statistics()
     
     if not visual:
         return stats_mdp, stats_lmdp
+    
+    # minigrid_mdp.compute_value_function()
+    mdp_v = minigrid_mdp.V
+    lmdp_v = embedded_lmdp.V
+    error_all = np.mean(np.square(lmdp_v - mdp_v))
     
     fig1 = plt.figure(figsize=(10, 5))
     plt.rcParams.update({

@@ -310,7 +310,6 @@ class MDP(ABC):
                 B_dagger = np.linalg.pinv(B)
                 c = B_dagger @ y
                 res = np.linalg.lstsq(B, y)
-                print(res[1])
                 
                 
                 R = np.log(np.sum(np.exp(c)))
@@ -319,11 +318,16 @@ class MDP(ABC):
                 lmdp.P[state, ~zero_cols] = np.exp(x)
                 
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
-        z, _ = lmdp.power_iteration()
-        V_lmdp = lmdp.get_value_function(z)
-        V_mdp, _ = self.value_iteration()
+        z, lmdp.stats = lmdp.power_iteration()
+        lmdp.V = lmdp.get_value_function(z)
+        V_mdp, stats = self.value_iteration()
         
-        print("EMBEDDING ERROR MDP to LMDP:", np.mean(np.square(V_lmdp - V_mdp)))
+        if not hasattr(self, "stats"):
+            self.stats = stats
+        if not hasattr(self, "V"):
+            self.V = V_mdp
+        
+        print("EMBEDDING ERROR MDP to LMDP:", np.mean(np.square(lmdp.V - V_mdp)))
         return lmdp
     
     

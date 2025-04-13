@@ -205,7 +205,7 @@ class GridWorldEnv:
                                 # We need to get the action that leads to the next state
                                 action = model.transition_action(state_idx, next_state)
                         else:
-                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx])
+                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64))
                             if next_state != np.argmax(policy[state_idx]):
                                 print(f"MISTAKE {num_mistakes}")
                                 num_mistakes += 1
@@ -368,9 +368,9 @@ class GridWorldMDP(MDP):
         for state in range(self.num_non_terminal_states):
             state_repr = self.gridworld_env.custom_grid.states[state]
             if self.gridworld_env.custom_grid.is_cliff(state_repr):
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=np.float64)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=np.float128)
             else:
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float64)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float128)
     
     def remove_unreachable_states(self) -> None:
         """
@@ -567,10 +567,10 @@ class GridWorldLMDP(LMDP):
         Returns:
             None
         """
-        self.R[:] = np.float64(-5)
+        self.R[:] = np.float128(-5)
         cliff_states = [i for i in range(self.num_states) if self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[i])]
-        self.R[cliff_states] = np.float64(-50)
-        self.R[self.num_non_terminal_states:] = np.float64(0)
+        self.R[cliff_states] = np.float128(-50)
+        self.R[self.num_non_terminal_states:] = np.float128(0)
     
     
     def transition_action(self, state_idx, next_state_idx) -> int:
@@ -728,11 +728,11 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             
         for i, j in zip(indices[0], indices[1]):
             if self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[j]) or self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[i]):
-                self.R[i, j] = np.float64(-50)
+                self.R[i, j] = np.float128(-50)
             elif self.gridworld_env.custom_grid.is_terminal(self.gridworld_env.custom_grid.state_index_mapper[j]):
-                self.R[i, j] = np.float64(0)
+                self.R[i, j] = np.float128(0)
             else:
-                self.R[i, j] = np.float64(-5)
+                self.R[i, j] = np.float128(-5)
         
         if self.sparse_optimization:
             print("Converting R into sparse matrix...")

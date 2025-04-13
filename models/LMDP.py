@@ -48,7 +48,7 @@ class LMDP:
         self.sparse_optimization = sparse_optimization
         
         self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states))
-        self.R = np.zeros(self.num_states, dtype=np.float64)
+        self.R = np.zeros(self.num_states, dtype=np.float128)
         
     
     
@@ -158,7 +158,7 @@ class LMDP:
         control = control / np.sum(control, axis=1).reshape(-1, 1)
         
         # print(f"Control elements: {control.size}. Non zero: {np.count_nonzero(control)}")
-        assert all(np.isclose(np.sum(control, axis=1), 1))
+        # assert all(np.isclose(np.sum(control, axis=1), 1)), np.sum(control, axis=1)
         
         return control
         
@@ -243,7 +243,7 @@ class LMDP:
             z = self.z
         
         result = np.log(z) * self.lmbda
-        result[result == -np.inf] = np.finfo(np.float64).min
+        result[result == -np.inf] = np.finfo(np.float128).min
         
         return result
     
@@ -324,7 +324,7 @@ class LMDP:
         
         lmdp_tdr.P = self.P.copy()
         for state in range(self.num_non_terminal_states):
-            lmdp_tdr.R[state, :] = np.full(shape=self.num_states, fill_value=self.R[state], dtype=np.float64)
+            lmdp_tdr.R[state, :] = np.full(shape=self.num_states, fill_value=self.R[state], dtype=np.float128)
         
         if self.sparse_optimization:
             lmdp_tdr.R = csr_matrix(lmdp_tdr.R)

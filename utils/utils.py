@@ -330,7 +330,7 @@ def uniform_assumption_plot(save_fig: bool = True):
 
 
 def generate_vi_pi_table(save_path: str = "assets/vi_pi_table.txt"):
-    grid_sizes = [2, 5, 10, 20, 50, 60, 100, 150, 200, 250]
+    grid_sizes = [2, 5, 10, 20, 50, 60, 70, 80, 90, 100]
     table_lines = []
     
     table_lines.append("| Num States | VI Iterations | PI Iterations | VI Time (s) | PI Time (s) |")
