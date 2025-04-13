@@ -19,9 +19,8 @@ def benchmark_value_iteration(savefig: bool = True):
     max_size = 20
     for size in range(min_size, max_size):
         gridworld_mdp = GridWorldMDP(
-            grid_size=size,
-            # map=Maps.CLIFF,
-            deterministic=True
+            map=Map(grid_size=size),
+            behaviour="deterministic"
         )
         print(f"[{size} / {max_size}]. Efficient...")
         _, stats_efficient = gridworld_mdp.value_iteration()
@@ -60,15 +59,8 @@ def benchmark_parallel_p(savefig: bool = True):
         tmp_results = []
         for grid_size in np.arange(min_grid, max_grid, 1):
             minigrid_lmdp = MinigridLMDP(
-                grid_size=grid_size,
-                allowed_actions=[
-                    MinigridActions.ROTATE_LEFT,
-                    MinigridActions.ROTATE_RIGHT,
-                    MinigridActions.FORWARD,
-                    MinigridActions.PICKUP,
-                    MinigridActions.DROP,
-                    MinigridActions.TOGGLE,
-                ],
+                map=Map(grid_size=grid_size),
+                allowed_actions=MinigridActions.get_actions(),
                 benchmark_p=True,
                 threads=jobs,
                 sparse_optimization=False
@@ -106,33 +98,20 @@ def benchmark_parallel_p(savefig: bool = True):
         plt.show()
         
         
-def benchmark_lmdp2mdp_embedding(savefig: bool = True, grid_size: int = None, map: list[str] = None, objects: list[Object] = None, name: str = None):
+def benchmark_lmdp2mdp_embedding(
+    map: Map,
+    savefig: bool = True,
+    ):
     
     custom_palette = CustomPalette()
     lmdp_color = custom_palette[3]
     mdp_color = custom_palette[4]
     
-    save_name = name
-    if not grid_size:
-        assert map and name, "Must provide a map and its name if no grid size is specified"
-    elif not map:
-        name = f"Simple grid ${grid_size}\\times{grid_size}$"
-        save_name = f"simple_grid_{grid_size}"
-    
-    
+    save_name = map.name    
     
     minigrid_lmdp = MinigridLMDP(
-        grid_size=grid_size,
         map=map,
-        allowed_actions=[
-            MinigridActions.ROTATE_LEFT,
-            MinigridActions.ROTATE_RIGHT,
-            MinigridActions.FORWARD,
-            MinigridActions.PICKUP,
-            MinigridActions.DROP,
-            MinigridActions.TOGGLE,
-        ],
-        objects=objects, 
+        allowed_actions=MinigridActions.get_actions(),
         sparse_optimization=True,
         threads=6
     )
@@ -155,7 +134,7 @@ def benchmark_lmdp2mdp_embedding(savefig: bool = True, grid_size: int = None, ma
     plt.scatter(states_to_goal, lmdp_v[states_to_goal], label="States that lead to the goal faster", color=custom_palette[0], s=8, marker="x", zorder=3)
     plt.plot([i for i in range(len(lmdp_v))], lmdp_v, label="LMDP", color=lmdp_color, linewidth=1)
     plt.plot([i for i in range(len(mdp_v))], mdp_v, label="MDP", color=mdp_color, linewidth=1)
-    plt.suptitle(f"LMDP and its embedded MDP comparison. {name}", fontsize=14, fontweight="bold")
+    plt.suptitle(f"LMDP and its embedded MDP comparison. {save_name}", fontsize=14, fontweight="bold")
     plt.title(f"MSE: {error_all:,.3e}\nMSE only with States that lead to the goal faster: {error_some:,.3e}", fontsize=10)
     plt.xlabel("State")
     plt.grid()
@@ -172,7 +151,7 @@ def benchmark_lmdp2mdp_embedding(savefig: bool = True, grid_size: int = None, ma
     stats_mdp.print_statistics()
     
     fig2 = plt.figure(figsize=(10, 5))
-    plt.suptitle(f"LMDP and its embedded MDP comparison. {name}. {minigrid_lmdp.num_states} states", fontsize=14, fontweight="bold")
+    plt.suptitle(f"LMDP and its embedded MDP comparison. {save_name}. {minigrid_lmdp.num_states} states", fontsize=14, fontweight="bold")
     plt.title(f"Value Iteration and Power Iteration convergence", fontsize=10)
     plt.plot([i for i in range(len(stats_lmdp.deltas))], stats_lmdp.deltas, color=lmdp_color, label=rf"Power Iteration: ${stats_lmdp.time:2f}$ sec")
     plt.plot([i for i in range(len(stats_mdp.deltas))], stats_mdp.deltas, color=mdp_color, label=rf"Value Iteration: ${stats_mdp.time:2f}$ sec")

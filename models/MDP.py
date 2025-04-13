@@ -193,7 +193,7 @@ class MDP(ABC):
 
         elapsed_time = time.time() - start_time
         
-        return V, ModelBasedAlgsStats(elapsed_time, rewards, iterations, deltas, self.num_states)
+        return V, ModelBasedAlgsStats(elapsed_time, rewards, iterations, deltas, self.num_states, descriptor="VI")
     
     
     def value_iteration(self, epsilon=1e-10, max_iterations=100000) -> tuple[np.ndarray, ModelBasedAlgsStats]:
