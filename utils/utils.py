@@ -8,6 +8,7 @@ from models.LMDP import LMDP
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP, GridWorldLMDP_TDR
 from utils.maps import Maps, Map
 import os
+from .benchmarks import benchmark_mdp2lmdp_embedding
 import seaborn as sns
 import scipy.stats as stats
 from scipy.sparse import csr_matrix
@@ -326,3 +327,23 @@ def uniform_assumption_plot(save_fig: bool = True):
         plt.savefig("assets/impact_transition_probability.png", dpi=300, bbox_inches="tight")
     else:
         plt.show()
+
+
+def generate_vi_pi_table(save_path: str = "assets/vi_pi_table.txt"):
+    grid_sizes = [2, 5, 10, 20, 50, 60, 100, 150, 200, 250]
+    table_lines = []
+    
+    table_lines.append("| Num States | VI Iterations | PI Iterations | VI Time (s) | PI Time (s) |")
+    table_lines.append("|------------|---------------|---------------|-------------|-------------|")
+
+    for i, size in enumerate(grid_sizes):
+        mdp_stats, lmdp_stats = benchmark_mdp2lmdp_embedding(map=Map(grid_size=size), savefig=False, visual=False)
+        
+        line = f"| {mdp_stats.num_states:<10} | {mdp_stats.iterations:<13} | {lmdp_stats.iterations:<13} | {mdp_stats.time:<11.4f} | {lmdp_stats.time:<11.4f} |"
+        table_lines.append(line)
+        
+    table_str = "\n".join(table_lines)
+    print(table_str)
+    
+    with open(save_path, "w") as f:
+        f.write(table_str)
