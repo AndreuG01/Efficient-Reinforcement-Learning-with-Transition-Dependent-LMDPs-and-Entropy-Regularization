@@ -562,7 +562,8 @@ class GridWorldLMDP(LMDP):
     
     def _generate_R(self) -> None:
         """
-        Generates the reward matrix (R) for the grid world, setting the default reward to -50 for all actions for cliff states and to -5 for normal states. Terminal states get a reward of 0.
+        Generates the reward matrix (R) for the grid world, setting the default reward to -50 for cliff states and to -5 for normal states.
+        Terminal states get a reward of 0.
 
         Returns:
             None

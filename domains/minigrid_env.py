@@ -33,23 +33,20 @@ class CustomMinigridEnv(MiniGridEnv):
         3 --> UP
 
     Attributes:
-    - custom_grid (CustomGrid): A grid representation with different cell types and properties.
-    - agent_start_pos (tuple[int, int]): The starting position of the agent in the grid.
-    - agent_start_dir (int): The starting direction (orientation) of the agent. Can be one of [0, 1, 2, 3] representing right, down, left, and up respectively.
-    - num_directions (int): The total number of possible directions the agent can face (default is 4: right, down, left, up).
-    - mission_space (MissionSpace): Defines the mission and possible tasks for the agent.
-    - max_steps (int): The maximum number of steps allowed for an episode.
+        custom_grid (CustomGrid): A grid representation with different cell types and properties.
+        agent_start_pos (tuple[int, int]): The starting position of the agent in the grid.
+        agent_start_dir (int): The starting direction (orientation) of the agent. Can be one of [0, 1, 2, 3] representing right, down, left, and up respectively.
+        title (str): The name of the grid, used for visualization purposes.
+        max_steps (int): The maximum number of steps allowed for the agent to take during an episode.
     """
     def __init__(
         self,
         map: Map,
         properties: dict[str, list] = None,
         agent_start_dir=0,
-        max_steps: int | None = None,
+        max_steps: int = 200,
         **kwargs,
     ):
-        
-        self.num_directions = 4
         self.custom_grid = CustomGrid("minigrid", map=map, properties=properties)
         self.agent_start_pos = self.custom_grid.start_pos
         self.agent_start_dir = agent_start_dir
@@ -58,16 +55,13 @@ class CustomMinigridEnv(MiniGridEnv):
 
         mission_space = MissionSpace(mission_func=self._gen_mission)
         self.max_steps = max_steps
-        if max_steps is None:
-            max_steps = 200
-            # max_steps = self.custom_grid.get_num_states() // 3
 
         super().__init__(
             mission_space=mission_space,
             # grid_size=size,
             highlight=False, # To avoid seeing the agent's view, which is not considered in our models.
             see_through_walls=False,
-            max_steps=max_steps,
+            max_steps=self.max_steps,
             width=self.custom_grid.size_y,
             height=self.custom_grid.size_x,
             **kwargs,
@@ -78,7 +72,16 @@ class CustomMinigridEnv(MiniGridEnv):
     def _gen_mission():
         return "grand mission"
 
+    
     def _gen_grid(self, width, height):
+        """
+        Overwrites the superclass' method to generate the custom MiniGrid's grid.
+        It initializes the interal structures used bythe gym library to visualize and manage the grid environment.
+        
+        Args:
+            width (int): The width of the grid.
+            height (int): The height of the grid.
+        """
         # Create an empty grid
         self.grid = Grid(width, height)
 
@@ -106,14 +109,9 @@ class CustomMinigridEnv(MiniGridEnv):
         for pos in self.custom_grid.positions[CellType.CLIFF]:
             self.put_obj(Lava(), pos[0], pos[1])
         
-        # # Place the agent
+        # Place the agent
         self.agent_pos = self.agent_start_pos
         self.agent_dir = self.agent_start_dir
-        # if self.agent_start_pos is not None:
-        #     self.agent_pos = self.agent_start_pos
-        #     self.agent_dir = self.agent_start_dir
-        # else:
-        #     self.place_agent()
 
         self.mission = self.title
     
@@ -125,16 +123,20 @@ class CustomMinigridEnv(MiniGridEnv):
         num_times: int=10,
         save_gif: bool = False,
         save_path: str = None,
-    ):
+    ) -> None:
         """
         Visualizes the behavior of the agent under some given policies by running multiple episodes, rendering each step, 
         and optionally saving the resulting frames as a GIF.
 
         Args:
-        - policies (list[tuple[int, np.ndarray]]): A list of policy arrays, one for each possible policy to visualize. Each policy contains the training epoch from which it was derived.
-        - num_times (int): The number of times to run each policy (default is 10).
-        - save_gif (bool): Whether to save the visualization as a GIF (default is False).
-        - save_path (str): The path to save the GIF if `save_gif` is True.
+            model (MinigridLMDP | MinigridMDP): The agent's model. It is used to determine the sequence of states that need to be visualized when following a policy.
+            policies (list[tuple[int, np.ndarray]]): A list of policy arrays, one for each possible policy to visualize. Each policy contains the training epoch from which it was derived.
+            num_times (int): The number of times to run each policy (default is 10).
+            save_gif (bool): Whether to save the visualization as a GIF (default is False).
+            save_path (str): The path to save the GIF if `save_gif` is True.
+        
+        Returns:
+            None
         """
         frames = []
         if not save_gif:
@@ -164,8 +166,6 @@ class CustomMinigridEnv(MiniGridEnv):
                                 num_mistakes += 1
                             # We need to get the action that leads to the next state
                             action = model.transition_action(state_idx, next_state)
-                            # print(f"Action chosen at move {actions}: {action}")
-                            # print(f"Next_state idx {next_state}, {np.where(model.P[state_idx, policy[state_idx], :] != 0)}, {model.P[state_idx, policy[state_idx], np.where(model.P[state_idx, policy[state_idx], :] != 0)[0]]}")
                             
                     else:
                         # next_state = np.argmax(policy[state_idx])
@@ -224,6 +224,22 @@ class CustomMinigridEnv(MiniGridEnv):
 
 
 class MinigridMDP(MDP):
+    """
+    A specialized Markov Decision Process (MDP) for MiniGrid environments.
+
+    This class constructs an MDP representation from a MiniGrid-based map. It supports deterministic, stochastic,
+    and mixed behaviour (stochastic for navigation and deterministic for manipulation) modes.
+
+    Attributes:
+        OFFSETS (dict[int, tuple[int, int]]): Maps direction indices to (dx, dy) movement.
+        stochastic_prob (float): Probability of following the intended action in a stochastic setting.
+        behaviour (Literal["deterministic", "stochastic", "mixed"]): Transition behaviour type. Defaults to "deterministic".
+        num_actions (int): Number of allowed actions.
+        allowed_actions (list[int]): List of action indices.
+        minigrid_env (CustomMinigridEnv): MiniGrid environment wrapper.
+        start_state (State): Initial state of the agent.
+        num_states (int): The total numbe rof states (excluding terminal states).
+    """
     
     OFFSETS = {
         0: (1, 0),   # RIGHT
@@ -241,6 +257,17 @@ class MinigridMDP(MDP):
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         mdp: MDP = None
     ):
+        """
+        Initializes a MinigridMDP instance.
+
+        Args:
+            map (Map): The map defining the MiniGrid layout.
+            allowed_actions (list[int], optional): List of allowed action indices. If None, defaults to [0, 1, 2].
+            properties (dict[str, list], optional): State properties for initialization. Defaults to {"orientation": [0, 1, 2, 3]}.
+            stochastic_prob (float): Probability of following the intended action in a stochastic setting. Defaults to 0.9.
+            behaviour (str): One of "deterministic", "stochastic", or "mixed". Defaults to "deterministic".
+            mdp (MDP, optional): If provided, initializes this MinigridMDP using an existing MDP's parameters. Defaults to None.
+        """
         
         self.stochastic_prob = stochastic_prob
         assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
@@ -316,7 +343,15 @@ class MinigridMDP(MDP):
             self.R = mdp.R
     
     # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
-    def remove_unreachable_states(self):
+    def remove_unreachable_states(self) -> None:
+        """
+        Removes states from the MDP that are not reachable from the start state.
+        
+        This function uses a breadth-first search (BFS) approach to find all reachable states and then removes the unreachable ones.
+
+        Returns:
+            None
+        """
         print("Going to remove unreachable states")
         
         reachable_states = set()
@@ -344,7 +379,14 @@ class MinigridMDP(MDP):
         self.minigrid_env.custom_grid.generate_state_index_mapper()
         
           
-    def _generate_R(self):
+    def _generate_R(self) -> None:
+        """
+        Generates the reward matrix (R) for the minigrid, setting the default reward to -50 for all actions for cliff states and to -5 for normal states.
+        Terminal states get a reward of 0.
+
+        Returns:
+            None
+        """
         for state in range(self.num_non_terminal_states):
             state_repr = self.minigrid_env.custom_grid.states[state]
             if self.minigrid_env.custom_grid.is_cliff(state_repr):
@@ -354,8 +396,18 @@ class MinigridMDP(MDP):
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float64)
 
 
+    # TODO: can be generalized as it is shared between different MiniGrid domains instances.
+    def transition_action(self, state_idx: int, next_state_idx: int) -> int:
+        """
+        Identifies the action that leads from one state index to another.
 
-    def transition_action(self, state_idx, next_state_idx):
+        Args:
+            state_idx (int): Index of the starting state.
+            next_state_idx (int): Index of the resulting state.
+
+        Returns:
+            int: The action that causes the transition, or -1 if none match.
+        """
         curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
         for action in self.allowed_actions:
             move_state, _, _ = self.minigrid_env.custom_grid.move(curr_state, action)
@@ -367,12 +419,17 @@ class MinigridMDP(MDP):
                 if move_state.y == next_state[0] and move_state.x == next_state[1]:
                     return action
                 
-        return 0
+        return -1
     
-    def states_to_goal(self, stochastic: bool = False, include_actions: bool = False) -> list[int]:
+    def states_to_goal(self, include_actions: bool = False) -> list[int] | tuple[list[int], list[int]]:
         """
-        Returns the indices of the states that lead to the solution based on the derived policy
-        include_actions: if true, the actions that lead to the transition of the states are returned as well
+        Returns the sequence of state indices that lead to the goal according to the current policy.
+
+        Args:
+            include_actions (bool): If True, also returns the actions taken to make the transitions.
+
+        Returns:
+            list[int] or tuple: A list of state indices, or a tuple (states, actions).
         """
         curr_state = self.minigrid_env.custom_grid.state_index_mapper[self.s0]
         curr_state_idx = self.s0
@@ -381,10 +438,10 @@ class MinigridMDP(MDP):
         
         
         while not self.minigrid_env.custom_grid.is_terminal(curr_state):
-            if stochastic:
+            if self.behaviour == "stochastic":
                 curr_state_idx = np.random.choice(self.minigrid_env.custom_grid.get_num_states(), p=self.P[curr_state_idx, self.policy[curr_state_idx], :])
                 curr_state = self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx]
-            else:
+            elif self.behaviour == "deterministic":
                 curr_action = self.policy[curr_state_idx]
                 curr_state, _, terminal = self.minigrid_env.custom_grid.move(self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx], curr_action)
                 if terminal:
@@ -392,8 +449,8 @@ class MinigridMDP(MDP):
                 else:
                     curr_state_idx = self.minigrid_env.custom_grid.states.index(curr_state)
             
+                actions.append(curr_action)
             states.append(curr_state_idx)
-            actions.append(curr_action)
         
         if include_actions:
             return (states, actions)
@@ -401,10 +458,21 @@ class MinigridMDP(MDP):
         return states
 
 
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
+        """
+        Visualizes the learnt policy on the MiniGrid environment.
+
+        Args:
+            policies (list[tuple[int, np.ndarray]], optional): Custom policies to visualize. Each tuple is (step, policy). Defaults to None.
+            num_times (int): Number of times to run the game. Defaults to 10.
+            save_gif (bool): If True, saves the game sequence as a GIF. Defaults to False.
+            save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+        
+        Returns:
+            None
+        """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
-        # if not hasattr(self, "V") or self.V is None and policies is None:
             print(f"Computing value function...")
             self.compute_value_function()
             self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
@@ -414,6 +482,19 @@ class MinigridMDP(MDP):
 
 
 class MinigridLMDP(LMDP):
+    """
+    A specialized linearly-solvable MDP for MiniGrid environments.
+
+    This class constructs an LMDP representation from a MiniGrid-based map.
+    
+    Attributes:
+        OFFSETS (dict[int, tuple[int, int]]): Maps direction indices to (dx, dy) movement.
+        num_actions (int): Number of allowed actions.
+        minigrid_env (CustomMinigridEnv): MiniGrid environment wrapper.
+        allowed_actions (list[int]): List of action indices.
+        start_state (State): Initial state of the agent.
+        num_states (int): The total number of states (excluding terminal states).
+    """
     
     OFFSETS = {
         0: (1, 0),   # RIGHT
@@ -432,6 +513,18 @@ class MinigridLMDP(LMDP):
         threads: int = 4,
         lmdp: LMDP = None
     ):
+        """
+        Initializes a MinigridLMDP instance.
+
+        Args:
+            map (Map): The map defining the MiniGrid layout.
+            allowed_actions (list[int], optional): List of allowed action indices. If None, defaults to [0, 1, 2].
+            properties (dict[str, list], optional): State properties for initialization. Defaults to {"orientation": [0, 1, 2, 3]}.
+            sparse_optimization (bool): Whether to use sparse matrix optimization. Defaults to False.
+            benchmark_p (bool): Whether to time the transition probability matrix generation. Defaults to False.
+            threads (int): Number of threads for the transition probability matrix computation. Defaults to 4.
+            lmdp (LMDP, optional): If provided, initializes this MinigridLMDP using an existing LMDP's parameters. Defaults to None.
+        """
         
         if allowed_actions:
             self.num_actions = len(allowed_actions)
@@ -491,7 +584,15 @@ class MinigridLMDP(LMDP):
     
     
     # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
-    def remove_unreachable_states(self):
+    def remove_unreachable_states(self) -> None:
+        """
+        Removes states from the MDP that are not reachable from the start state.
+        
+        This function uses a breadth-first search (BFS) approach to find all reachable states and then removes the unreachable ones.
+
+        Returns:
+            None
+        """
         print("Going to remove unreachable states")
         
         reachable_states = set()
@@ -521,14 +622,30 @@ class MinigridLMDP(LMDP):
 
                   
     def _generate_R(self):
+        """
+        Generates the reward matrix (R) for the minigrid, setting the default reward to -50 for cliff states and to -5 for normal states.
+        Terminal states get a reward of 0.
+
+        Returns:
+            None
+        """
         self.R[:] = np.float64(-5)
         cliff_states = [i for i in range(self.num_states) if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i])]
         self.R[cliff_states] = np.float64(-50)
         self.R[self.num_non_terminal_states:] = np.float64(0)
 
 
+    def transition_action(self, state_idx: int, next_state_idx: int) -> int:
+        """
+        Identifies the action that leads from one state index to another.
 
-    def transition_action(self, state_idx, next_state_idx):
+        Args:
+            state_idx (int): Index of the starting state.
+            next_state_idx (int): Index of the resulting state.
+
+        Returns:
+            int: The action that causes the transition, or -1 if none match.
+        """
         curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
         for action in self.allowed_actions:
             move_state, _, _ = self.minigrid_env.custom_grid.move(curr_state, action)
@@ -540,12 +657,18 @@ class MinigridLMDP(LMDP):
                 if move_state.y == next_state[0] and move_state.x == next_state[1]:
                     return action
                 
-        return 0
+        return -1
 
     
     def states_to_goal(self, stochastic: bool = False) -> list[int]:
         """
-        Returns the indices of the states that lead to the solution based on the derived policy
+        Computes the trajectory of state indices from start to goal based on the current policy.
+
+        Args:
+            stochastic (bool): Whether to sample actions probabilistically or use greedy strategy. Defaults to False.
+
+        Returns:
+            list[int]: Sequence of state indices leading to the goal.
         """
         curr_state = self.minigrid_env.custom_grid.state_index_mapper[self.s0]
         curr_state_idx = self.s0
@@ -564,7 +687,19 @@ class MinigridLMDP(LMDP):
         
     
     
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
+        """
+        Visualizes the learnt policy on the MiniGrid environment.
+
+        Args:
+            policies (list[tuple[int, np.ndarray]], optional): Custom policies to visualize. Each tuple is (step, policy). Defaults to None.
+            num_times (int): Number of times to run the game. Defaults to 10.
+            save_gif (bool): If True, saves the game sequence as a GIF. Defaults to False.
+            save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+        
+        Returns:
+            None
+        """
         assert not save_gif or save_path is not None, "Must specify save path"
         if not hasattr(self, "V") and policies is None:
             print(f"Computing value function...")
@@ -576,6 +711,19 @@ class MinigridLMDP(LMDP):
 
 
 class MinigridLMDP_TDR(LMDP_TDR):
+    """
+    A specialized LMDP with transition dependent-rewards for MiniGrid environments.
+
+    This class constructs an LMDP representation from a MiniGrid-based map.
+    
+    Attributes:
+        OFFSETS (dict[int, tuple[int, int]]): Maps direction indices to (dx, dy) movement.
+        num_actions (int): Number of allowed actions.
+        minigrid_env (CustomMinigridEnv): MiniGrid environment wrapper.
+        allowed_actions (list[int]): List of action indices.
+        start_state (State): Initial state of the agent.
+        num_states (int): The total number of states (excluding terminal states).
+    """
     
     OFFSETS = {
         0: (1, 0),   # RIGHT
@@ -593,6 +741,17 @@ class MinigridLMDP_TDR(LMDP_TDR):
         benchmark_p: bool = False,
         threads: int = 4
     ):
+        """
+        Initializes a MinigridLMDP_TDR instance.
+
+        Args:
+            map (Map): The map defining the MiniGrid layout.
+            allowed_actions (list[int], optional): List of allowed action indices. If None, defaults to [0, 1, 2].
+            properties (dict[str, list], optional): State properties for initialization. Defaults to {"orientation": [0, 1, 2, 3]}.
+            sparse_optimization (bool): Whether to use sparse matrix optimization. Defaults to False.
+            benchmark_p (bool): Whether to time the transition probability matrix generation. Defaults to False.
+            threads (int): Number of threads for the transition probability matrix computation. Defaults to 4.
+        """
         
         if allowed_actions:
             self.num_actions = len(allowed_actions)
@@ -635,7 +794,15 @@ class MinigridLMDP_TDR(LMDP_TDR):
     
     
     # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
-    def remove_unreachable_states(self):
+    def remove_unreachable_states(self) -> None:
+        """
+        Removes states from the MDP that are not reachable from the start state.
+        
+        This function uses a breadth-first search (BFS) approach to find all reachable states and then removes the unreachable ones.
+
+        Returns:
+            None
+        """
         print("Going to remove unreachable states")
         
         reachable_states = set()
@@ -663,6 +830,18 @@ class MinigridLMDP_TDR(LMDP_TDR):
         self.minigrid_env.custom_grid.generate_state_index_mapper() 
                   
     def _generate_R(self):
+        """
+        Generates the transition-based reward matrix (R) for the minigrid. 
+        Rewards are set as follows:
+        - -50 for transitions into or from cliff states.
+        - -5 for regular transitions.
+        - 0 for transitions into terminal states.
+
+        If sparse optimization is enabled, the reward matrix is converted to a sparse matrix for memory efficiency.
+
+        Returns:
+            None
+        """
         if self.sparse_optimization:
             indices = self.P.nonzero()
         else:
@@ -682,7 +861,17 @@ class MinigridLMDP_TDR(LMDP_TDR):
             print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
 
 
-    def transition_action(self, state_idx, next_state_idx):
+    def transition_action(self, state_idx: int, next_state_idx: int) -> int:
+        """
+        Identifies the action that leads from one state index to another.
+
+        Args:
+            state_idx (int): Index of the starting state.
+            next_state_idx (int): Index of the resulting state.
+
+        Returns:
+            int: The action that causes the transition, or -1 if none match.
+        """
         curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
         for action in self.allowed_actions:
             move_state, _, _ = self.minigrid_env.custom_grid.move(curr_state, action)
@@ -694,10 +883,22 @@ class MinigridLMDP_TDR(LMDP_TDR):
                 if move_state.y == next_state[0] and move_state.x == next_state[1]:
                     return action
                 
-        return 0
+        return -1
     
     
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None):
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
+        """
+        Visualizes the learnt policy on the MiniGrid environment.
+
+        Args:
+            policies (list[tuple[int, np.ndarray]], optional): Custom policies to visualize. Each tuple is (step, policy). Defaults to None.
+            num_times (int): Number of times to run the game. Defaults to 10.
+            save_gif (bool): If True, saves the game sequence as a GIF. Defaults to False.
+            save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+        
+        Returns:
+            None
+        """
         assert not save_gif or save_path is not None, "Must specify save path"
         if not hasattr(self, "V") and policies is None:
             print(f"Computing value function...")
