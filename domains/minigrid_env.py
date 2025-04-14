@@ -165,15 +165,15 @@ class CustomMinigridEnv(MiniGridEnv):
                                 print(f"MISTAKE {num_mistakes}")
                                 num_mistakes += 1
                             # We need to get the action that leads to the next state
-                            action = model.transition_action(state_idx, next_state)
+                            action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                             
                     else:
                         # next_state = np.argmax(policy[state_idx])
-                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx])
+                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64))
                         if next_state != np.argmax(policy[state_idx]):
                             print(f"MISTAKE {num_mistakes}")
                             num_mistakes += 1
-                        action = model.transition_action(state_idx, next_state)
+                        action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                     
                     next_state, _, terminal = self.custom_grid.move(state, action)
                     
@@ -285,7 +285,7 @@ class MinigridMDP(MDP):
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
-        self.remove_unreachable_states()
+        self.minigrid_env.custom_grid.remove_unreachable_states(self.allowed_actions)
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
@@ -341,42 +341,6 @@ class MinigridMDP(MDP):
             
             self.P = mdp.P
             self.R = mdp.R
-    
-    # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
-    def remove_unreachable_states(self) -> None:
-        """
-        Removes states from the MDP that are not reachable from the start state.
-        
-        This function uses a breadth-first search (BFS) approach to find all reachable states and then removes the unreachable ones.
-
-        Returns:
-            None
-        """
-        print("Going to remove unreachable states")
-        
-        reachable_states = set()
-        queue = [self.start_state]
-
-        for terminal_state in queue:
-            reachable_states.add(terminal_state)
-
-        while queue:
-            current_state = queue.pop(0)
-            for action in self.allowed_actions:
-                next_state, _, _ = self.minigrid_env.custom_grid.move(current_state, action)
-                if next_state not in reachable_states:
-                    reachable_states.add(next_state)
-                    queue.append(next_state)
-
-        states = [state for state in self.minigrid_env.custom_grid.states if state in reachable_states]
-        terminal_states = [state for state in self.minigrid_env.custom_grid.terminal_states if state in reachable_states]
-
-        removed_states = len(self.minigrid_env.custom_grid.states) - len(states)
-        print(f"Removing {removed_states} states")
-
-        self.minigrid_env.custom_grid.states = states
-        self.minigrid_env.custom_grid.terminal_states = terminal_states
-        self.minigrid_env.custom_grid.generate_state_index_mapper()
         
           
     def _generate_R(self) -> None:
@@ -395,31 +359,6 @@ class MinigridMDP(MDP):
             else:
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float64)
 
-
-    # TODO: can be generalized as it is shared between different MiniGrid domains instances.
-    def transition_action(self, state_idx: int, next_state_idx: int) -> int:
-        """
-        Identifies the action that leads from one state index to another.
-
-        Args:
-            state_idx (int): Index of the starting state.
-            next_state_idx (int): Index of the resulting state.
-
-        Returns:
-            int: The action that causes the transition, or -1 if none match.
-        """
-        curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
-        for action in self.allowed_actions:
-            move_state, _, _ = self.minigrid_env.custom_grid.move(curr_state, action)
-            next_state = self.minigrid_env.custom_grid.state_index_mapper[next_state_idx]
-            if type(next_state) == State:
-                if move_state == next_state:
-                    return action
-            else:
-                if move_state.y == next_state[0] and move_state.x == next_state[1]:
-                    return action
-                
-        return -1
     
     def states_to_goal(self, include_actions: bool = False) -> list[int] | tuple[list[int], list[int]]:
         """
@@ -538,7 +477,7 @@ class MinigridLMDP(LMDP):
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
-        self.remove_unreachable_states()
+        self.minigrid_env.custom_grid.remove_unreachable_states(self.allowed_actions)
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
@@ -581,44 +520,6 @@ class MinigridLMDP(LMDP):
             )
             self.P = lmdp.P
             self.R = lmdp.R
-    
-    
-    # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
-    def remove_unreachable_states(self) -> None:
-        """
-        Removes states from the MDP that are not reachable from the start state.
-        
-        This function uses a breadth-first search (BFS) approach to find all reachable states and then removes the unreachable ones.
-
-        Returns:
-            None
-        """
-        print("Going to remove unreachable states")
-        
-        reachable_states = set()
-        queue = [self.start_state]
-
-        for terminal_state in queue:
-            reachable_states.add(terminal_state)
-
-        while queue:
-            current_state = queue.pop(0)
-            for action in self.allowed_actions:
-                next_state, _, _ = self.minigrid_env.custom_grid.move(current_state, action)
-                if next_state not in reachable_states:
-                    reachable_states.add(next_state)
-                    queue.append(next_state)
-
-        states = [state for state in self.minigrid_env.custom_grid.states if state in reachable_states]
-        terminal_states = [state for state in self.minigrid_env.custom_grid.terminal_states if state in reachable_states]
-
-        removed_states = len(self.minigrid_env.custom_grid.states) - len(states)
-        print(f"Removing {removed_states} states")
-
-        self.minigrid_env.custom_grid.states = states
-        self.minigrid_env.custom_grid.terminal_states = terminal_states
-        self.minigrid_env.custom_grid.generate_state_index_mapper()
-
 
                   
     def _generate_R(self):
@@ -633,31 +534,6 @@ class MinigridLMDP(LMDP):
         cliff_states = [i for i in range(self.num_states) if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i])]
         self.R[cliff_states] = np.float64(-50)
         self.R[self.num_non_terminal_states:] = np.float64(0)
-
-
-    def transition_action(self, state_idx: int, next_state_idx: int) -> int:
-        """
-        Identifies the action that leads from one state index to another.
-
-        Args:
-            state_idx (int): Index of the starting state.
-            next_state_idx (int): Index of the resulting state.
-
-        Returns:
-            int: The action that causes the transition, or -1 if none match.
-        """
-        curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
-        for action in self.allowed_actions:
-            move_state, _, _ = self.minigrid_env.custom_grid.move(curr_state, action)
-            next_state = self.minigrid_env.custom_grid.state_index_mapper[next_state_idx]
-            if type(next_state) == State:
-                if move_state == next_state:
-                    return action
-            else:
-                if move_state.y == next_state[0] and move_state.x == next_state[1]:
-                    return action
-                
-        return -1
 
     
     def states_to_goal(self, stochastic: bool = False) -> list[int]:
@@ -763,7 +639,8 @@ class MinigridLMDP_TDR(LMDP_TDR):
         self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties)
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
-        self.remove_unreachable_states()
+        
+        self.minigrid_env.custom_grid.remove_unreachable_states(self.allowed_actions)
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
@@ -792,42 +669,6 @@ class MinigridLMDP_TDR(LMDP_TDR):
             self._generate_R()
         print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
     
-    
-    # TODO: generalize, as this is shared among all MDP, LMDP and LMDP_TDR
-    def remove_unreachable_states(self) -> None:
-        """
-        Removes states from the MDP that are not reachable from the start state.
-        
-        This function uses a breadth-first search (BFS) approach to find all reachable states and then removes the unreachable ones.
-
-        Returns:
-            None
-        """
-        print("Going to remove unreachable states")
-        
-        reachable_states = set()
-        queue = [self.start_state]
-
-        for terminal_state in queue:
-            reachable_states.add(terminal_state)
-
-        while queue:
-            current_state = queue.pop(0)
-            for action in self.allowed_actions:
-                next_state, _, _ = self.minigrid_env.custom_grid.move(current_state, action)
-                if next_state not in reachable_states:
-                    reachable_states.add(next_state)
-                    queue.append(next_state)
-
-        states = [state for state in self.minigrid_env.custom_grid.states if state in reachable_states]
-        terminal_states = [state for state in self.minigrid_env.custom_grid.terminal_states if state in reachable_states]
-
-        removed_states = len(self.minigrid_env.custom_grid.states) - len(states)
-        print(f"Removing {removed_states} states")
-
-        self.minigrid_env.custom_grid.states = states
-        self.minigrid_env.custom_grid.terminal_states = terminal_states
-        self.minigrid_env.custom_grid.generate_state_index_mapper() 
                   
     def _generate_R(self):
         """
@@ -859,31 +700,6 @@ class MinigridLMDP_TDR(LMDP_TDR):
             print(f"Memory usage before conversion: {getsizeof(self.R):,} bytes")
             self.R = csr_matrix(self.R)
             print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
-
-
-    def transition_action(self, state_idx: int, next_state_idx: int) -> int:
-        """
-        Identifies the action that leads from one state index to another.
-
-        Args:
-            state_idx (int): Index of the starting state.
-            next_state_idx (int): Index of the resulting state.
-
-        Returns:
-            int: The action that causes the transition, or -1 if none match.
-        """
-        curr_state = self.minigrid_env.custom_grid.state_index_mapper[state_idx]
-        for action in self.allowed_actions:
-            move_state, _, _ = self.minigrid_env.custom_grid.move(curr_state, action)
-            next_state = self.minigrid_env.custom_grid.state_index_mapper[next_state_idx]
-            if type(next_state) == State:
-                if move_state == next_state:
-                    return action
-            else:
-                if move_state.y == next_state[0] and move_state.x == next_state[1]:
-                    return action
-                
-        return -1
     
     
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:

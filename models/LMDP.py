@@ -176,11 +176,6 @@ class LMDP:
         return self.get_control(z)
         
     
-    def transition_action(self, state: int, next_state: list[int]) -> list[int]:
-        # LMDPs do not have actions. However, to be able to plot the policies, or interact with the environment, we need to convert the transitions into certain actions
-        # (as long as the problem is deterministic)
-        raise NotImplementedError("Implement in the subclass")
-    
     
     def power_iteration(self, epsilon=1e-10, max_iterations=100000) -> np.ndarray:
         """

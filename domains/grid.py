@@ -424,6 +424,70 @@ class CustomGrid:
             # Done actions have no effect yet
             return next_state, True, False
     
+    
+    def remove_unreachable_states(self, allowed_actions: list[int]) -> None:
+        """
+        Removes states that are unreachable from the start state.
+
+        This function uses a breadth-first search (BFS) approach to find all reachable states and then removes the unreachable ones.
+
+        Returns:
+            None
+        """
+        print("Going to remove unreachable states")
+        start_state = [state for state in self.states if state.x == self.start_pos[1] and state.y == self.start_pos[0]][0]
+        
+        reachable_states = set()
+        queue = [start_state]
+
+        for terminal_state in queue:
+            reachable_states.add(terminal_state)
+
+        while queue:
+            current_state = queue.pop(0)
+            for action in allowed_actions:
+                next_state, _, _ = self.move(current_state, action)
+                if next_state not in reachable_states:
+                    reachable_states.add(next_state)
+                    queue.append(next_state)
+
+        
+        states = [state for state in self.states if state in reachable_states]
+        terminal_states = [state for state in self.terminal_states if state in reachable_states]
+
+        removed_states = len(self.states) - len(states)
+        print(f"Removing {removed_states} states")
+
+        self.states = states
+        self.terminal_states = terminal_states
+        self.generate_state_index_mapper()
+    
+    
+    def transition_action(self, state_idx: int, next_state_idx: int, allowed_actions: list[int], ) -> int:
+        """
+        Identifies the action that leads from one state index to another.
+
+        Args:
+            state_idx (int): Index of the starting state.
+            next_state_idx (int): Index of the resulting state.
+
+        Returns:
+            int: The action that causes the transition, or -1 if none match.
+        """
+        curr_state = self.state_index_mapper[state_idx]
+        for action in allowed_actions:
+            move_state, _, _ = self.move(curr_state, action)
+            next_state = self.state_index_mapper[next_state_idx]
+            if type(next_state) == State:
+                if move_state == next_state:
+                    return action
+            else:
+                if move_state.y == next_state[0] and move_state.x == next_state[1]:
+                    return action
+                
+        return -1
+        
+    
     def get_num_states(self) -> int:
         """
         Returns the total number of navigable states (normal cells + goal cells).

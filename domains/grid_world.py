@@ -203,13 +203,13 @@ class GridWorldEnv:
                                     print(f"MISTAKE {num_mistakes}")
                                     num_mistakes += 1
                                 # We need to get the action that leads to the next state
-                                action = model.transition_action(state_idx, next_state)
+                                action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                         else:
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64))
                             if next_state != np.argmax(policy[state_idx]):
                                 print(f"MISTAKE {num_mistakes}")
                                 num_mistakes += 1
-                            action = model.transition_action(state_idx, next_state)
+                            action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                     
                     next_state, _, _ = self.custom_grid.move(state, action)
                     
@@ -317,7 +317,7 @@ class GridWorldMDP(MDP):
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
-        self.remove_unreachable_states()
+        self.gridworld_env.custom_grid.remove_unreachable_states(self.allowed_actions)
         
         self.num_states = self.gridworld_env.custom_grid.get_num_states()
 
@@ -372,66 +372,7 @@ class GridWorldMDP(MDP):
             else:
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float128)
     
-    def remove_unreachable_states(self) -> None:
-        """
-        Removes states that are unreachable from the start state.
-
-        This function uses a breadth-first search (BFS) approach to find all reachable states and then removes the unreachable ones.
-
-        Returns:
-            None
-        """
-        print("Going to remove unreachable states")
-        
-        reachable_states = set()
-        queue = [self.start_state]
-
-        for terminal_state in queue:
-            reachable_states.add(terminal_state)
-
-        while queue:
-            current_state = queue.pop(0)
-            for action in self.allowed_actions:
-                next_state, _, _ = self.gridworld_env.custom_grid.move(current_state, action)
-                if next_state not in reachable_states:
-                    reachable_states.add(next_state)
-                    queue.append(next_state)
-
-        
-        states = [state for state in self.gridworld_env.custom_grid.states if state in reachable_states]
-        terminal_states = [state for state in self.gridworld_env.custom_grid.terminal_states if state in reachable_states]
-
-        removed_states = len(self.gridworld_env.custom_grid.states) - len(states)
-        print(f"Removing {removed_states} states")
-
-        self.gridworld_env.custom_grid.states = states
-        self.gridworld_env.custom_grid.terminal_states = terminal_states
-        self.gridworld_env.custom_grid.generate_state_index_mapper()
     
-    
-    def transition_action(self, state_idx, next_state_idx) -> int:
-        """
-        Determines the action that transitions the agent from the current state to the next state.
-
-        Args:
-            state_idx (int): The index of the current state.
-            next_state_idx (int): The index of the next state.
-
-        Returns:
-            int: The action that leads to the next state. If there is no valid action for the transition, -1 is returned.
-        """
-        curr_state = self.gridworld_env.custom_grid.state_index_mapper[state_idx]
-        for action in self.allowed_actions:
-            move_state, _, _ = self.gridworld_env.custom_grid.move(curr_state, action)
-            next_state = self.gridworld_env.custom_grid.state_index_mapper[next_state_idx]
-            if type(next_state) == State:
-                if move_state == next_state:
-                    return action
-            else:
-                if move_state.y == next_state[0] and move_state.x == next_state[1]:
-                    return action
-                
-        return -1
 
 
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
@@ -572,31 +513,6 @@ class GridWorldLMDP(LMDP):
         cliff_states = [i for i in range(self.num_states) if self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[i])]
         self.R[cliff_states] = np.float128(-50)
         self.R[self.num_non_terminal_states:] = np.float128(0)
-    
-    
-    def transition_action(self, state_idx, next_state_idx) -> int:
-        """
-        Determines the action that transitions the agent from the current state to the next state.
-
-        Args:
-            state_idx (int): The index of the current state.
-            next_state_idx (int): The index of the next state.
-
-        Returns:
-            int: The action that leads to the next state. If there is no valid action for the transition, -1 is returned.
-        """
-        curr_state = self.gridworld_env.custom_grid.state_index_mapper[state_idx]
-        for action in self.allowed_actions:
-            move_state, _, _ = self.gridworld_env.custom_grid.move(curr_state, action)
-            next_state = self.gridworld_env.custom_grid.state_index_mapper[next_state_idx]
-            if type(next_state) == State:
-                if move_state == next_state:
-                    return action
-            else:
-                if move_state.y == next_state[0] and move_state.x == next_state[1]:
-                    return action
-                
-        return -1
     
     
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:

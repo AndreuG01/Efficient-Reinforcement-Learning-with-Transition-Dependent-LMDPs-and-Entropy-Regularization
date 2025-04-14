@@ -110,22 +110,12 @@ class LMDP_TDR:
         
         return control
         
-        
-    
     
     def get_optimal_policy(self, z: np.ndarray, o: np.ndarray | csr_matrix, multiple_states: bool = False) -> np.ndarray:
         probs = self.get_control(z, o)
         if self.sparse_optimization:
             probs = probs.toarray()
         return probs
-        
-        
-        
-    
-    def transition_action(self, state: int, next_state: list[int]) -> list[int]:
-        # LMDPs do not have actions. However, to be able to plot the policies, or interact with the environment, we need to convert the transitions into certain actions
-        # (as long as the problem is deterministic)
-        raise NotImplementedError("Implement in the subclass")
 
     
     def power_iteration(self, epsilon=1e-10) -> np.ndarray:
