@@ -8,7 +8,7 @@ from models.LMDP import LMDP
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP, GridWorldLMDP_TDR
 from utils.maps import Maps, Map
 import os
-from .benchmarks import benchmark_mdp2lmdp_embedding
+from .benchmarks import benchmark_mdp2lmdp_embedding, benchmark_parallel_p
 import seaborn as sns
 import scipy.stats as stats
 from scipy.sparse import csr_matrix
@@ -347,3 +347,38 @@ def generate_vi_pi_table(save_path: str = "assets/vi_pi_table.txt"):
     
     with open(save_path, "w") as f:
         f.write(table_str)
+        
+
+def generate_parallel_p_table(save_path: str = "assets/parallel_p_table.txt"):
+    table_lines = []
+    
+    for behaviour in ["deterministic", "stochastic"]:
+        first_line = "|--------------------------------------|"
+        table_lines.append(first_line)
+        title = f"| {behaviour} MDP"
+        title += (" " * (len(first_line) - len(title) - 1)) + "|"
+        # title += "|"e
+        table_lines.append(title)
+        table_lines.append("|--------------------------------------|")
+        table_lines.append("| Num States | Cores | Time (s)        |")
+        table_lines.append("|------------|-------|-----------------|")
+        
+        res = benchmark_parallel_p(
+            behaviour=behaviour,
+            savefig=True,
+            visual=True
+        )
+        
+        for core in sorted(res.keys()):
+            for state_count, time in res[core]:
+                table_lines.append(f"| {state_count:<10} | {core:<5} | {time:<15.4f} |")
+        
+        table_lines.append(first_line)
+
+    table_str = "\n".join(table_lines)
+    print(table_str)
+    
+    with open(save_path, "w") as f:
+        f.write(table_str)
+
+    

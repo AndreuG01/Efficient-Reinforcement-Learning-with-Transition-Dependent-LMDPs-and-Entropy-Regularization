@@ -10,6 +10,9 @@ from joblib import cpu_count
 import numpy as np
 from custom_palette import CustomPalette
 from utils.stats import ModelBasedAlgsStats
+from typing import Literal
+from collections import defaultdict
+from tqdm import tqdm
 
 
 def benchmark_value_iteration(savefig: bool = True):
@@ -48,28 +51,45 @@ def benchmark_value_iteration(savefig: bool = True):
         plt.show()
 
 
-
-def benchmark_parallel_p(savefig: bool = True):
-    min_grid = 10
-    max_grid = 65
-    limit_core = 21
-    results = []
-    num_states = []
-    for jobs in range(1, min(cpu_count(), limit_core)):
-        tmp_results = []
-        for grid_size in np.arange(min_grid, max_grid, 1):
-            minigrid_lmdp = MinigridLMDP(
-                map=Map(grid_size=grid_size),
-                allowed_actions=MinigridActions.get_actions(),
-                benchmark_p=True,
-                threads=jobs,
-                sparse_optimization=False
-            )
-            num_states.append(minigrid_lmdp.num_states)
-            tmp_results.append(minigrid_lmdp.p_time)
-            print(f"Grid size: {grid_size}. Jobs: {jobs}. Total time: {minigrid_lmdp.p_time:2f} sec")
+def benchmark_parallel_p(
+    savefig: bool = True,
+    visual: bool = False,
+    min_grid: int = 10,
+    max_grid: int = 65,
+    limit_core: int = 16,
+    framewok: Literal["MDP", "LMDP"] = "MDP",
+    behaviour: Literal["stochastic", "deterministic"] = "deterministic"
+):
+    
+    assert framewok in ["MDP", "LMDP"], "Invalid framework"
+    assert behaviour in ["stochastic", "deterministic"], "Invalid behaviour"
+    
+    results = defaultdict(list)
+    
+    for jobs in tqdm(range(1, min(cpu_count(), limit_core + 1)), desc="Benchmarking parallel P", total=min(cpu_count(), limit_core)):
+        for grid_size in np.arange(min_grid, max_grid + 1, 5):
+            if framewok == "MDP":
+                model = MinigridMDP(
+                    map=Map(grid_size=grid_size),
+                    allowed_actions=MinigridActions.get_actions(),
+                    benchmark_p=True,
+                    threads=jobs,
+                    behaviour=behaviour
+                )
+            elif framewok == "LMDP":
+                model = MinigridLMDP(
+                    map=Map(grid_size=grid_size),
+                    allowed_actions=MinigridActions.get_actions(),
+                    benchmark_p=True,
+                    threads=jobs,
+                    sparse_optimization=False
+                )
+            
+            results[jobs].append([model.num_states, model.p_time])
         
-        results.append(tmp_results)
+    
+    if not visual:
+        return results
     
     palette = CustomPalette()
     
@@ -78,24 +98,24 @@ def benchmark_parallel_p(savefig: bool = True):
         "text.usetex": True,
     })
     
-    for i, job_res in enumerate(results):
-        plt.plot([i for i in range(len(job_res))], job_res, label=f"{i + 1} cores", color=palette[i])
+    for i, core in enumerate(results.keys()):
+        times = [elem[1] for elem in results[core]]
+        states = [elem[0] for elem in results[core]]
+        plt.plot(states, times, label=f"{core} cores", color=palette[i])
+        
     
     plt.title("Parallelization impact on the generation time of transition matrix $\mathcal{P}$.", fontsize=14, fontweight="bold")
     plt.legend(loc="upper left")
     plt.grid()
     plt.xlabel("Number of states")
-    xticks_positions = plt.gca().get_xticks()
-    tick_labels = [num_states[int(i)] if i >= 0 else "" for i in xticks_positions]
-    tick_labels[0] = ""
-    tick_labels[-1] = ""
-    plt.xticks(xticks_positions, tick_labels)
     plt.ylabel("Time ($s$)")
     
     if savefig:
-        plt.savefig("assets/benchmark/value_iteration.png", dpi=300)
+        plt.savefig(f"assets/benchmark/parallel_p_{framewok}_{behaviour}.png", dpi=300)
     else:
         plt.show()
+    
+    return results
         
         
 def benchmark_lmdp2mdp_embedding(

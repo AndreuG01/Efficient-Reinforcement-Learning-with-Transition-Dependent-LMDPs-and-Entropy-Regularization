@@ -12,7 +12,7 @@ from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, be
 from minigrid.manual_control import ManualControl
 from custom_palette import CustomPalette
 import pickle as pkl
-from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table
+from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table, generate_parallel_p_table
 from sklearn.metrics import r2_score
 from scipy.stats import spearmanr
 import matplotlib.gridspec as gridspec
@@ -22,12 +22,7 @@ import pickle
 import seaborn as sns
 
 if __name__ == "__main__":
-    
-    mdp = MinigridMDP(map=Maps.SIMPLE_DOOR, allowed_actions=MinigridActions.get_actions(), benchmark_p=True, threads=4)
-    
-    mdp.visualize_policy(num_times=3)
-    
-    
+    generate_parallel_p_table()
     exit()
     
     # mdp = MinigridMDP(
