@@ -4,6 +4,8 @@ from copy import deepcopy
 import copy
 from typing import Literal
 from utils.maps import Map
+import numpy as np
+from tqdm import tqdm
 
 class MinigridActions:
     """
@@ -104,7 +106,8 @@ class CustomGrid:
         self,
         type: Literal["gridworld", "minigrid"],
         map: Map,
-        properties: dict[str, list] = {}
+        properties: dict[str, list] = {},
+        allowed_actions: list[int] = None
     ):
         """
         Initializes the grid with either a predefined map or generates a simple grid.
@@ -119,6 +122,7 @@ class CustomGrid:
         
         self.positions = {k: [] for k in self.POSITIONS_CHAR.values()}
         self.objects = self.map.objects
+        self.allowed_actions = allowed_actions
         
         for id, object in enumerate(self.objects):
             object.id = id
@@ -134,8 +138,8 @@ class CustomGrid:
         
         self.states, self.terminal_states = self._generate_states()
         
-        self.generate_state_index_mapper()
-    
+        self.remove_unreachable_states()
+        
     
     def _generate_states(self):
         states = []
@@ -425,7 +429,7 @@ class CustomGrid:
             return next_state, True, False
     
     
-    def remove_unreachable_states(self, allowed_actions: list[int]) -> None:
+    def remove_unreachable_states(self) -> None:
         """
         Removes states that are unreachable from the start state.
 
@@ -445,7 +449,7 @@ class CustomGrid:
 
         while queue:
             current_state = queue.pop(0)
-            for action in allowed_actions:
+            for action in self.allowed_actions:
                 next_state, _, _ = self.move(current_state, action)
                 if next_state not in reachable_states:
                     reachable_states.add(next_state)

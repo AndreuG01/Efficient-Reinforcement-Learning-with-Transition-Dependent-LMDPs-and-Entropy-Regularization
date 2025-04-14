@@ -22,7 +22,12 @@ import pickle
 import seaborn as sns
 
 if __name__ == "__main__":
-    generate_vi_pi_table()
+    
+    mdp = MinigridMDP(map=Maps.SIMPLE_DOOR, allowed_actions=MinigridActions.get_actions(), benchmark_p=True, threads=4)
+    
+    mdp.visualize_policy(num_times=3)
+    
+    
     exit()
     
     # mdp = MinigridMDP(

@@ -10,6 +10,7 @@ from scipy.sparse import csr_matrix
 import models
 from copy import deepcopy
 from typing import Literal
+from joblib import Parallel, delayed, cpu_count
 
 class MDP(ABC):
     """
@@ -64,8 +65,8 @@ class MDP(ABC):
         self.num_states = num_states
         self.num_terminal_states = num_terminal_states
         self.num_non_terminal_states = self.num_states - self.num_terminal_states
-        self.__alowed_actions = allowed_actions
-        self.num_actions = len(self.__alowed_actions)
+        self.__allowed_actions = allowed_actions
+        self.num_actions = len(self.__allowed_actions)
         self.s0 = s0
         self.gamma = gamma
         self.deterministic = deterministic
@@ -74,11 +75,9 @@ class MDP(ABC):
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
         self.R = np.zeros((self.num_states, self.num_actions), dtype=np.float64)
-        
     
-    
-    
-    def generate_P(self, grid: CustomGrid, stochastic_prob: float = 0.9):
+
+    def generate_P(self, grid: CustomGrid, stochastic_prob: float = 0.9, num_threads: int = 4, benchmark: bool = False) -> float:
         """
         Generates the transition probability matrix (P) for the MDP, based on the dynamics of the environment
         (deterministic or stochastic).
@@ -91,14 +90,15 @@ class MDP(ABC):
         """
         pos = grid.states
         terminal_pos = grid.terminal_states
-        print(f"Allowed actions {self.__alowed_actions}")
-        for state in tqdm(range(self.num_non_terminal_states), desc="Generating transition matrix P", total=self.num_non_terminal_states):
-            for action in self.__alowed_actions:
-                # print(state, action)
+        print(f"Allowed actions {self.__allowed_actions}")
+        
+        def process_state(state: int) -> list[float]:
+            row_updates = []
+            for action in self.__allowed_actions:
                 if grid.is_cliff(grid.state_index_mapper[state]):
                     # Cliff states always have the full probability to transition to the initial state, regardless of whether the model is stochastic, or deterministic
                     next_state = self.s0
-                    self.P[state, action, next_state] = 1
+                    row_updates.append((state, next_state, action, 1))
                     continue
                 else:
                     next_state, _, terminal = grid.move(pos[state], action)
@@ -107,25 +107,42 @@ class MDP(ABC):
                         next_state = len(pos) + terminal_pos.index(next_state)
                     else:
                         next_state = pos.index(next_state)
-
+                
                 if self.deterministic:
-                    self.P[state, action, next_state] = 1
+                    row_updates.append((state, next_state, action, 1))
                 else:
-                    # Stochastic policy. With stochastic_prob take the correct action. With 1 - stochastic_prob, uniformly take every other action
-                    self.P[state, action, next_state] = stochastic_prob
-                    other_actions = [a for a in self.__alowed_actions if a != action]
+                    row_updates.append((state, next_state, action, stochastic_prob))
+                    other_actions = [a for a in self.__allowed_actions if a != action]
                     for new_action in other_actions:
-                        
                         next_state, _, terminal = grid.move(pos[state], new_action)
                         if terminal:
                             next_state = len(pos) + terminal_pos.index(next_state)
                         else:
                             next_state = pos.index(next_state)
-                        self.P[state, action, next_state] += (1 - stochastic_prob) / len(other_actions)
+                        row_updates.append((state, next_state, action, (1 - stochastic_prob) / len(other_actions)))
+            
+            return row_updates
                     
-                    
+        total_time = 0
+        if benchmark: start_time = time.time()
+        
+        results = Parallel(n_jobs=min(num_threads, cpu_count()))(
+            delayed(process_state)(state) for state in tqdm(range(self.num_non_terminal_states),
+                                                            desc="Generating transition matrix P",
+                                                            total=self.num_non_terminal_states)
+        )
+        
+        for row_updates in results:
+            for state_idx, next_state_idx, action, prob in row_updates:
+                self.P[state_idx, action, next_state_idx] += prob
+        
+        if benchmark:
+            end_time = time.time()
+            total_time = end_time - start_time
         
         print(f"Generated matrix P with {self.P.size:,} elements")
+        
+        return total_time
     
     def _generate_R(self):
         raise NotImplementedError("Implement in the subclass.")
@@ -196,7 +213,7 @@ class MDP(ABC):
         return V, ModelBasedAlgsStats(elapsed_time, rewards, iterations, deltas, self.num_states, descriptor="VI")
     
     
-    def value_iteration(self, epsilon=1e-10, max_iterations=100000) -> tuple[np.ndarray, ModelBasedAlgsStats]:
+    def value_iteration(self, epsilon=1e-10, max_iterations=2000) -> tuple[np.ndarray, ModelBasedAlgsStats]:
         """
         Perform value iteration to compute the optimal value function.
         Efficiently implemented with matrix operations

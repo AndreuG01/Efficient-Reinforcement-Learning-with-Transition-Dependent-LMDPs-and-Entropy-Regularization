@@ -45,9 +45,19 @@ class CustomMinigridEnv(MiniGridEnv):
         properties: dict[str, list] = None,
         agent_start_dir=0,
         max_steps: int = 200,
+        allowed_actions: list[int] = None,
         **kwargs,
     ):
-        self.custom_grid = CustomGrid("minigrid", map=map, properties=properties)
+        
+        if allowed_actions:
+            self.num_actions = len(allowed_actions)
+            self.allowed_actions = allowed_actions
+        else:
+            self.num_actions = 3
+            self.allowed_actions = [i for i in range(self.num_actions)]
+        
+        
+        self.custom_grid = CustomGrid("minigrid", map=map, properties=properties, allowed_actions=allowed_actions)
         self.agent_start_pos = self.custom_grid.start_pos
         self.agent_start_dir = agent_start_dir
         
@@ -255,6 +265,8 @@ class MinigridMDP(MDP):
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
         stochastic_prob: float = 0.9,
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
+        benchmark_p: bool = False,
+        threads: int = 4,
         mdp: MDP = None
     ):
         """
@@ -281,11 +293,10 @@ class MinigridMDP(MDP):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties)
+        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions)
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
-        self.minigrid_env.custom_grid.remove_unreachable_states(self.allowed_actions)
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
@@ -306,7 +317,12 @@ class MinigridMDP(MDP):
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
                 self.P = map.P
             else:
-                self.generate_P(self.minigrid_env.custom_grid, stochastic_prob=self.stochastic_prob)
+                self.p_time = self.generate_P(
+                    self.minigrid_env.custom_grid,
+                    stochastic_prob=self.stochastic_prob,
+                    benchmark=benchmark_p,
+                    num_threads=threads
+                )
             
             # If the agent has a mixed behaviour, we have to make navigation actions deterministic.
             if self.behaviour == "mixed":
@@ -472,12 +488,10 @@ class MinigridLMDP(LMDP):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties)
+        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions)
         
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
-        
-        self.minigrid_env.custom_grid.remove_unreachable_states(self.allowed_actions)
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
@@ -636,11 +650,9 @@ class MinigridLMDP_TDR(LMDP_TDR):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties)
+        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions)
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
-        
-        self.minigrid_env.custom_grid.remove_unreachable_states(self.allowed_actions)
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         

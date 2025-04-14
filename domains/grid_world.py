@@ -47,7 +47,8 @@ class GridWorldEnv:
     def __init__(
         self,
         map: Map,
-        max_steps: int = 200
+        max_steps: int = 200,
+        allowed_actions: list[int] = None
     ):
         """
         Initializes the GridWorld environment with the provided map and the maximum number of steps.
@@ -56,7 +57,14 @@ class GridWorldEnv:
             map (Map): The map representing the environment layout.
             max_steps (int, optional): The maximum number of steps the agent can take. Defaults to 200.
         """
-        self.custom_grid = CustomGrid("gridworld", map=map)
+        if allowed_actions:
+            self.num_actions = len(allowed_actions)
+            self.allowed_actions = allowed_actions
+        else:
+            self.num_actions = 3
+            self.allowed_actions = [i for i in range(self.num_actions)]
+            
+        self.custom_grid = CustomGrid("gridworld", map=map, allowed_actions=self.allowed_actions)
         self.agent_start_pos = self.custom_grid.start_pos
         
         self.title = map.name
@@ -248,9 +256,6 @@ class GridWorldEnv:
         
         pygame.quit()
                 
-                    
-
-                
 class GridWorldMDP(MDP):
     """
     A class representing a GridWorld Markov Decision Process (MDP).
@@ -283,6 +288,8 @@ class GridWorldMDP(MDP):
         allowed_actions: list[int] = None,
         stochastic_prob: float = 0.9,
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
+        benchmark_p: bool = False,
+        threads: int = 4,
         mdp: MDP = None
     ):
         """
@@ -313,11 +320,10 @@ class GridWorldMDP(MDP):
         self.behaviour = behaviour
         deterministic = self.behaviour == "deterministic"
         
-        self.gridworld_env = GridWorldEnv(map=map)
+        self.gridworld_env = GridWorldEnv(map=map, allowed_actions=self.allowed_actions)
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
-        self.gridworld_env.custom_grid.remove_unreachable_states(self.allowed_actions)
         
         self.num_states = self.gridworld_env.custom_grid.get_num_states()
 
@@ -335,7 +341,12 @@ class GridWorldMDP(MDP):
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
                 self.P = map.P
             else:
-                self.generate_P(self.gridworld_env.custom_grid, stochastic_prob=self.stochastic_prob)
+                self.p_time = self.generate_P(
+                    self.gridworld_env.custom_grid,
+                    stochastic_prob=self.stochastic_prob,
+                    num_threads=threads,
+                    benchmark=benchmark_p
+                )
             
             if map.R is not None:
                 assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
@@ -436,6 +447,7 @@ class GridWorldLMDP(LMDP):
         self,
         map: Map,
         sparse_optimization: bool = True,
+        allowed_actions: list[int] = None,
         benchmark_p: bool = False,
         threads: int = 4,
         lmdp: LMDP = None
@@ -445,21 +457,25 @@ class GridWorldLMDP(LMDP):
 
         Args:
             map (Map): The map for the environment.
+            allowed_actions (list[int], optional): List of allowed actions. Defaults to None.
             sparse_optimization (bool, optional): Flag indicating whether sparse optimization is enabled. Defaults to True.
             benchmark_p (bool, optional): Flag indicating whether to benchmark the transition probabilities. Defaults to False.
             threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
             lmdp (LMDP, optional): An existing LMDP object to initialize the superclass. Defaults to None.
         """
         
-        self.allowed_actions = [i for i in range(len(self.OFFSETS))] # It is not that the LMDP has actions, but to determine the transition probabilities, we need to know how the agent moves through the environment
-        self.num_actions = len(self.allowed_actions)
+        if allowed_actions:
+            self.allowed_actions = allowed_actions
+            self.num_actions = len(allowed_actions)
+        else:
+            self.num_actions = 4
+            self.allowed_actions = [i for i in range(self.num_actions)]
         
         
-        self.gridworld_env = GridWorldEnv(map=map)
+        self.gridworld_env = GridWorldEnv(map=map, allowed_actions=self.allowed_actions)
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
-        # TODO: remove unreachable states in case that I add the possibilities for GridWorld to support objects (e.g. keys, doors, etc.)
         self.num_sates = self.gridworld_env.custom_grid.get_num_states()
         
         if lmdp is None:
@@ -575,6 +591,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
     def __init__(
         self,
         map: Map,
+        allowed_actions: list[int] = None,
         sparse_optimization: bool = False,  # TODO: check error and correct (does not work with True)
         benchmark_p: bool = False,
         threads: int = 4
@@ -584,18 +601,24 @@ class GridWorldLMDP_TDR(LMDP_TDR):
 
         Args:
             map (Map): The map for the environment.
+            allowed_actions (list[int], optional): List of allowed actions. Defaults to None.
             sparse_optimization (bool, optional): Flag indicating whether sparse optimization is enabled. Defaults to False.
             benchmark_p (bool, optional): Flag indicating whether to benchmark the transition probabilities. Defaults to False.
             threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
         """
-        self.allowed_actions = [i for i in range(len(self.OFFSETS))] # It is not that the LMDP has actions, but to determine the transition probabilities, we need to know how the agent moves through the environment
-        self.num_actions = len(self.allowed_actions)
+        if allowed_actions:
+            self.allowed_actions = allowed_actions
+            self.num_actions = len(allowed_actions)
+        else:
+            self.num_actions = 4
+            self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.gridworld_env = GridWorldEnv(map=map)
+        
+        self.gridworld_env = GridWorldEnv(map=map, allowed_actions=self.allowed_actions)
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
-        # TODO: remove unreachable states in case that I add the possibilities for GridWorld to support objects (e.g. keys, doors, etc.)
+        
         self.num_sates = self.gridworld_env.custom_grid.get_num_states()
         
         super().__init__(
