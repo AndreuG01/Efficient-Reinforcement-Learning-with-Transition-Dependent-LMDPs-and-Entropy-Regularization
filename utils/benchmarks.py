@@ -101,7 +101,10 @@ def benchmark_parallel_p(
     for i, core in enumerate(results.keys()):
         times = [elem[1] for elem in results[core]]
         states = [elem[0] for elem in results[core]]
-        plt.plot(states, times, label=f"{core} cores", color=palette[i])
+        if i == 0:
+            plt.plot(states, times, label=f"{core} core", color=palette[i], linestyle="--")
+        else:
+            plt.plot(states, times, label=f"{core} cores", color=palette[i], linewidth=1, marker="x")
         
     
     plt.title("Parallelization impact on the generation time of transition matrix $\mathcal{P}$.", fontsize=14, fontweight="bold")

@@ -357,7 +357,6 @@ def generate_parallel_p_table(save_path: str = "assets/parallel_p_table.txt"):
         table_lines.append(first_line)
         title = f"| {behaviour} MDP"
         title += (" " * (len(first_line) - len(title) - 1)) + "|"
-        # title += "|"e
         table_lines.append(title)
         table_lines.append("|--------------------------------------|")
         table_lines.append("| Num States | Cores | Time (s)        |")
