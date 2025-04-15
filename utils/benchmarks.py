@@ -56,7 +56,6 @@ def benchmark_parallel_p(
     visual: bool = False,
     min_grid: int = 10,
     max_grid: int = 65,
-    limit_core: int = 16,
     framewok: Literal["MDP", "LMDP"] = "MDP",
     behaviour: Literal["stochastic", "deterministic"] = "deterministic"
 ):
@@ -66,8 +65,9 @@ def benchmark_parallel_p(
     
     results = defaultdict(list)
     
-    for jobs in tqdm(range(1, min(cpu_count(), limit_core + 1)), desc="Benchmarking parallel P", total=min(cpu_count(), limit_core)):
+    for jobs in tqdm(range(1, cpu_count() // 2 + 1), desc="Benchmarking parallel P", total=cpu_count() // 2):
         for grid_size in np.arange(min_grid, max_grid + 1, 5):
+            print(f"{jobs} cpus and size {grid_size}")
             if framewok == "MDP":
                 model = MinigridMDP(
                     map=Map(grid_size=grid_size),
