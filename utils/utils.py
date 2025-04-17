@@ -352,6 +352,8 @@ def generate_vi_pi_table(save_path: str = "assets/vi_pi_table.txt"):
 def generate_parallel_p_table(save_path: str = "assets/parallel_p_table.txt"):
     table_lines = []
     
+    results = []
+    
     for behaviour in ["deterministic", "stochastic"]:
         first_line = "|--------------------------------------|"
         table_lines.append(first_line)
@@ -373,11 +375,46 @@ def generate_parallel_p_table(save_path: str = "assets/parallel_p_table.txt"):
                 table_lines.append(f"| {state_count:<10} | {core:<5} | {time:<15.4f} |")
         
         table_lines.append(first_line)
+        
+        results.append(res)
 
     table_str = "\n".join(table_lines)
     print(table_str)
     
     with open(save_path, "w") as f:
         f.write(table_str)
+    
+    
+    fig, axes = plt.subplots(2, 1, figsize=(9, 7))
+    
+    plt.rcParams.update({
+        "text.usetex": True,
+    })
+    palette = CustomPalette()
+    
+    for i, behaviour in zip(range(len(results)), ["deterministic", "stochastic"]):
+        axes[i].grid()
+        axes[i].set_title(behaviour.capitalize(), fontsize=10, fontweight="bold")
+        for j, core in enumerate(results[i].keys()):
+            times = [elem[1] for elem in results[i][core]]
+            states = [elem[0] for elem in results[i][core]]
+            if j == 0:
+                axes[i].plot(states, times, label=f"{core} core", color=palette[j], linestyle="--")
+            else:
+                axes[i].plot(states, times, label=f"{core} cores", color=palette[j], linewidth=1, marker="x")
+        if i == 0:
+            axes[i].tick_params(labelbottom=False)
+            axes[i].set_xlabel("")
+            axes[i].legend(loc="upper left")
+
+    
+    fig.supxlabel(r"Number of states")
+    fig.supylabel(r"Time ($s$)")
+    fig.suptitle("Parallelization impact on the generation time of transition matrix $\mathcal{P}$.", fontsize=14, fontweight="bold")
+
+    plt.tight_layout()
+    
+
+    plt.savefig(f"assets/benchmark/parallel_p_combined.png", dpi=300, bbox_inches="tight")
 
     
