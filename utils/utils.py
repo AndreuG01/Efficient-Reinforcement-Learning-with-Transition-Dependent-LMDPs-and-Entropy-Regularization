@@ -511,3 +511,58 @@ def different_temperature_plots(model_type: Literal["MDP", "LMDP"] = "MDP", save
         plt.savefig(f"assets/{model_type}_different_temperature.png", dpi=300, bbox_inches="tight")
     else:
         plt.show()
+
+
+def regularized_embedding_error_plot(map: Map, min_temp: float = 0.1, max_temp: float = 3, temp_step: float = 0.1, save_fig: bool = True):
+
+    temperatures = np.arange(min_temp, max_temp, temp_step)
+    errors_state_dependent = []
+    errors_trans_dependent = []
+    
+    for temp in temperatures:
+        mdp = MinigridMDP(
+            map=map,
+            behaviour="deterministic",
+            allowed_actions=MinigridActions.get_actions(),
+            temperature=temp
+        )
+        
+        embedded_lmdp_state = mdp.to_LMDP()
+        embedded_lmdp_state.compute_value_function()
+        embedded_lmdp_trans = mdp.to_LMDP_TDR()
+        embedded_lmdp_trans.compute_value_function()
+        mdp.compute_value_function()
+        
+        error_state = np.mean(np.square(mdp.V - embedded_lmdp_state.V))
+        error_trans = np.mean(np.square(mdp.V - embedded_lmdp_trans.V))
+        errors_state_dependent.append(error_state)
+        errors_trans_dependent.append(error_trans)
+    
+    palette = CustomPalette()
+    plt.rcParams.update({"text.usetex": True})
+    plt.tight_layout()
+    fig = plt.figure(figsize=(8, 5))
+    
+    plt.title(f"MDP-LMDP embedding error comparison on LMDP with state and transition-dependent rewards.\nMap: {map.name}")
+    
+    min_state_dep = min(errors_state_dependent)
+    min_trans_dep = min(errors_trans_dependent)
+    
+    plt.plot(temperatures, errors_state_dependent, label="State-dependent", color=palette[2])
+    plt.plot(temperatures, errors_trans_dependent, label="Transition-dependent", color=palette[17])
+    print([val for val in errors_state_dependent if val == min_state_dep])
+    plt.scatter([temperatures[i] for i, val in enumerate(errors_state_dependent) if val == min_state_dep][0], min_state_dep, color=palette[3], zorder=3, marker="x", s=50, label="Min value")
+    plt.grid()
+    
+    
+    plt.ylabel(r"MSE$(V_\mathcal{M}, V_\mathcal{L})$")
+    plt.xlabel("Regularization parameter value")
+    
+    plt.legend()
+    
+    if save_fig:
+        save_map_name = map.name.lower().replace(" ", "_")
+        plt.savefig(f"assets/reg_no_reg_embedding_error_{save_map_name}.png", dpi=300, bbox_inches="tight")
+    else:
+        plt.show()
+    

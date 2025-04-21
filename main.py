@@ -13,7 +13,7 @@ from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, be
 from minigrid.manual_control import ManualControl
 from custom_palette import CustomPalette
 import pickle as pkl
-from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table, generate_parallel_p_table, different_gammas_plot, different_temperature_plots
+from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table, generate_parallel_p_table, different_gammas_plot, different_temperature_plots, regularized_embedding_error_plot
 from sklearn.metrics import r2_score
 from scipy.stats import spearmanr
 import matplotlib.gridspec as gridspec
@@ -24,28 +24,7 @@ from math import ceil
 import seaborn as sns
 
 if __name__ == "__main__":
-    map = Maps.CLIFF_WALKING
-    
-    temperature = 2.1
-    mdp = GridWorldMDP(
-        map=map,
-        allowed_actions=GridWorldActions.get_actions()[:4],
-        behaviour="deterministic",
-        temperature=temperature,
-    )
-    
-    embedded_lmdp = mdp.to_LMDP_TDR()
-    
-    mdp.compute_value_function(temp=embedded_lmdp.lmbda)
-
-    embedded_lmdp.compute_value_function()
-    
-    print(embedded_lmdp.R)
-    print(mdp.R)
-    
-    fig = plt.figure(figsize=(10, 5))
-    plt.plot([i for i in range(len(mdp.V))], mdp.V, label="MDP")
-    plt.plot([i for i in range(len(mdp.V))], embedded_lmdp.V, label="EMBEDDED LMDP")
-    plt.legend()
-    plt.show()
+    regularized_embedding_error_plot(map=Maps.MDP_NON_UNIFORM_REWARD, max_temp=3)
+    regularized_embedding_error_plot(map=Maps.CHALLENGE_DOOR, min_temp=0.3, max_temp=2)
+    regularized_embedding_error_plot(map=Map(grid_size=6), min_temp=0.3, max_temp=2)
     
