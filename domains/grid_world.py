@@ -160,6 +160,7 @@ class GridWorldEnv:
             screen = None
         plotter = GridWorldPlotter(model)
         frames = []
+        self.max_steps = 30
         
         for policy_epoch, policy in policies:
             print(f"Visualizing policy from training epoch: {policy_epoch}")
@@ -290,6 +291,8 @@ class GridWorldMDP(MDP):
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         benchmark_p: bool = False,
         threads: int = 4,
+        gamma: float = 1.0,
+        temperature: float = 0.0,
         mdp: MDP = None
     ):
         """
@@ -301,6 +304,8 @@ class GridWorldMDP(MDP):
             allowed_actions (list[int], optional): List of allowed actions. Defaults to None.
             stochastic_prob (float, optional): Probability of stochastic transitions. Defaults to 0.9.
             behaviour (Literal["deterministic", "stochastic", "mixed"], optional): Behaviour type for the environment. Defaults to "deterministic".
+            threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
+            gamma (float, optional): The discount factor for the MDP. Defaults to 1.
             mdp (MDP, optional): An existing MDP object to initialize the superclass. Defaults to None.
         """
         
@@ -335,7 +340,9 @@ class GridWorldMDP(MDP):
                 allowed_actions=self.allowed_actions,
                 s0=self.gridworld_env.custom_grid.states.index(self.start_state),
                 deterministic=deterministic,
-                behaviour=self.behaviour
+                behaviour=self.behaviour,
+                gamma=gamma,
+                temperature=temperature
             )
             if map.P is not None:
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
@@ -345,7 +352,7 @@ class GridWorldMDP(MDP):
                     self.gridworld_env.custom_grid,
                     stochastic_prob=self.stochastic_prob,
                     num_threads=threads,
-                    benchmark=benchmark_p
+                    benchmark=benchmark_p,
                 )
             
             if map.R is not None:
@@ -363,7 +370,9 @@ class GridWorldMDP(MDP):
                 allowed_actions=self.allowed_actions,
                 s0=mdp.s0,
                 deterministic=mdp.deterministic,
-                behaviour=self.behaviour
+                behaviour=self.behaviour,
+                gamma=mdp.gamma,
+                temperature=mdp.temperature
             )
             self.P = mdp.P
             self.R = mdp.R
@@ -450,7 +459,8 @@ class GridWorldLMDP(LMDP):
         allowed_actions: list[int] = None,
         benchmark_p: bool = False,
         threads: int = 4,
-        lmdp: LMDP = None
+        lmbda: float = 1.0,
+        lmdp: LMDP = None,
     ) -> None:
         """
         Initializes the grid world based on the provided map and optionally inherits from an existing LMDP.
@@ -461,6 +471,7 @@ class GridWorldLMDP(LMDP):
             sparse_optimization (bool, optional): Flag indicating whether sparse optimization is enabled. Defaults to True.
             benchmark_p (bool, optional): Flag indicating whether to benchmark the transition probabilities. Defaults to False.
             threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
+            lmbda (float, optional): The temperature parameter controlling the penalty from the passive dynamics. Defaults to 1.0.
             lmdp (LMDP, optional): An existing LMDP object to initialize the superclass. Defaults to None.
         """
         
@@ -483,7 +494,8 @@ class GridWorldLMDP(LMDP):
                 self.num_sates,
                 num_terminal_states=self.gridworld_env.custom_grid.get_num_terminal_states(),
                 s0=self.gridworld_env.custom_grid.states.index(self.start_state),
-                sparse_optimization=sparse_optimization
+                sparse_optimization=sparse_optimization,
+                lmbda=lmbda
             )
             
             if map.P is not None:
@@ -594,6 +606,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         allowed_actions: list[int] = None,
         sparse_optimization: bool = False,  # TODO: check error and correct (does not work with True)
         benchmark_p: bool = False,
+        lmbda: float = 1.0,
         threads: int = 4
     ):
         """
@@ -625,7 +638,8 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             self.num_sates,
             num_terminal_states=self.gridworld_env.custom_grid.get_num_terminal_states(),
             s0=self.gridworld_env.custom_grid.states.index(self.start_state),
-            sparse_optimization=sparse_optimization
+            sparse_optimization=sparse_optimization,
+            lmbda=lmbda
         )
         
         if map.P is not None:

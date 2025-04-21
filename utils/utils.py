@@ -1,9 +1,11 @@
+import matplotlib.cm as cm
+from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
 from custom_palette import CustomPalette
 from domains.minigrid_env import MinigridMDP, MinigridLMDP
-from domains.grid import MinigridActions
+from domains.grid import MinigridActions, GridWorldActions
 from models.LMDP import LMDP
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP, GridWorldLMDP_TDR
 from utils.maps import Maps, Map
@@ -13,6 +15,7 @@ import seaborn as sns
 import scipy.stats as stats
 from scipy.sparse import csr_matrix
 from sklearn.metrics import r2_score
+from typing import Literal
 
 def visualize_stochasticity_rewards_embedded_lmdp(state: int, map: Map, num_actions=3, save_fig: bool = True):
     """
@@ -417,4 +420,94 @@ def generate_parallel_p_table(save_path: str = "assets/parallel_p_table.txt"):
 
     plt.savefig(f"assets/benchmark/parallel_p_combined.png", dpi=300, bbox_inches="tight")
 
+
+def different_gammas_plot(save_fig: bool = True):
+    plt.rcParams.update({"text.usetex": True})
+    fig, ax = plt.subplots(figsize=(10, 5))
+    plt.tight_layout()
+    gammas = np.arange(0, 1.1, 0.1)
     
+    cmap = plt.colormaps["turbo"]
+    norm = Normalize(vmin=gammas.min(), vmax=gammas.max())
+    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    
+    np.random.seed(43)
+    r = np.random.randint(-10, 0, size=(21, 4))
+    r[20] = np.array([0, 0, 0, 0])
+
+
+    for i, gamma in enumerate(gammas):
+        mdp = GridWorldMDP(
+            map=Maps.GRIDWORLD_MDP_MYOPIC,
+            allowed_actions=GridWorldActions.get_actions()[:4],
+            behaviour="deterministic",
+            gamma=gamma,
+        )
+        
+        if i == 1:
+            for s in range(mdp.num_states):
+                plt.scatter(s, np.max(mdp.R[s]), color="#FF00C6", marker="x", zorder=3, s=50, label="$\max_{a}\mathcal{R}(s,a)$" if s == 0 else None)
+    
+        mdp.compute_value_function()
+
+        plt.plot([i for i in range(len(mdp.V))], mdp.V, color=cmap(norm(gamma)))
+    
+    ax.set_xlabel("State $s$")
+    ax.set_ylabel("$V(s)$")
+    cbar = plt.colorbar(sm, ax=ax)
+    cbar.set_label("$\gamma$")
+    ax.set_title("Value function for different discount factor ($\gamma$) values.")
+    plt.legend()
+    
+    if save_fig:
+        plt.savefig("assets/different_gamma.png", dpi=300, bbox_inches="tight")
+    else:
+        plt.show()
+
+
+def different_temperature_plots(model_type: Literal["MDP", "LMDP"] = "MDP", save_fig: bool = True):
+    assert model_type in ["MDP", "LMDP"], f"Invalid model type. Only valids: {['MDP', 'LMDP']}"
+    
+    plt.rcParams.update({"text.usetex": True})
+    fig, ax = plt.subplots(figsize=(10, 5))
+    plt.tight_layout()
+    temperatures = np.arange(0.1, 10.1, 0.1)
+    
+    cmap = plt.colormaps["turbo"]
+    norm = Normalize(vmin=temperatures.min(), vmax=temperatures.max())
+    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    
+    map = Map(grid_size=5)
+
+    for i, temp in enumerate(temperatures):
+        if model_type == "MDP":
+            model = GridWorldMDP(
+                map=map,
+                allowed_actions=GridWorldActions.get_actions()[:4],
+                behaviour="deterministic",
+                temperature=temp
+            )
+        else:
+            model = GridWorldLMDP(
+                map=map,
+                allowed_actions=GridWorldActions.get_actions()[:4],
+                lmbda=temp
+            )
+    
+        model.compute_value_function()
+        plt.plot([i for i in range(len(model.V))], model.V, color=cmap(norm(temp)))
+    
+    temp_name = "beta" if model_type == "MDP" else "lambda"
+    
+    ax.set_xlabel("State $s$")
+    ax.set_ylabel("$V(s)$")
+    cbar = plt.colorbar(sm, ax=ax)
+    cbar.set_label(f"$\{temp_name}$")
+    ax.set_title(f"Value function for different temperature parameters ($\{temp_name}$) values.")
+    plt.grid()
+    if save_fig:
+        plt.savefig(f"assets/{model_type}_different_temperature.png", dpi=300, bbox_inches="tight")
+    else:
+        plt.show()

@@ -118,14 +118,19 @@ class LMDP_TDR:
         return probs
 
     
-    def power_iteration(self, epsilon=1e-10) -> np.ndarray:
+    def power_iteration(self, epsilon=1e-10, temp: float = None) -> np.ndarray:
+        if temp is not None:
+            temperature = temp
+        else:
+            temperature = self.lmbda
+        
         print(f"Power iteration LMDP-TDR...")
         if self.sparse_optimization:
-            self.o = np.exp(self.R.toarray() / self.lmbda) # TODO: I have problems when this is a sparse matrix
+            self.o = np.exp(self.R.toarray() / temperature) # TODO: I have problems when this is a sparse matrix
             G = csr_matrix(self.P.multiply(self.o))
             
         else:
-            self.o = np.exp(self.R / self.lmbda)
+            self.o = np.exp(self.R / temperature)
             G = self.P * self.o
     
     
@@ -137,7 +142,7 @@ class LMDP_TDR:
             z_new = G @ z
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
            
-            delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z), ord=np.inf)
+            delta = np.linalg.norm(self.get_value_function(z_new, temp=temp) - self.get_value_function(z, temp=temp), ord=np.inf)
             
             if iterations % 100 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
@@ -153,22 +158,27 @@ class LMDP_TDR:
         return z
         
     
-    def get_value_function(self, z: np.ndarray = None) -> np.ndarray:
+    def get_value_function(self, z: np.ndarray = None, temp: float = None) -> np.ndarray:
+        if temp is not None:
+            temperature = temp
+        else:
+            temperature = self.lmbda
+        
         if z is None:
             z = self.z
         
-        result = np.log(z) * self.lmbda
+        result = np.log(z) * temperature
         result[result == -np.inf] = np.finfo(np.float64).min
         
         return result
     
     
-    def compute_value_function(self):
+    def compute_value_function(self, temp: float = None):
         # if not hasattr(self, "z"):
         print("Will compute power iteration")
-        self.power_iteration()
+        self.power_iteration(temp=temp)
         
-        self.V = self.get_value_function()
+        self.V = self.get_value_function(temp=temp)
         
         self.policy = self.get_optimal_policy(self.z, self.o)
         # self.policy_multiple_states = self.get_optimal_policy(self.z, self.o, multiple_states=True)

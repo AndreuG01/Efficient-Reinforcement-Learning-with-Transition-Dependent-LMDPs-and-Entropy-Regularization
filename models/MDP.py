@@ -42,6 +42,7 @@ class MDP(ABC):
         gamma: int = 1,
         s0: int = 0,
         deterministic: bool = False,
+        temperature: float = 0.0,
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
     ) -> None:
         """
@@ -71,6 +72,9 @@ class MDP(ABC):
         self.gamma = gamma
         self.deterministic = deterministic
         self.behaviour = behaviour
+        self.temperature = temperature
+        self.policy_ref = np.full((self.num_states, self.num_actions), 1.0 / self.num_actions)
+
         
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
@@ -213,7 +217,7 @@ class MDP(ABC):
         return V, ModelBasedAlgsStats(elapsed_time, rewards, iterations, deltas, self.num_states, descriptor="VI")
     
     
-    def value_iteration(self, epsilon=1e-10, max_iterations=2000) -> tuple[np.ndarray, ModelBasedAlgsStats]:
+    def value_iteration(self, epsilon=1e-10, max_iterations=20000, temp: float = None) -> tuple[np.ndarray, ModelBasedAlgsStats]:
         """
         Perform value iteration to compute the optimal value function.
         Efficiently implemented with matrix operations
@@ -226,6 +230,12 @@ class MDP(ABC):
         - V (np.ndarray): The optimal value function for each state.
         - ModelBasedAlgsStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
         """
+        
+        if temp is not None:
+            temperature = temp
+        else:
+            temperature = self.temperature
+        
         V = np.zeros(self.num_states)
 
         iterations = 0
@@ -240,7 +250,11 @@ class MDP(ABC):
             expected_values = self.P @ V
             Q = self.R + self.gamma * np.concatenate((expected_values, self.R[self.num_non_terminal_states:, :])) # num_states X num_actions
 
-            V_new =  np.max(Q, axis=1)
+            if temperature == 0:
+                V_new =  np.max(Q, axis=1)
+            else:
+                V_new = temperature * np.log(np.sum(self.policy_ref * np.exp(Q / temperature), axis=1))
+            
             Vs.append(V_new)
             delta = np.linalg.norm(V - V_new, np.inf)
             
@@ -260,18 +274,18 @@ class MDP(ABC):
         return V, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "VI")
     
     
-    def compute_value_function(self):
+    def compute_value_function(self, temp: float = None):
         """
         Computes the value function using value iteration and extracts the optimal policy.
         """
-        self.V, self.stats = self.value_iteration()
+        self.V, self.stats = self.value_iteration(temp=temp)
         
-        self.policy = self.get_optimal_policy(self.V)
-        self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True)
+        self.policy = self.get_optimal_policy(self.V, temp=temp)
+        self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True, temp=temp)
     
     
 
-    def get_optimal_policy(self, V: np.ndarray, multiple_actions: bool = False) -> np.ndarray:
+    def get_optimal_policy(self, V: np.ndarray, multiple_actions: bool = False, temp: float = None) -> np.ndarray:
         """
         Derive the optimal policy from the value function.
 
@@ -281,13 +295,25 @@ class MDP(ABC):
         Returns:
         - policy (np.ndarray): The optimal policy, where each element corresponds to the optimal action for a state.
         """
+        
+        if temp is not None:
+            temperature = temp
+        else:
+            temperature = self.temperature
+        
+        
         expected_utilities = self.R[:self.num_non_terminal_states] + \
                      self.gamma * np.einsum("saj,j->sa", self.P[:self.num_non_terminal_states], V)
-        if multiple_actions:
-            max_values = np.max(expected_utilities, axis=1, keepdims=True)
-            policy = (expected_utilities == max_values).astype(int)  # Binary mask for optimal actions
+        
+        if self.temperature == 0:
+            if multiple_actions:
+                max_values = np.max(expected_utilities, axis=1, keepdims=True)
+                policy = (expected_utilities == max_values).astype(int)  # Binary mask for optimal actions
+            else:
+                policy = np.argmax(expected_utilities, axis=1)
         else:
-            policy = np.argmax(expected_utilities, axis=1)
+            policy = np.exp(expected_utilities / temperature) / np.sum(np.exp(expected_utilities / temperature), axis=1).reshape(-1,1)
+        
 
         return policy
     
@@ -355,8 +381,8 @@ class MDP(ABC):
         lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
-            sparse_optimization=True,
-            lmbda=1,
+            sparse_optimization=False,
+            lmbda=self.temperature if self.temperature != 0 else 0.8,
             s0=self.s0
         )
         
@@ -382,20 +408,28 @@ class MDP(ABC):
                 B_dagger = np.linalg.pinv(B)
                 x = B_dagger @ y
                 
+                if lmdp_tdr.lmbda != 0:
+                    for i, next_state in enumerate(np.where(zero_cols == False)[0]):
+                        res = 0
+                        for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
+                            res += self.policy_ref[state, next_action] * np.exp(self.R[state, next_action] / lmdp_tdr.lmbda)
+                        res = lmdp_tdr.lmbda * np.log(res)
+                        x[i] = res
+                
                 support_x = [col for col in zero_cols if col == False]
                 len_support = len(support_x)
                 
                 lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support)
                 lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
                 
-        lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
-        lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
+        # lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
+        # lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
         
         z = lmdp_tdr.power_iteration()
         V_lmdp = lmdp_tdr.get_value_function(z)
-        V_mdp, _ = self.value_iteration()
+        V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
         
-        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))
         return lmdp_tdr
     
     

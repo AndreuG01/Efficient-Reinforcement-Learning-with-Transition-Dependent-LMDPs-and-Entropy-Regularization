@@ -267,6 +267,8 @@ class MinigridMDP(MDP):
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         benchmark_p: bool = False,
         threads: int = 4,
+        gamma: float = 1.0,
+        temperature: float = 0.0,
         mdp: MDP = None
     ):
         """
@@ -278,6 +280,7 @@ class MinigridMDP(MDP):
             properties (dict[str, list], optional): State properties for initialization. Defaults to {"orientation": [0, 1, 2, 3]}.
             stochastic_prob (float): Probability of following the intended action in a stochastic setting. Defaults to 0.9.
             behaviour (str): One of "deterministic", "stochastic", or "mixed". Defaults to "deterministic".
+            gamma (float, optional): The discount factor for the MDP. Defaults to 1.0
             mdp (MDP, optional): If provided, initializes this MinigridMDP using an existing MDP's parameters. Defaults to None.
         """
         
@@ -310,8 +313,9 @@ class MinigridMDP(MDP):
                 allowed_actions=self.allowed_actions,
                 s0=self.minigrid_env.custom_grid.states.index(self.start_state),
                 deterministic=deterministic,
-                behaviour=self.behaviour
-                # gamma=0.999
+                behaviour=self.behaviour,
+                gamma=gamma,
+                temperature=temperature
             )
             if map.P is not None:
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
@@ -352,7 +356,8 @@ class MinigridMDP(MDP):
                 s0=mdp.s0,
                 gamma=mdp.gamma,
                 deterministic=mdp.deterministic,
-                behaviour=self.behaviour
+                behaviour=self.behaviour,
+                temperature=mdp.temperature
             )
             
             self.P = mdp.P
@@ -466,6 +471,7 @@ class MinigridLMDP(LMDP):
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
         threads: int = 4,
+        lmbda: float = 1.0,
         lmdp: LMDP = None
     ):
         """
@@ -501,7 +507,7 @@ class MinigridLMDP(LMDP):
                 self.num_states,
                 num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
                 s0=self.minigrid_env.custom_grid.states.index(self.start_state),
-                # lmbda=0.99,
+                lmbda=lmbda,
                 sparse_optimization=sparse_optimization
             )
 
