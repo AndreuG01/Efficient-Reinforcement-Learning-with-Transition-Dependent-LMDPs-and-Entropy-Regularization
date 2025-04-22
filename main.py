@@ -24,7 +24,8 @@ from math import ceil
 import seaborn as sns
 
 if __name__ == "__main__":
-    regularized_embedding_error_plot(map=Maps.MDP_NON_UNIFORM_REWARD, max_temp=3)
-    regularized_embedding_error_plot(map=Maps.CHALLENGE_DOOR, min_temp=0.3, max_temp=2)
-    regularized_embedding_error_plot(map=Map(grid_size=6), min_temp=0.3, max_temp=2)
+    # regularized_embedding_error_plot(map=Maps.MDP_NON_UNIFORM_REWARD, max_temp=3)
+    regularized_embedding_error_plot(map=Maps.SIMPLE_DOOR, min_temp=0.3, max_temp=2)
+    # regularized_embedding_error_plot(map=Map(grid_size=6), min_temp=0.3, max_temp=2)
+    # regularized_embedding_error_plot(map=Map(grid_size=20), min_temp=0.3, max_temp=2)
     

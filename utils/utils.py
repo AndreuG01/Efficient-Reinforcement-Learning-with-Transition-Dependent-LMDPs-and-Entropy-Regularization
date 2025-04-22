@@ -540,8 +540,8 @@ def regularized_embedding_error_plot(map: Map, min_temp: float = 0.1, max_temp: 
     
     palette = CustomPalette()
     plt.rcParams.update({"text.usetex": True})
-    plt.tight_layout()
     fig = plt.figure(figsize=(8, 5))
+    plt.tight_layout()
     
     plt.title(f"MDP-LMDP embedding error comparison on LMDP with state and transition-dependent rewards.\nMap: {map.name}")
     

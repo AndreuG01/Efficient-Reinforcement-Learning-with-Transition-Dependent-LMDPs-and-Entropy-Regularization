@@ -366,10 +366,10 @@ class MDP(ABC):
                 # res = np.linalg.lstsq(B, y)
                 
                 
-                R = np.log(np.sum(np.exp(c)))
+                R = lmdp.lmbda * np.log(np.sum(np.exp(c / lmdp.lmbda)))
                 x = c - R * np.ones(shape=c.shape)
                 lmdp.R[state] = R
-                lmdp.P[state, ~zero_cols] = np.exp(x)
+                lmdp.P[state, ~zero_cols] = np.exp(x / lmdp.lmbda)
                 
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, lmdp.stats = lmdp.power_iteration()
