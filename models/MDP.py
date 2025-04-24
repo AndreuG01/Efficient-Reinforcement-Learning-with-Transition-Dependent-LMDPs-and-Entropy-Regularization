@@ -349,27 +349,22 @@ class MDP(ABC):
                 B /= np.sum(B, axis=1).reshape(-1, 1)
                 
                 log_B = np.where(B != 0, np.log(B), B)
-                y = self.R[state] + lmdp.lmbda * np.sum(B * log_B, axis=1)
+                v = self.R[state] + lmdp.lmbda * np.sum(B * log_B, axis=1)
                 B_dagger = np.linalg.pinv(B)
-                c = B_dagger @ y
+                x = B_dagger @ v
                 
-                
-                if lmdp.lmbda != 0:
+                if lmdp.lmbda != 0 and self.deterministic:
                     # TODO: vectorize or make it more efficient
                     for i, next_state in enumerate(np.where(zero_cols == False)[0]):
                         res = 0
                         for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
                             res += self.policy_ref[state, next_action] * np.exp(self.R[state, next_action] / lmdp.lmbda)
                         res = lmdp.lmbda * np.log(res)
-                        c[i] = res
+                        x[i] = res
                 
-                # res = np.linalg.lstsq(B, y)
-                
-                
-                R = lmdp.lmbda * np.log(np.sum(np.exp(c / lmdp.lmbda)))
-                x = c - R * np.ones(shape=c.shape)
+                R = lmdp.lmbda * np.log(np.sum(np.exp(x / lmdp.lmbda)))
                 lmdp.R[state] = R
-                lmdp.P[state, ~zero_cols] = np.exp(x / lmdp.lmbda)
+                lmdp.P[state, ~zero_cols] = np.exp((x - R * np.ones(shape=x.shape)) / lmdp.lmbda)
                 
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, lmdp.stats = lmdp.power_iteration()
@@ -385,7 +380,7 @@ class MDP(ABC):
         return lmdp
     
     
-    def to_LMDP_TDR(self):
+    def to_LMDP_TDR(self, lmbda: float):
         print(f"Computing the LMDP-TDR embedding of this MDP...")
         
         
@@ -393,7 +388,7 @@ class MDP(ABC):
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,
-            lmbda=self.temperature if self.temperature != 0 else 0.8, # TODO: change lmbda value when temperature is 0
+            lmbda=lmbda,
             s0=self.s0
         )
         
@@ -419,7 +414,7 @@ class MDP(ABC):
                 B_dagger = np.linalg.pinv(B)
                 x = B_dagger @ y
                 
-                if lmdp_tdr.lmbda != 0:
+                if lmdp_tdr.lmbda != 0 and self.deterministic:
                     # TODO: vectorize or make it more efficient
                     for i, next_state in enumerate(np.where(zero_cols == False)[0]):
                         res = 0
@@ -439,7 +434,8 @@ class MDP(ABC):
         
         z = lmdp_tdr.power_iteration()
         V_lmdp = lmdp_tdr.get_value_function(z)
-        V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
+        V_mdp, _ = self.value_iteration()
+        # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
         
         print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))
         return lmdp_tdr
@@ -561,6 +557,35 @@ class MDP(ABC):
         z = lmdp_tdr.power_iteration()
         V_lmdp = lmdp_tdr.get_value_function(z)
         V_mdp, _ = self.value_iteration()
+        
+        print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        return lmdp_tdr
+    
+    
+    def to_LMDP_TDR_4(self):
+        print(f"Computing the LMDP-TDR embedding of this MDP...")
+        
+        self.compute_value_function()
+        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+            num_states=self.num_states,
+            num_terminal_states=self.num_terminal_states,
+            sparse_optimization=False,
+            lmbda=self.temperature if self.temperature != 0 else 0.8, # TODO: change lmbda value when temperature is 0
+            s0=self.s0
+        )
+        
+        if self.deterministic and False:
+            pass
+            
+        else:
+            epsilon = 1e-10
+            for state in range(self.num_non_terminal_states):
+                pass
+        
+        
+        z = lmdp_tdr.power_iteration()
+        V_lmdp = lmdp_tdr.get_value_function(z)
+        V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
         
         print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
         return lmdp_tdr

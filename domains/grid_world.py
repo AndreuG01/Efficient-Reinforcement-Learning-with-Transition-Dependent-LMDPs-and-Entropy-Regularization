@@ -160,7 +160,7 @@ class GridWorldEnv:
             screen = None
         plotter = GridWorldPlotter(model)
         frames = []
-        self.max_steps = 30
+        # self.max_steps = 30
         
         for policy_epoch, policy in policies:
             print(f"Visualizing policy from training epoch: {policy_epoch}")
@@ -607,7 +607,8 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         sparse_optimization: bool = False,  # TODO: check error and correct (does not work with True)
         benchmark_p: bool = False,
         lmbda: float = 1.0,
-        threads: int = 4
+        threads: int = 4,
+        lmdp_tdr: LMDP_TDR = None
     ):
         """
         Initializes the GridWorldTDR environment using the provided map, and sets up the LMDP-TDR structure.
@@ -634,30 +635,42 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         
         self.num_sates = self.gridworld_env.custom_grid.get_num_states()
         
-        super().__init__(
-            self.num_sates,
-            num_terminal_states=self.gridworld_env.custom_grid.get_num_terminal_states(),
-            s0=self.gridworld_env.custom_grid.states.index(self.start_state),
-            sparse_optimization=sparse_optimization,
-            lmbda=lmbda
-        )
+        if lmdp_tdr is None:
         
-        if map.P is not None:
-            assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
-            self.P = map.P
-        else:
-            self.p_time = self.generate_P(
-                self.gridworld_env.custom_grid,
-                self.allowed_actions,
-                benchmark=benchmark_p,
-                num_threads=threads
+            super().__init__(
+                self.num_sates,
+                num_terminal_states=self.gridworld_env.custom_grid.get_num_terminal_states(),
+                s0=self.gridworld_env.custom_grid.states.index(self.start_state),
+                sparse_optimization=sparse_optimization,
+                lmbda=lmbda
             )
-        
-        if map.R is not None:
-            assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
-            self.R = map.R
+            
+            if map.P is not None:
+                assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
+                self.P = map.P
+            else:
+                self.p_time = self.generate_P(
+                    self.gridworld_env.custom_grid,
+                    self.allowed_actions,
+                    benchmark=benchmark_p,
+                    num_threads=threads
+                )
+            
+            if map.R is not None:
+                assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
+                self.R = map.R
+            else:
+                self._generate_R()
         else:
-            self._generate_R()
+            super().__init__(
+                num_states=lmdp_tdr.num_states,
+                num_terminal_states=lmdp_tdr.num_terminal_states,
+                s0=lmdp_tdr.s0,
+                lmbda=lmdp_tdr.lmbda,
+                sparse_optimization=lmdp_tdr.sparse_optimization
+            )
+            self.P = lmdp_tdr.P
+            self.R = lmdp_tdr.R
         
         print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
 
@@ -693,8 +706,39 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             print(f"Memory usage before conversion: {getsizeof(self.R):,} bytes")
             self.R = csr_matrix(self.R)
             print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
-                
 
+                
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
+        """
+        Visualizes the policy by running the environment with the given policies. If there are no policies, the optimal one is computed.
+        If the `save_gif` parameter is set to true, a GIF with the visualization is stored in the specified path. Otherwise, the policy is displayed to
+        the user through the screen.
+
+        Args:
+            policies (list[tuple[int, np.ndarray]], optional): List of policies from different epochs. Defaults to None
+            num_times (int, optional): Number of times to run the game. Defaults to 10.
+            save_gif (bool, optional): If True, saves the game sequence as a GIF. Defaults to False
+            save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+
+        Returns:
+            None
+        """
+        assert not save_gif or save_path is not None, "Must specify save path"
+        if policies is None:
+            print("Computing value function...")
+            self.compute_value_function()
+            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
+        else:
+            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
+
+    def play_map(self) -> None:
+        """
+        Allows the user to play with the agent manually through the map.
+
+        Returns:
+            None
+        """
+        self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
 class GridWorldPlotter:
     """
     A class responsible for plotting the GridWorld environment and its results, including the value function and policy.
@@ -1214,7 +1258,7 @@ class GridWorldPlotter:
         cbar.set_label("Reward")
     
     
-    def visualize_reward(self, savefig: bool = False) -> None:
+    def visualize_reward(self, ax: matplotlib.axes.Axes = None, savefig: bool = False) -> None:
         """
         Visualizes the reward structure of the grid world environment.
 
@@ -1224,14 +1268,16 @@ class GridWorldPlotter:
 
         Args:
             savefig (bool, optional): Whether to save the generated plot as an image file. Defaults to False.
+            axes (matplotlib.axses.Axes, optional): An axis where the reward should be plotted. Defaults to None.
 
         Returns:
             None
         """
         assert self.gridworld.num_actions == 4, "Gridworld can only have four navigation actions"
         
-        plt.rcParams.update({"text.usetex": True})
-        fig, ax = plt.subplots(figsize=self.figsize)
+        if ax is None:
+            plt.rcParams.update({"text.usetex": True})
+            fig, ax = plt.subplots(figsize=self.figsize)
         grid_positions = self.gridworld_env.custom_grid.positions
 
         self.plot_base_grid(ax, grid_positions, color_start=False, color_goal=False)
@@ -1241,9 +1287,10 @@ class GridWorldPlotter:
         elif isinstance(self.gridworld, GridWorldMDP) or isinstance(self.gridworld, GridWorldLMDP_TDR):
             self.__visualize_reward_mdp_lmdptdr(ax)
         
-        plt.title(self.gridworld_env.title)
-        print()
-        if savefig:
-            plt.savefig(f"assets/reward_{self.gridworld_env.title}_{type(self.gridworld).__name__}.png", dpi=300, bbox_inches="tight")
-        else:
-            plt.show()
+        if ax is None:
+            plt.title(self.gridworld_env.title)
+        
+            if savefig:
+                plt.savefig(f"assets/reward_{self.gridworld_env.title}_{type(self.gridworld).__name__}.png", dpi=300, bbox_inches="tight")
+            else:
+                plt.show()

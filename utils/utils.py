@@ -298,6 +298,8 @@ def uniform_assumption_plot(save_fig: bool = True):
     
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     palette = CustomPalette()
+    cmap = plt.get_cmap("turbo")
+    norm = Normalize(vmin=probs[0], vmax=probs[-1])
     plt.rcParams.update({"text.usetex": True})
     colors = [palette[i] for i in range(len(probs))]
     
@@ -312,7 +314,7 @@ def uniform_assumption_plot(save_fig: bool = True):
         lmdp.compute_value_function()
         value_functions.append(lmdp.V)
         iters = lmdp.stats.iterations
-        axes[0].plot([i for i in range(len(lmdp.V))], lmdp.V, label=f"$p = {round(stochastic_prob, 1)}$. ${iters}$ iters", color=colors[i])
+        axes[0].plot([i for i in range(len(lmdp.V))], lmdp.V, label=f"$p = {round(stochastic_prob, 1)}$. ${iters}$ iters", color=cmap(norm(stochastic_prob)))
     
     axes[0].set_title("Value functions")
     axes[0].set_xlabel("State index $s$")

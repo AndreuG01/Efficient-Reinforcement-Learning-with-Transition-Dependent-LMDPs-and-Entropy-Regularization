@@ -144,7 +144,7 @@ class LMDP_TDR:
            
             delta = np.linalg.norm(self.get_value_function(z_new, temp=temp) - self.get_value_function(z, temp=temp), ord=np.inf)
             
-            if iterations % 100 == 0:
+            if iterations % 1000 == 0:
                 print(f"Iter: {iterations}. Delta: {delta}")
         
             if delta < epsilon:
