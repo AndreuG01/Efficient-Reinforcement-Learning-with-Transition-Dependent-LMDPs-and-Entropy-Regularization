@@ -567,4 +567,150 @@ def regularized_embedding_error_plot(map: Map, min_temp: float = 0.1, max_temp: 
         plt.savefig(f"assets/reg_no_reg_embedding_error_{save_map_name}.png", dpi=300, bbox_inches="tight")
     else:
         plt.show()
-    
+
+
+def create_models(map, f, t, temp_mdp, temp_lmdp, behaviour, stochastic_prob):
+    if f == "MDP":
+        mdp = GridWorldMDP(
+            map=map,
+            allowed_actions=GridWorldActions.get_actions()[:4],
+            behaviour=behaviour,
+            stochastic_prob=stochastic_prob,
+            temperature=temp_mdp
+        )
+        lmdp = mdp.to_LMDP_TDR(lmbda=temp_lmdp)
+        lmdp = GridWorldLMDP_TDR(
+            map=map,
+            allowed_actions=GridWorldActions.get_actions()[:4],
+            lmdp_tdr=lmdp
+        )
+    else:
+        lmdp = GridWorldLMDP(
+            map=map,
+            allowed_actions=GridWorldActions.get_actions()[:4],
+        )
+        mdp = lmdp.to_MDP()
+        mdp = GridWorldMDP(
+            map=map,
+            allowed_actions=GridWorldActions.get_actions()[:4],
+            mdp=mdp
+        )
+    mdp.compute_value_function()
+    lmdp.compute_value_function()
+    return mdp, lmdp
+
+
+def compute_value_metrics(mdp, lmdp):
+    mse = np.mean(np.square(mdp.V - lmdp.V))
+    r2 = r2_score(mdp.V, lmdp.V)
+    corr = np.corrcoef(mdp.V, lmdp.V)[0, 1]
+    return mse, r2, corr
+
+
+def embedding_value_function_reg(map, f="MDP", t="LMDP", behaviour="deterministic", stochastic_prob=0.9, save_fig=False):
+    assert f in ["MDP", "LMDP"]
+    assert t in ["MDP", "LMDP"]
+    assert t != f
+    assert behaviour in ["deterministic", "stochastic", "mixed"]
+
+    temps = np.arange(1, 7, 0.05)
+    lmdp_color = plt.get_cmap("Reds")
+    mdp_color = plt.get_cmap("Blues")
+    normalizer = Normalize(vmin=temps[0], vmax=temps[-1])
+    sm_lmbda = cm.ScalarMappable(cmap=lmdp_color, norm=normalizer)
+    sm_beta = cm.ScalarMappable(cmap=mdp_color, norm=normalizer)
+
+    fig = plt.figure(figsize=(15, 10))
+    gs = fig.add_gridspec(2, 3)
+    ax_val = fig.add_subplot(gs[0, :])
+    ax_mse = fig.add_subplot(gs[1, 0])
+    ax_r2 = fig.add_subplot(gs[1, 1])
+    ax_corr = fig.add_subplot(gs[1, 2])
+
+    mse_vals, r2_vals, corr_vals = [], [], []
+
+    for temp in temps:
+        mdp, lmdp = create_models(map, f, t, temp, temp, behaviour, stochastic_prob)
+        mse, r2, corr = compute_value_metrics(mdp, lmdp)
+
+        mse_vals.append(mse)
+        r2_vals.append(r2)
+        corr_vals.append(corr)
+
+        ax_val.plot(range(len(mdp.V)), mdp.V, color=mdp_color(normalizer(temp)))
+        ax_val.plot(range(len(lmdp.V)), lmdp.V, color=lmdp_color(normalizer(temp)))
+
+    ax_val.set_xlabel(r"State $s$")
+    ax_val.set_ylabel(r"$V(s)$")
+    fig.colorbar(sm_beta, ax=ax_val).set_label(r"MDP temperature ($\beta$)")
+    fig.colorbar(sm_lmbda, ax=ax_val).set_label(r"LMDP temperature ($\lambda$)")
+
+    optimal_color = "#FF00C6"
+
+    def plot_metric(ax, data, label, ylabel):
+        ax.plot(temps, data, color="#00CC15")
+        idx = np.argmax(data) if "Corr" in ylabel or "R^2" in ylabel else np.argmin(data)
+        ax.scatter(temps[idx], data[idx], color=optimal_color, marker="x", zorder=3, label=f"{label} $\lambda = {round(temps[idx], 2)}$")
+        ax.set_title(ylabel)
+        ax.set_xlabel(r"Temperature $\lambda = \beta$")
+        ax.legend()
+        ax.grid()
+
+    plot_metric(ax_mse, mse_vals, "Min", "MSE")
+    plot_metric(ax_r2, r2_vals, "Max", r"$R^2$")
+    plot_metric(ax_corr, corr_vals, "Max", r"Correlation ($\rho$)")
+
+    plt.suptitle(f"{f} to {t} embedding. Stochastic MDP with prob ${stochastic_prob if behaviour != 'deterministic' else '1'}$. Map: {map.name}")
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+    if save_fig:
+        name = map.name.lower().replace(" ", "_")
+        path = f"assets/{f}_to_{t}_prob_{stochastic_prob if behaviour != 'deterministic' else 'det'}_{name}.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+    else:
+        plt.show()
+
+
+def embedding_errors_different_temp(map, f="MDP", t="LMDP", behaviour="deterministic", stochastic_prob=0.9, save_fig=False):
+    assert f in ["MDP", "LMDP"]
+    assert t in ["MDP", "LMDP"]
+    assert t != f
+    assert behaviour in ["deterministic", "stochastic", "mixed"]
+
+    mdp_temps = [1, 2, 3, 4]
+    lmdp_range = np.arange(14, 25, 0.5)
+
+    plt.rcParams.update({"text.usetex": True})
+    fig, axes = plt.subplots(1, 3, figsize=(25, 5))
+    fig.supxlabel(r"Temperature $\lambda$")
+
+    for beta in mdp_temps:
+        mse_list, r2_list, corr_list = [], [], []
+        for lmbda in lmdp_range:
+            mdp, lmdp = create_models(map, f, t, beta, lmbda, behaviour, stochastic_prob)
+            mse, r2, corr = compute_value_metrics(mdp, lmdp)
+            mse_list.append(mse)
+            r2_list.append(r2)
+            corr_list.append(corr)
+
+        def plot(ax, data, label, metric):
+            ax.plot(lmdp_range, data, label=label)
+            idx = np.argmax(data) if metric != "MSE" else np.argmin(data)
+            ax.scatter(lmdp_range[idx], data[idx], color="red", marker="x", zorder=3)
+
+        plot(axes[0], mse_list, f"MDP: $\\beta = {beta}$", "MSE")
+        plot(axes[1], r2_list, f"MDP: $\\beta = {beta}$", "R2")
+        plot(axes[2], corr_list, f"MDP: $\\beta = {beta}$", "Corr")
+
+    for ax, title, ylabel in zip(axes, ["MSE", r"$R^2$", "Correlation"], ["MSE", r"$R^2$", r"$\\rho$"]):
+        ax.set_title(title)
+        ax.set_ylabel(ylabel)
+        ax.legend()
+
+    plt.suptitle(f"{f} to {t} embedding. Stochastic MDP with prob ${stochastic_prob if behaviour != 'deterministic' else '1'}$. Map: {map.name}")
+    if save_fig:
+        name = map.name.lower().replace(" ", "_")
+        path = f"assets/{f}_to_{t}_prob_{stochastic_prob if behaviour != 'deterministic' else 'det'}_{name}_lmbda_choosing.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+    else:
+        plt.show()
