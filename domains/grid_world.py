@@ -208,16 +208,13 @@ class GridWorldEnv:
                         action = self.__get_manual_action()
                     else:
                         if isinstance(model, GridWorldMDP):
-                            if model.deterministic:
-                                action = np.argmax(policy[state_idx])
-                            else:
-                                action = np.argmax(policy[state_idx])
-                                next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :])
-                                if next_state != np.argmax(model.P[state_idx, action, :]):
-                                    num_mistakes += 1
-                                    self._print(f"MISTAKE [{num_mistakes} / {actions}]")
-                                # We need to get the action that leads to the next state
-                                action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
+                            action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx])
+                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :])
+                            if next_state != np.argmax(model.P[state_idx, action, :]):
+                                num_mistakes += 1
+                                self._print(f"MISTAKE [{num_mistakes} / {actions}]")
+                            # We need to get the action that leads to the next state
+                            action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                         else:
                             # This function uses the C-long dtype, which is 32bit on windows and otherwise 64bit on 64bit platforms (and 32bit on 32bit ones).
                             # Since NumPy 2.0, NumPy’s default integer is 32bit on 32bit platforms and 64bit on 64bit platforms.
@@ -499,6 +496,7 @@ class GridWorldLMDP(LMDP):
             lmbda (float, optional): The temperature parameter controlling the penalty from the passive dynamics. Defaults to 1.0.
             lmdp (LMDP, optional): An existing LMDP object to initialize the superclass. Defaults to None.
         """
+        self.deterministic = False
         self.verbose = verbose
         if allowed_actions:
             self.allowed_actions = allowed_actions
@@ -652,6 +650,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             benchmark_p (bool, optional): Flag indicating whether to benchmark the transition probabilities. Defaults to False.
             threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
         """
+        self.deterministic = False
         self.verbose = verbose
         if allowed_actions:
             self.allowed_actions = allowed_actions
@@ -989,7 +988,13 @@ class GridWorldPlotter:
         for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
             curr_state = [s for s in self.gridworld_env.custom_grid.states if s.x == pos[1] and s.y == pos[0]][0]
             if self.gridworld_env.custom_grid.is_cliff(curr_state): continue
-            actions = policy[idx] if multiple_actions else [policy[idx]]
+            if self.is_mdp:
+                if multiple_actions:
+                    actions = np.where(policy[idx] != 0)[0]
+                else:
+                    actions = [np.argmax(policy[idx])]
+            else:
+                actions = policy[idx] if multiple_actions else [policy[idx]]
 
             y, x = curr_state.y, curr_state.x
             if not self.gridworld.deterministic:
@@ -1315,8 +1320,8 @@ class GridWorldPlotter:
             None
         """
         assert self.gridworld.num_actions == 4, "Gridworld can only have four navigation actions"
-        
-        if ax is None:
+        create_ax = ax == None
+        if create_ax:
             plt.rcParams.update({"text.usetex": True})
             fig, ax = plt.subplots(figsize=self.figsize)
         grid_positions = self.gridworld_env.custom_grid.positions
@@ -1328,7 +1333,7 @@ class GridWorldPlotter:
         elif isinstance(self.gridworld, GridWorldMDP) or isinstance(self.gridworld, GridWorldLMDP_TDR):
             self.__visualize_reward_mdp_lmdptdr(ax)
         
-        if ax is None:
+        if create_ax:
             plt.title(self.gridworld_env.title)
         
             if savefig:

@@ -145,44 +145,20 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
 
 if __name__ == "__main__":
     
-    map = Map(grid_size=20)
-    
     mdp = GridWorldMDP(
-        map=map,
+        map=Maps.CLIFF,
         allowed_actions=GridWorldActions.get_actions()[:4],
-        temperature=3,
-        behaviour="stochastic",
-        stochastic_prob=0.2,
-        verbose=True
+        behaviour="deterministic",
+        temperature=10,
     )
     
-    # mdp.visualize_policy(num_times=1, save_gif=True, save_path="assets/infinite_agent_2.gif")
     
     mdp.compute_value_function()
-    lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
-    
-    
-    lmdp = GridWorldLMDP_TDR(
-        map=map,
-        allowed_actions=GridWorldActions.get_actions()[:4],
-        lmdp_tdr=lmdp
+    print(mdp.policy)
+    plotter = GridWorldPlotter(mdp)
+    plotter.plot_grid_world(
+        show_actions=True,
+        show_value_function=True,
+        show_prob=True
     )
-    
-    
-    lmdp.compute_value_function(temp=1381.9)
-    # lmdp.compute_value_function()
-    
-    # print("corr coef", np.corrcoef(mdp.V, lmdp.V)[0, 1])
-    # print("mse:", np.mean(np.square(mdp.V - lmdp.V)))
-    # print("r2_score:", r2_score(mdp.V, lmdp.V))
-    
-    # mdp.visualize_policy(num_times=2)
-    lmdp.visualize_policy(num_times=1, policies=[(0, lmdp.policy)], save_gif=True, save_path="assets/infinite_agent_LMDP_longer.gif")
-    
-    fig = plt.figure(figsize=(10, 5))
-    plt.plot(mdp.V, label="MDP")
-    plt.plot(lmdp.V, label="LMDP")
-    
-    plt.legend()
-    plt.savefig("assets/example_v_differ_2.png", dpi=300)
     

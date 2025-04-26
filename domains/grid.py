@@ -353,6 +353,9 @@ class CustomGrid:
             
             return next_state, True, False
     
+        else:
+            return next_state, True, False
+    
     def __move_minigrid(self, state: State, action: int, offsets: dict ={0: (1, 0), 1: (0, 1), 2: (-1, 0), 3: (0, -1)}):
         orientation = state.properties["orientation"]
         y, x, curr_layout = state.y, state.x, state.layout

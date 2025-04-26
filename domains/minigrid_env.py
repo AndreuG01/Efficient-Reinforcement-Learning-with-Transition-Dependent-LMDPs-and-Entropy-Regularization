@@ -167,16 +167,13 @@ class CustomMinigridEnv(MiniGridEnv):
                     state_idx = next(k for k, v in self.custom_grid.state_index_mapper.items() if v == state)
                     
                     if isinstance(model, MinigridMDP):
-                        if model.deterministic:
-                            action = policy[state_idx]
-                            
-                        else:
-                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, policy[state_idx], :])
-                            if next_state != np.argmax(model.P[state_idx, policy[state_idx], :]):
-                                self._print(f"MISTAKE {num_mistakes}")
-                                num_mistakes += 1
-                            # We need to get the action that leads to the next state
-                            action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
+                        action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx])
+                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :])
+                        if next_state != np.argmax(model.P[state_idx, action, :]):
+                            self._print(f"MISTAKE {num_mistakes}")
+                            num_mistakes += 1
+                        # We need to get the action that leads to the next state
+                        action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                             
                     else:
                         # next_state = np.argmax(policy[state_idx])

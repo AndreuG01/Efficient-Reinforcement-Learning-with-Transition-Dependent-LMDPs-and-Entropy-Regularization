@@ -329,7 +329,8 @@ class MDP(ABC):
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=True,
-            lmbda=self.temperature if self.temperature != 0 else 0.1, # TODO: change lmbda value when temperature is 0
+            # lmbda=self.temperature if self.temperature != 0 else 0.1, # TODO: change lmbda value when temperature is 0
+            lmbda=1,
             s0=self.s0,
             verbose=self.verbose
         )
@@ -373,14 +374,15 @@ class MDP(ABC):
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, lmdp.stats = lmdp.power_iteration()
         lmdp.V = lmdp.get_value_function(z)
-        V_mdp, stats = self.value_iteration(temp=lmdp.lmbda)
+        V_mdp, stats = self.value_iteration()
+        # V_mdp, stats = self.value_iteration(temp=lmdp.lmbda)
         
         if not hasattr(self, "stats"):
             self.stats = stats
         if not hasattr(self, "V"):
             self.V = V_mdp
         
-        self._print("EMBEDDING ERROR MDP to LMDP:", np.mean(np.square(lmdp.V - V_mdp)))
+        self._print(f"EMBEDDING ERROR MDP to LMDP: {np.mean(np.square(lmdp.V - V_mdp))}")
         return lmdp
     
     
