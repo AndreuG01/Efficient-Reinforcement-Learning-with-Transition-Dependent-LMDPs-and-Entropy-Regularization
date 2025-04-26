@@ -107,7 +107,8 @@ class CustomGrid:
         type: Literal["gridworld", "minigrid"],
         map: Map,
         properties: dict[str, list] = {},
-        allowed_actions: list[int] = None
+        allowed_actions: list[int] = None,
+        verbose: bool = True
     ):
         """
         Initializes the grid with either a predefined map or generates a simple grid.
@@ -116,6 +117,7 @@ class CustomGrid:
         - map (list[str], optional): A list of strings representing the grid.
         - grid_size (int, optional): The size of the grid if generating a simple grid (default is 3).
         """
+        self.verbose = verbose
         self.type = type
         self.map = map
         self.char_positions = {v: k for k, v in self.POSITIONS_CHAR.items()}
@@ -438,7 +440,7 @@ class CustomGrid:
         Returns:
             None
         """
-        print("Going to remove unreachable states")
+        self._print("Going to remove unreachable states")
         start_state = [state for state in self.states if state.x == self.start_pos[1] and state.y == self.start_pos[0]][0]
         
         reachable_states = set()
@@ -460,7 +462,7 @@ class CustomGrid:
         terminal_states = [state for state in self.terminal_states if state in reachable_states]
 
         removed_states = len(self.states) - len(states)
-        print(f"Removing {removed_states} states")
+        self._print(f"Removing {removed_states} states")
 
         self.states = states
         self.terminal_states = terminal_states
@@ -622,3 +624,6 @@ class CustomGrid:
                 print(self.char_positions[type], end="")
             print()
     
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)

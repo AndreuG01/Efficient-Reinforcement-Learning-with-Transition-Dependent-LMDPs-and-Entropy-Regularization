@@ -46,9 +46,10 @@ class CustomMinigridEnv(MiniGridEnv):
         agent_start_dir=0,
         max_steps: int = 200,
         allowed_actions: list[int] = None,
+        verbose: bool = True,
         **kwargs,
     ):
-        
+        self.verbose = verbose
         if allowed_actions:
             self.num_actions = len(allowed_actions)
             self.allowed_actions = allowed_actions
@@ -152,7 +153,7 @@ class CustomMinigridEnv(MiniGridEnv):
         if not save_gif:
             self.render_mode = "human"
         for policy_epoch, policy in policies:
-            print(f"Visualizing policy from training epoch: {policy_epoch}")
+            self._print(f"Visualizing policy from training epoch: {policy_epoch}")
             for i in tqdm(range(num_times), desc=f"Playing {num_times} games"):
                 num_mistakes = 1
                 self.reset()
@@ -172,16 +173,16 @@ class CustomMinigridEnv(MiniGridEnv):
                         else:
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, policy[state_idx], :])
                             if next_state != np.argmax(model.P[state_idx, policy[state_idx], :]):
-                                print(f"MISTAKE {num_mistakes}")
+                                self._print(f"MISTAKE {num_mistakes}")
                                 num_mistakes += 1
                             # We need to get the action that leads to the next state
                             action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                             
                     else:
                         # next_state = np.argmax(policy[state_idx])
-                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64))
+                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float128))
                         if next_state != np.argmax(policy[state_idx]):
-                            print(f"MISTAKE {num_mistakes}")
+                            self._print(f"MISTAKE {num_mistakes}")
                             num_mistakes += 1
                         action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                     
@@ -230,7 +231,10 @@ class CustomMinigridEnv(MiniGridEnv):
                 duration=200,
                 loop=0  # Loop forever
             )
-        
+    
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
 
 
 class MinigridMDP(MDP):
@@ -269,7 +273,8 @@ class MinigridMDP(MDP):
         threads: int = 4,
         gamma: float = 1.0,
         temperature: float = 0.0,
-        mdp: MDP = None
+        mdp: MDP = None,
+        verbose: bool = True
     ):
         """
         Initializes a MinigridMDP instance.
@@ -283,7 +288,7 @@ class MinigridMDP(MDP):
             gamma (float, optional): The discount factor for the MDP. Defaults to 1.0
             mdp (MDP, optional): If provided, initializes this MinigridMDP using an existing MDP's parameters. Defaults to None.
         """
-        
+        self.verbose = verbose
         self.stochastic_prob = stochastic_prob
         assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
         self.behaviour = behaviour
@@ -296,14 +301,14 @@ class MinigridMDP(MDP):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions)
+        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
-        print(f"MDP with {self.num_actions} actions. Allowed actions: {self.allowed_actions}")
+        self._print(f"MDP with {self.num_actions} actions. Allowed actions: {self.allowed_actions}")
         
 
         if mdp is None:
@@ -344,7 +349,7 @@ class MinigridMDP(MDP):
             else:
                 self._generate_R()
             
-            print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
+            self._print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
         else:
             # Useful when wanting to create a MinigridMDP from an embedding of an LMDP into an MDP
             # self.num_actions = mdp.num_actions
@@ -376,9 +381,9 @@ class MinigridMDP(MDP):
             state_repr = self.minigrid_env.custom_grid.states[state]
             if self.minigrid_env.custom_grid.is_cliff(state_repr):
                 # For precision purposes, do not use rewards non strictily lower than np.log(np.finfo(np.float64).tiny) = -708
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=np.float64)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=np.float128)
             else:
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float64)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float128)
 
     
     def states_to_goal(self, include_actions: bool = False) -> list[int] | tuple[list[int], list[int]]:
@@ -433,12 +438,16 @@ class MinigridMDP(MDP):
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
-            print(f"Computing value function...")
+            self._print(f"Computing value function...")
             self.compute_value_function()
             self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
         else:
             self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
 
+    
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
 
 
 class MinigridLMDP(LMDP):
@@ -472,7 +481,8 @@ class MinigridLMDP(LMDP):
         benchmark_p: bool = False,
         threads: int = 4,
         lmbda: float = 1.0,
-        lmdp: LMDP = None
+        lmdp: LMDP = None,
+        verbose: bool = True
     ):
         """
         Initializes a MinigridLMDP instance.
@@ -486,7 +496,7 @@ class MinigridLMDP(LMDP):
             threads (int): Number of threads for the transition probability matrix computation. Defaults to 4.
             lmdp (LMDP, optional): If provided, initializes this MinigridLMDP using an existing LMDP's parameters. Defaults to None.
         """
-        
+        self.verbose = verbose
         if allowed_actions:
             self.num_actions = len(allowed_actions)
             self.allowed_actions = allowed_actions
@@ -494,7 +504,7 @@ class MinigridLMDP(LMDP):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions)
+        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions, verbose=self.verbose)
         
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
@@ -528,7 +538,7 @@ class MinigridLMDP(LMDP):
             else:
                 self._generate_R()
             
-            print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
+            self._print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
                     
         else:
             super().__init__(
@@ -550,10 +560,10 @@ class MinigridLMDP(LMDP):
         Returns:
             None
         """
-        self.R[:] = np.float64(-5)
+        self.R[:] = np.float128(-5)
         cliff_states = [i for i in range(self.num_states) if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i])]
-        self.R[cliff_states] = np.float64(-50)
-        self.R[self.num_non_terminal_states:] = np.float64(0)
+        self.R[cliff_states] = np.float128(-50)
+        self.R[self.num_non_terminal_states:] = np.float128(0)
 
     
     def states_to_goal(self, stochastic: bool = False) -> list[int]:
@@ -598,13 +608,17 @@ class MinigridLMDP(LMDP):
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if not hasattr(self, "V") and policies is None:
-            print(f"Computing value function...")
+            self._print(f"Computing value function...")
             self.compute_value_function()
             self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
         else:
             assert policies is not None
             self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
-
+    
+    
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
 
 class MinigridLMDP_TDR(LMDP_TDR):
     """
@@ -635,7 +649,8 @@ class MinigridLMDP_TDR(LMDP_TDR):
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
-        threads: int = 4
+        threads: int = 4,
+        verbose: bool = True
     ):
         """
         Initializes a MinigridLMDP_TDR instance.
@@ -648,7 +663,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
             benchmark_p (bool): Whether to time the transition probability matrix generation. Defaults to False.
             threads (int): Number of threads for the transition probability matrix computation. Defaults to 4.
         """
-        
+        self.verbose = verbose
         if allowed_actions:
             self.num_actions = len(allowed_actions)
             self.allowed_actions = allowed_actions
@@ -656,7 +671,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
         
-        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions)
+        self.minigrid_env = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.minigrid_env.custom_grid.start_pos
         self.start_state = [state for state in self.minigrid_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
@@ -685,7 +700,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
             self.R = map.R
         else:
             self._generate_R()
-        print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
+        self._print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
     
                   
     def _generate_R(self):
@@ -708,16 +723,16 @@ class MinigridLMDP_TDR(LMDP_TDR):
         
         for i, j in zip(indices[0], indices[1]):
             if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[j]) or self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i]):
-                self.R[i, j] = np.float64(-50)
+                self.R[i, j] = np.float128(-50)
             else:
-                self.R[i, j] = np.float64(-5)
+                self.R[i, j] = np.float128(-5)
 
         # Matrix R is now sparese as well, so if sparse_optimization is activated, we convert it.
         if self.sparse_optimization:
-            print("Converting R into sparse matrix...")
-            print(f"Memory usage before conversion: {getsizeof(self.R):,} bytes")
+            self._print("Converting R into sparse matrix...")
+            self._print(f"Memory usage before conversion: {getsizeof(self.R):,} bytes")
             self.R = csr_matrix(self.R)
-            print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
+            self._print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
     
     
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
@@ -735,11 +750,15 @@ class MinigridLMDP_TDR(LMDP_TDR):
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if not hasattr(self, "V") and policies is None:
-            print(f"Computing value function...")
+            self._print(f"Computing value function...")
             self.compute_value_function()
             self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
         else:
             assert policies is not None
             self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self)
 
+    
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
     

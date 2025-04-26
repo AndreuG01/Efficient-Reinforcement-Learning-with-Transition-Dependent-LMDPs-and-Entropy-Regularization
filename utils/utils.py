@@ -578,7 +578,7 @@ def create_models(map, f, t, temp_mdp, temp_lmdp, behaviour, stochastic_prob):
             stochastic_prob=stochastic_prob,
             temperature=temp_mdp
         )
-        lmdp = mdp.to_LMDP_TDR(lmbda=temp_lmdp)
+        lmdp = mdp.to_LMDP_TDR(lmbda=temp_mdp)
         lmdp = GridWorldLMDP_TDR(
             map=map,
             allowed_actions=GridWorldActions.get_actions()[:4],

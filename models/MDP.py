@@ -44,6 +44,7 @@ class MDP(ABC):
         deterministic: bool = False,
         temperature: float = 0.0,
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
+        verbose: bool = True
     ) -> None:
         """
         Initialize the MDP with the given parameters.
@@ -78,7 +79,10 @@ class MDP(ABC):
         
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states))
-        self.R = np.zeros((self.num_states, self.num_actions), dtype=np.float64)
+        self.R = np.zeros((self.num_states, self.num_actions), dtype=np.float128)
+        
+        
+        self.verbose = verbose
     
 
     def generate_P(self, grid: CustomGrid, stochastic_prob: float = 0.9, num_threads: int = 4, benchmark: bool = False) -> float:
@@ -94,7 +98,7 @@ class MDP(ABC):
         """
         pos = grid.states
         terminal_pos = grid.terminal_states
-        print(f"Allowed actions {self.__allowed_actions}")
+        self._print(f"Allowed actions {self.__allowed_actions}")
         
         def process_state(state: int) -> list[float]:
             row_updates = []
@@ -144,7 +148,7 @@ class MDP(ABC):
             end_time = time.time()
             total_time = end_time - start_time
         
-        print(f"Generated matrix P with {self.P.size:,} elements")
+        self._print(f"Generated matrix P with {self.P.size:,} elements")
         
         return total_time
     
@@ -242,7 +246,7 @@ class MDP(ABC):
         start_time = time.time()
         deltas = []
         Vs = []
-        print(f"Value iteration...")
+        self._print(f"Value iteration...")
 
         while True:
             delta = 0
@@ -259,7 +263,7 @@ class MDP(ABC):
             delta = np.linalg.norm(V - V_new, np.inf)
             
             if iterations % 1000 == 0:
-                print(f"Iter: {iterations}. Delta: {delta}")
+                self._print(f"Iter: {iterations}. Delta: {delta}")
             
             
             if delta < epsilon or iterations == max_iterations:
@@ -270,7 +274,7 @@ class MDP(ABC):
             deltas.append(delta)
 
         elapsed_time = time.time() - start_time
-        print(f"Converged in {iterations} iterations")
+        self._print(f"Converged in {iterations} iterations")
         return V, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "VI")
     
     
@@ -319,7 +323,7 @@ class MDP(ABC):
     
         
     def to_LMDP(self):
-        print(f"Computing the LMDP embedding of this MDP...")
+        self._print(f"Computing the LMDP embedding of this MDP...")
         
         
         lmdp = models.LMDP.LMDP(
@@ -327,7 +331,8 @@ class MDP(ABC):
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=True,
             lmbda=self.temperature if self.temperature != 0 else 0.1, # TODO: change lmbda value when temperature is 0
-            s0=self.s0
+            s0=self.s0,
+            verbose=self.verbose
         )
         
         if self.deterministic and False:   
@@ -364,7 +369,7 @@ class MDP(ABC):
                 
                 R = lmdp.lmbda * np.log(np.sum(np.exp(x / lmdp.lmbda)))
                 lmdp.R[state] = R
-                lmdp.P[state, ~zero_cols] = np.exp((x - R * np.ones(shape=x.shape)) / lmdp.lmbda)
+                lmdp.P[state, ~zero_cols] = np.exp((x - R * np.ones(shape=x.shape, dtype=np.float128)) / lmdp.lmbda)
                 
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, lmdp.stats = lmdp.power_iteration()
@@ -376,12 +381,12 @@ class MDP(ABC):
         if not hasattr(self, "V"):
             self.V = V_mdp
         
-        print("EMBEDDING ERROR MDP to LMDP:", np.mean(np.square(lmdp.V - V_mdp)))
+        self._print("EMBEDDING ERROR MDP to LMDP:", np.mean(np.square(lmdp.V - V_mdp)))
         return lmdp
     
     
     def to_LMDP_TDR(self, lmbda: float):
-        print(f"Computing the LMDP-TDR embedding of this MDP...")
+        self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
         
         lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
@@ -389,7 +394,8 @@ class MDP(ABC):
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,
             lmbda=lmbda,
-            s0=self.s0
+            s0=self.s0,
+            verbose=self.verbose
         )
         
         if self.deterministic and False:
@@ -437,19 +443,20 @@ class MDP(ABC):
         V_mdp, _ = self.value_iteration()
         # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
         
-        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))
+        self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - V_mdp))}")
         return lmdp_tdr
     
     
     def to_LMDP_TDR_2(self):
-        print(f"Computing the LMDP-TDR embedding of this MDP...")
+        self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
         lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=True,
             lmbda=1,
-            s0=self.s0
+            s0=self.s0,
+            verbose=self.verbose
         )
         
         R_1 = np.einsum("san,na->sn", self.P, self.R) / self.num_actions
@@ -518,12 +525,12 @@ class MDP(ABC):
         V_lmdp = lmdp_tdr.get_value_function(z)
         V_mdp, _ = self.value_iteration()
         
-        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        self._print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
         return lmdp_tdr
 
     
     def to_LMDP_TDR_3(self):
-        print(f"Computing the LMDP-TDR embedding of this MDP...")
+        self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
         self.compute_value_function()
         lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
@@ -531,7 +538,8 @@ class MDP(ABC):
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,
             lmbda=1,
-            s0=self.s0
+            s0=self.s0,
+            verbose=self.verbose
         )
         
         if self.deterministic and False:
@@ -547,7 +555,7 @@ class MDP(ABC):
                 
                 x = np.where(denominator != 0, x / denominator, 0)
                 
-                if state == 0: print("x ldmp-tdr", x)
+                if state == 0: self._print("x ldmp-tdr", x)
                 
                 # lmdp_tdr.P[state, nonzero_cols] = np.exp(-np.log(len_support))
                 lmdp_tdr.P[state] = self.P[state, self.policy[state]]
@@ -558,12 +566,12 @@ class MDP(ABC):
         V_lmdp = lmdp_tdr.get_value_function(z)
         V_mdp, _ = self.value_iteration()
         
-        print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        self._print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
         return lmdp_tdr
     
     
     def to_LMDP_TDR_4(self):
-        print(f"Computing the LMDP-TDR embedding of this MDP...")
+        self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
         self.compute_value_function()
         lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
@@ -571,7 +579,8 @@ class MDP(ABC):
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,
             lmbda=self.temperature if self.temperature != 0 else 0.8, # TODO: change lmbda value when temperature is 0
-            s0=self.s0
+            s0=self.s0,
+            verbose=self.verbose
         )
         
         if self.deterministic and False:
@@ -587,7 +596,7 @@ class MDP(ABC):
         V_lmdp = lmdp_tdr.get_value_function(z)
         V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
         
-        print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        self._print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
         return lmdp_tdr
 
     def print_rewards(self):
@@ -620,3 +629,8 @@ class MDP(ABC):
                     for s_next in range(self.num_states)
                 )
                 print(f"{s:5d} | {a:6d} | {q_value:.3f}")
+
+    
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)

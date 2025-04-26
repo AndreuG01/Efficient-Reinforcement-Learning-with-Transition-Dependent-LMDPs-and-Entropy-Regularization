@@ -48,7 +48,8 @@ class GridWorldEnv:
         self,
         map: Map,
         max_steps: int = 200,
-        allowed_actions: list[int] = None
+        allowed_actions: list[int] = None,
+        verbose: bool = True
     ):
         """
         Initializes the GridWorld environment with the provided map and the maximum number of steps.
@@ -57,6 +58,7 @@ class GridWorldEnv:
             map (Map): The map representing the environment layout.
             max_steps (int, optional): The maximum number of steps the agent can take. Defaults to 200.
         """
+        self.verbose = verbose
         if allowed_actions:
             self.num_actions = len(allowed_actions)
             self.allowed_actions = allowed_actions
@@ -64,7 +66,7 @@ class GridWorldEnv:
             self.num_actions = 3
             self.allowed_actions = [i for i in range(self.num_actions)]
             
-        self.custom_grid = CustomGrid("gridworld", map=map, allowed_actions=self.allowed_actions)
+        self.custom_grid = CustomGrid("gridworld", map=map, allowed_actions=self.allowed_actions, verbose=self.verbose)
         self.agent_start_pos = self.custom_grid.start_pos
         
         self.title = map.name
@@ -100,7 +102,7 @@ class GridWorldEnv:
                     exit()
                 elif event.type == pygame.KEYDOWN:
                     key_name = pygame.key.name(event.key).lower()
-                    print(key_name)
+                    self._print(key_name)
                     if key_name in key_to_action:
                         return key_to_action[key_name]
     
@@ -163,7 +165,7 @@ class GridWorldEnv:
         # self.max_steps = 30
         
         for policy_epoch, policy in policies:
-            print(f"Visualizing policy from training epoch: {policy_epoch}")
+            self._print(f"Visualizing policy from training epoch: {policy_epoch}")
             for i in tqdm(range(num_times), desc=f"Playing {num_times} games"):
                 num_mistakes = 1
                 done = False
@@ -209,14 +211,14 @@ class GridWorldEnv:
                             else:
                                 next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, policy[state_idx], :])
                                 if next_state != np.argmax(model.P[state_idx, policy[state_idx], :]):
-                                    print(f"MISTAKE {num_mistakes}")
+                                    self._print(f"MISTAKE {num_mistakes}")
                                     num_mistakes += 1
                                 # We need to get the action that leads to the next state
                                 action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                         else:
-                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64))
+                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float128))
                             if next_state != np.argmax(policy[state_idx]):
-                                print(f"MISTAKE {num_mistakes}")
+                                self._print(f"MISTAKE {num_mistakes}")
                                 num_mistakes += 1
                             action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                     
@@ -256,6 +258,10 @@ class GridWorldEnv:
             )
         
         pygame.quit()
+    
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
                 
 class GridWorldMDP(MDP):
     """
@@ -293,7 +299,8 @@ class GridWorldMDP(MDP):
         threads: int = 4,
         gamma: float = 1.0,
         temperature: float = 0.0,
-        mdp: MDP = None
+        mdp: MDP = None,
+        verbose: bool = True
     ):
         """
         Initializes the grid world based on the provided map. Based on the allowed actions of the agent, it removes any state from the state space that cannot be reached by the agent.
@@ -308,6 +315,7 @@ class GridWorldMDP(MDP):
             gamma (float, optional): The discount factor for the MDP. Defaults to 1.
             mdp (MDP, optional): An existing MDP object to initialize the superclass. Defaults to None.
         """
+        self.verbose = verbose
         
         if mdp is not None:
             assert type(mdp) == MDP, "MDP must be of type mdp"
@@ -325,7 +333,7 @@ class GridWorldMDP(MDP):
         self.behaviour = behaviour
         deterministic = self.behaviour == "deterministic"
         
-        self.gridworld_env = GridWorldEnv(map=map, allowed_actions=self.allowed_actions)
+        self.gridworld_env = GridWorldEnv(map=map, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
@@ -342,7 +350,8 @@ class GridWorldMDP(MDP):
                 deterministic=deterministic,
                 behaviour=self.behaviour,
                 gamma=gamma,
-                temperature=temperature
+                temperature=temperature,
+                verbose=self.verbose
             )
             if map.P is not None:
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
@@ -361,7 +370,7 @@ class GridWorldMDP(MDP):
             else:
                 self._generate_R()
             
-            print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
+            self._print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
         else:
             # Useful when wanting to create a GridWorldMDP from an embedding of an LMDP into an MDP
             super().__init__(
@@ -372,7 +381,8 @@ class GridWorldMDP(MDP):
                 deterministic=mdp.deterministic,
                 behaviour=self.behaviour,
                 gamma=mdp.gamma,
-                temperature=mdp.temperature
+                temperature=mdp.temperature,
+                verbose=mdp.verbose
             )
             self.P = mdp.P
             self.R = mdp.R
@@ -412,7 +422,7 @@ class GridWorldMDP(MDP):
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
-            print("Computing value function...")
+            self._print("Computing value function...")
             self.compute_value_function()
             self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
         else:
@@ -426,6 +436,11 @@ class GridWorldMDP(MDP):
             None
         """
         self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
+    
+    
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
     
 class GridWorldLMDP(LMDP):
     """
@@ -461,6 +476,7 @@ class GridWorldLMDP(LMDP):
         threads: int = 4,
         lmbda: float = 1.0,
         lmdp: LMDP = None,
+        verbose: bool = True
     ) -> None:
         """
         Initializes the grid world based on the provided map and optionally inherits from an existing LMDP.
@@ -474,7 +490,7 @@ class GridWorldLMDP(LMDP):
             lmbda (float, optional): The temperature parameter controlling the penalty from the passive dynamics. Defaults to 1.0.
             lmdp (LMDP, optional): An existing LMDP object to initialize the superclass. Defaults to None.
         """
-        
+        self.verbose = verbose
         if allowed_actions:
             self.allowed_actions = allowed_actions
             self.num_actions = len(allowed_actions)
@@ -483,7 +499,7 @@ class GridWorldLMDP(LMDP):
             self.allowed_actions = [i for i in range(self.num_actions)]
         
         
-        self.gridworld_env = GridWorldEnv(map=map, allowed_actions=self.allowed_actions)
+        self.gridworld_env = GridWorldEnv(map=map, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
@@ -495,7 +511,8 @@ class GridWorldLMDP(LMDP):
                 num_terminal_states=self.gridworld_env.custom_grid.get_num_terminal_states(),
                 s0=self.gridworld_env.custom_grid.states.index(self.start_state),
                 sparse_optimization=sparse_optimization,
-                lmbda=lmbda
+                lmbda=lmbda,
+                verbose=self.verbose
             )
             
             if map.P is not None:
@@ -522,7 +539,8 @@ class GridWorldLMDP(LMDP):
                 num_terminal_states=lmdp.num_terminal_states,
                 s0=lmdp.s0,
                 lmbda=lmdp.lmbda,
-                sparse_optimization=False #TODO: update
+                sparse_optimization=False, #TODO: update
+                verbose=lmdp.verbose
             )
             
             self.P = lmdp.P
@@ -560,7 +578,7 @@ class GridWorldLMDP(LMDP):
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
-            print("Computing value function...")
+            self._print("Computing value function...")
             self.compute_value_function()
             self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
         else:
@@ -576,6 +594,10 @@ class GridWorldLMDP(LMDP):
         """
         self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
 
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
+    
 class GridWorldLMDP_TDR(LMDP_TDR):
     """
     A class representing a GridWorld LMDP with transition-dependent rewards.
@@ -608,7 +630,8 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         benchmark_p: bool = False,
         lmbda: float = 1.0,
         threads: int = 4,
-        lmdp_tdr: LMDP_TDR = None
+        lmdp_tdr: LMDP_TDR = None,
+        verbose: bool = True
     ):
         """
         Initializes the GridWorldTDR environment using the provided map, and sets up the LMDP-TDR structure.
@@ -620,6 +643,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             benchmark_p (bool, optional): Flag indicating whether to benchmark the transition probabilities. Defaults to False.
             threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
         """
+        self.verbose = verbose
         if allowed_actions:
             self.allowed_actions = allowed_actions
             self.num_actions = len(allowed_actions)
@@ -628,7 +652,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             self.allowed_actions = [i for i in range(self.num_actions)]
         
         
-        self.gridworld_env = GridWorldEnv(map=map, allowed_actions=self.allowed_actions)
+        self.gridworld_env = GridWorldEnv(map=map, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.gridworld_env.custom_grid.start_pos
         self.start_state = [state for state in self.gridworld_env.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
         
@@ -642,7 +666,8 @@ class GridWorldLMDP_TDR(LMDP_TDR):
                 num_terminal_states=self.gridworld_env.custom_grid.get_num_terminal_states(),
                 s0=self.gridworld_env.custom_grid.states.index(self.start_state),
                 sparse_optimization=sparse_optimization,
-                lmbda=lmbda
+                lmbda=lmbda,
+                verbose=self.verbose
             )
             
             if map.P is not None:
@@ -667,12 +692,13 @@ class GridWorldLMDP_TDR(LMDP_TDR):
                 num_terminal_states=lmdp_tdr.num_terminal_states,
                 s0=lmdp_tdr.s0,
                 lmbda=lmdp_tdr.lmbda,
-                sparse_optimization=lmdp_tdr.sparse_optimization
+                sparse_optimization=lmdp_tdr.sparse_optimization,
+                verbose=lmdp_tdr.verbose
             )
             self.P = lmdp_tdr.P
             self.R = lmdp_tdr.R
         
-        print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
+        self._print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
 
 
     def _generate_R(self) -> None:
@@ -702,10 +728,10 @@ class GridWorldLMDP_TDR(LMDP_TDR):
                 self.R[i, j] = np.float128(-5)
         
         if self.sparse_optimization:
-            print("Converting R into sparse matrix...")
-            print(f"Memory usage before conversion: {getsizeof(self.R):,} bytes")
+            self._print("Converting R into sparse matrix...")
+            self._print(f"Memory usage before conversion: {getsizeof(self.R):,} bytes")
             self.R = csr_matrix(self.R)
-            print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
+            self._print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
 
                 
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
@@ -725,7 +751,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
-            print("Computing value function...")
+            self._print("Computing value function...")
             self.compute_value_function()
             self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
         else:
@@ -739,6 +765,12 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             None
         """
         self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
+
+
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
+            
 class GridWorldPlotter:
     """
     A class responsible for plotting the GridWorld environment and its results, including the value function and policy.

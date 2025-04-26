@@ -30,7 +30,7 @@ class LMDP:
     - R (np.ndarray): The reward matrix for each state-action pair.
     # TODO: complete when code is finished
     """
-    def __init__(self, num_states: int, num_terminal_states: int, lmbda: int = 1, s0: int = 0, sparse_optimization: bool = True) -> None:
+    def __init__(self, num_states: int, num_terminal_states: int, lmbda: int = 1, s0: int = 0, sparse_optimization: bool = True, verbose: bool = True) -> None:
         """
         Initialize the LMDP with the given parameters.
         
@@ -49,6 +49,8 @@ class LMDP:
         
         self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states))
         self.R = np.zeros(self.num_states, dtype=np.float128)
+        
+        self.verbose = verbose
         
     
     
@@ -106,12 +108,12 @@ class LMDP:
         assert all([np.isclose(np.sum(self.P[i, :]), 1) for i in range(self.P.shape[0])]), "Transition probabilities are not properly defined. They do not add up to 1 in every row"
         
         
-        print(f"Generated matrix P with {self.P.size:,} elements")
+        self._print(f"Generated matrix P with {self.P.size:,} elements")
         if self.sparse_optimization:
-            print("Converting P into sparse matrix...")
-            print(f"Memory usage before conversion: {getsizeof(self.P):,} bytes")
+            self._print("Converting P into sparse matrix...")
+            self._print(f"Memory usage before conversion: {getsizeof(self.P):,} bytes")
             self.P = csr_matrix(self.P)
-            print(f"Memory usage after conversion: {getsizeof(self.P):,} bytes")
+            self._print(f"Memory usage after conversion: {getsizeof(self.P):,} bytes")
         
         return total_time
     
@@ -189,9 +191,9 @@ class LMDP:
         - z (np.ndarray): Converged transformed value function vector.
         """
         G = np.diag(np.exp(self.R[:self.num_non_terminal_states] / self.lmbda))
-        z = np.ones(self.num_states)
+        z = np.ones(self.num_states, dtype=np.float128)
         
-        print(f"Power iteration LMDP...")
+        self._print(f"Power iteration LMDP...")
         if self.sparse_optimization:
             if type(self.P) != csr_matrix: self.P = csr_matrix(self.P)
             G = csr_matrix(G)
@@ -204,13 +206,13 @@ class LMDP:
         while True:
             delta = 0
             z_new = G @ self.P @ z
-            z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
+            z_new = np.concatenate((z_new, np.ones((self.num_terminal_states), dtype=np.float128)))
             Vs.append(self.get_value_function(z_new))
             
             delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z), ord=np.inf)
             
             if iterations % 100 == 0:
-                print(f"Iter: {iterations}. Delta: {delta}")
+                self._print(f"Iter: {iterations}. Delta: {delta}")
 
             if delta < epsilon or iterations == max_iterations:
                 break
@@ -222,7 +224,7 @@ class LMDP:
         elapsed_time = time.time() - start_time
         
         self.z = z
-        print(f"Converged in {iterations} iterations")
+        self._print(f"Converged in {iterations} iterations")
         return z, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "PI")
 
     def get_value_function(self, z: np.ndarray = None) -> np.ndarray:
@@ -249,7 +251,7 @@ class LMDP:
         Compute the value function and derive the optimal policy.
         """
         if not hasattr(self, "z"):
-            print("Will compute power iteration")
+            self._print("Will compute power iteration")
         _, self.stats = self.power_iteration()
         
         self.V = self.get_value_function()
@@ -267,7 +269,7 @@ class LMDP:
         z, _ = self.power_iteration()
         
         control = self.get_control(z)
-        print(f"Computing the MDP embedding of this LMDP...")
+        self._print(f"Computing the MDP embedding of this LMDP...")
         # The minimum number of actions that can be done to achieve the same behaviour in an MDP.
         num_actions = np.max(np.sum(control > 0, axis=1))
         
@@ -275,7 +277,8 @@ class LMDP:
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             allowed_actions=[i for i in range(num_actions)],
-            s0=self.s0
+            s0=self.s0,
+            verbose=self.verbose
             # gamma=0.9
         )
         
@@ -305,7 +308,7 @@ class LMDP:
         mdp.compute_value_function()
         V_mdp = mdp.V
         
-        print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))
+        self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - V_mdp))}")
         
         return mdp
 
@@ -315,7 +318,8 @@ class LMDP:
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             s0=self.s0,
-            sparse_optimization=self.sparse_optimization
+            sparse_optimization=self.sparse_optimization,
+            verbose=self.verbose
         )
         
         lmdp_tdr.P = self.P.copy()
@@ -326,4 +330,7 @@ class LMDP:
             lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
         
         return lmdp_tdr
-        
+    
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)

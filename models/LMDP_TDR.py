@@ -9,7 +9,7 @@ from tqdm import tqdm
 import models
 import models.LMDP
 class LMDP_TDR:
-    def __init__(self, num_states: int, num_terminal_states: int, lmbda: int = 1, s0: int = 0, sparse_optimization: bool = True) -> None:
+    def __init__(self, num_states: int, num_terminal_states: int, lmbda: int = 1, s0: int = 0, sparse_optimization: bool = True, verbose: bool = True) -> None:
         self.num_states = num_states
         self.num_terminal_states = num_terminal_states
         self.num_non_terminal_states = self.num_states - self.num_terminal_states
@@ -19,6 +19,8 @@ class LMDP_TDR:
         
         self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states))
         self.R = np.zeros((self.num_non_terminal_states, self.num_states))
+        
+        self.verbose = verbose
     
     
     def generate_P(self, grid: CustomGrid, actions: list[int], num_threads: int = 10, benchmark: bool = False) -> float:
@@ -73,12 +75,12 @@ class LMDP_TDR:
         assert all([np.isclose(np.sum(self.P[i, :]), 1) for i in range(self.P.shape[0])]), "Transition probabilities are not properly defined. They do not add up to 1 in every row"
         
         
-        print(f"Generated matrix P with {self.P.size:,} elements")
+        self._print(f"Generated matrix P with {self.P.size:,} elements")
         if self.sparse_optimization:
-            print("Converting P into sparse matrix...")
-            print(f"Memory usage before conversion: {getsizeof(self.P):,} bytes")
+            self._print("Converting P into sparse matrix...")
+            self._print(f"Memory usage before conversion: {getsizeof(self.P):,} bytes")
             self.P = csr_matrix(self.P)
-            print(f"Memory usage after conversion: {getsizeof(self.P):,} bytes")
+            self._print(f"Memory usage after conversion: {getsizeof(self.P):,} bytes")
         
         return total_time
     
@@ -124,7 +126,7 @@ class LMDP_TDR:
         else:
             temperature = self.lmbda
         
-        print(f"Power iteration LMDP-TDR...")
+        self._print(f"Power iteration LMDP-TDR...")
         if self.sparse_optimization:
             self.o = np.exp(self.R.toarray() / temperature) # TODO: I have problems when this is a sparse matrix
             G = csr_matrix(self.P.multiply(self.o))
@@ -134,18 +136,18 @@ class LMDP_TDR:
             G = self.P * self.o
     
     
-        z = np.ones(self.num_states)
+        z = np.ones(self.num_states, dtype=np.float128)
         iterations = 0
         delta = 0
         
         while True:
             z_new = G @ z
-            z_new = np.concatenate((z_new, np.ones((self.num_terminal_states))))
+            z_new = np.concatenate((z_new, np.ones((self.num_terminal_states), dtype=np.float128)))
            
             delta = np.linalg.norm(self.get_value_function(z_new, temp=temp) - self.get_value_function(z, temp=temp), ord=np.inf)
             
             if iterations % 1000 == 0:
-                print(f"Iter: {iterations}. Delta: {delta}")
+                self._print(f"Iter: {iterations}. Delta: {delta}")
         
             if delta < epsilon:
                 break
@@ -154,7 +156,7 @@ class LMDP_TDR:
             iterations += 1
         
         self.z = z
-        print(f"Converged in {iterations} iterations")
+        self._print(f"Converged in {iterations} iterations")
         return z
         
     
@@ -168,14 +170,14 @@ class LMDP_TDR:
             z = self.z
         
         result = np.log(z) * temperature
-        result[result == -np.inf] = np.finfo(np.float64).min
+        result[result == -np.inf] = np.finfo(np.float128).min
         
         return result
     
     
     def compute_value_function(self, temp: float = None):
         # if not hasattr(self, "z"):
-        print("Will compute power iteration")
+        self._print("Will compute power iteration")
         self.power_iteration(temp=temp)
         
         self.V = self.get_value_function(temp=temp)
@@ -194,10 +196,11 @@ class LMDP_TDR:
             self.num_terminal_states,
             self.lmbda,
             self.s0,
-            sparse_optimization=False
+            sparse_optimization=False,
+            verbose=self.verbose
         )
         
-        large_negative = np.float64(-1e10)
+        large_negative = np.float128(-1e10)
         x = self.R + self.lmbda * np.where(self.P != 0, np.log(self.P), large_negative)
         
         lmdp.R = self.lmbda * np.log(np.sum(np.exp(x / self.lmbda), axis=1))
@@ -208,4 +211,7 @@ class LMDP_TDR:
         lmdp.P /= np.sum(lmdp.P, axis=1).reshape(-1, 1)
 
         return lmdp
-        
+    
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
