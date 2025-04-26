@@ -75,7 +75,7 @@ class GridWorldEnv:
         
         self.__agent_pos = self.agent_start_pos
         
-        self.max_steps = max_steps
+        self.max_steps = 10000#max_steps
 
     
     def __get_manual_action(self):
@@ -166,8 +166,10 @@ class GridWorldEnv:
         
         for policy_epoch, policy in policies:
             self._print(f"Visualizing policy from training epoch: {policy_epoch}")
+            total_mistakes = 0
+            total_actions = 0
             for i in tqdm(range(num_times), desc=f"Playing {num_times} games"):
-                num_mistakes = 1
+                num_mistakes = 0
                 done = False
                 actions = 0
                 next_properties = {k: v[0] for k, v in self.custom_grid.state_properties.items()}
@@ -207,19 +209,23 @@ class GridWorldEnv:
                     else:
                         if isinstance(model, GridWorldMDP):
                             if model.deterministic:
-                                action = policy[state_idx]
+                                action = np.argmax(policy[state_idx])
                             else:
-                                next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, policy[state_idx], :])
-                                if next_state != np.argmax(model.P[state_idx, policy[state_idx], :]):
-                                    self._print(f"MISTAKE {num_mistakes}")
+                                action = np.argmax(policy[state_idx])
+                                next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :])
+                                if next_state != np.argmax(model.P[state_idx, action, :]):
                                     num_mistakes += 1
+                                    self._print(f"MISTAKE [{num_mistakes} / {actions}]")
                                 # We need to get the action that leads to the next state
                                 action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                         else:
-                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float128))
+                            # This function uses the C-long dtype, which is 32bit on windows and otherwise 64bit on 64bit platforms (and 32bit on 32bit ones).
+                            # Since NumPy 2.0, NumPy’s default integer is 32bit on 32bit platforms and 64bit on 64bit platforms.
+                            # Therefore, DO NOT CHANGE THE .astype(np.float64) from the following line.
+                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64))
                             if next_state != np.argmax(policy[state_idx]):
-                                self._print(f"MISTAKE {num_mistakes}")
                                 num_mistakes += 1
+                                self._print(f"MISTAKE [{num_mistakes} / {actions}]")
                             action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                     
                     next_state, _, _ = self.custom_grid.move(state, action)
@@ -247,7 +253,10 @@ class GridWorldEnv:
                     actions += 1
                     if actions == self.max_steps:
                         break
+            total_mistakes += num_mistakes
+            total_actions += actions
         
+        self._print(f"After {num_times} games. {total_actions} total actions. {total_mistakes} mistakes. {round((total_actions - total_mistakes) / total_actions * 100, 2)}% correct actions")
         if save_gif and frames and save_path:
             frames[0].save(
                 save_path,

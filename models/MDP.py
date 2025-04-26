@@ -310,11 +310,10 @@ class MDP(ABC):
                      self.gamma * np.einsum("saj,j->sa", self.P[:self.num_non_terminal_states], V)
         
         if self.temperature == 0:
-            if multiple_actions:
-                max_values = np.max(expected_utilities, axis=1, keepdims=True)
-                policy = (expected_utilities == max_values).astype(int)  # Binary mask for optimal actions
-            else:
-                policy = np.argmax(expected_utilities, axis=1)
+            max_values = np.max(expected_utilities, axis=1, keepdims=True)
+            policy = (expected_utilities == max_values).astype(int)  # Binary mask for optimal actions
+            if not multiple_actions:
+                policy = policy.astype(np.float64) / np.sum(policy, axis=1).reshape(-1, 1)
         else:
             policy = np.exp(expected_utilities / temperature) / np.sum(np.exp(expected_utilities / temperature), axis=1).reshape(-1,1)
         
