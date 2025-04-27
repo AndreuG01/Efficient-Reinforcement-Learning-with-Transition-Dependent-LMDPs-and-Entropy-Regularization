@@ -1,3 +1,6 @@
+import os
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1" # To hide the welcome message of the pygame library
+from models.MDP import MDP
 from domains.grid import MinigridActions, GridWorldActions
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP, GridWorldLMDP_TDR
 from domains.minigrid_env import MinigridMDP, MinigridLMDP, MinigridLMDP_TDR
@@ -6,7 +9,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import Normalize
 from PIL import Image
-import os
 import numpy as np
 from utils.maps import Maps, Map
 from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, benchmark_lmdp2mdp_embedding, benchmark_mdp2lmdp_embedding

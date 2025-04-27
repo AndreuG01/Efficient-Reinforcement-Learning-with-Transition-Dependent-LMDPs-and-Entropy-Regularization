@@ -30,7 +30,16 @@ class LMDP:
     - R (np.ndarray): The reward matrix for each state-action pair.
     # TODO: complete when code is finished
     """
-    def __init__(self, num_states: int, num_terminal_states: int, lmbda: int = 1, s0: int = 0, sparse_optimization: bool = True, verbose: bool = True) -> None:
+    def __init__(
+        self,
+        num_states: int,
+        num_terminal_states: int,
+        lmbda: int = 1,
+        s0: int = 0,
+        sparse_optimization: bool = True,
+        verbose: bool = True,
+        dtype: np.dtype = np.float128
+    ) -> None:
         """
         Initialize the LMDP with the given parameters.
         
@@ -40,6 +49,8 @@ class LMDP:
         - lmbda (int): Regularization factor for KL divergence (default is 1).
         - s0 (int): Initial state index (default is 1).
         """
+        self.__dtype = dtype
+        
         self.num_states = num_states
         self.num_terminal_states = num_terminal_states
         self.num_non_terminal_states = self.num_states - self.num_terminal_states
@@ -47,8 +58,8 @@ class LMDP:
         self.lmbda = lmbda
         self.sparse_optimization = sparse_optimization
         
-        self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states))
-        self.R = np.zeros(self.num_states, dtype=np.float128)
+        self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states), dtype=self.__dtype)
+        self.R = np.zeros(self.num_states, dtype=self.__dtype)
         
         self.verbose = verbose
         
@@ -134,7 +145,7 @@ class LMDP:
         - reward (float): The reward obtained for the transition.
         - terminal (bool): True if the next state is a terminal state, False otherwise.
         """
-        next_state = np.random.choice(self.num_states, p=self.P[state])
+        next_state = np.random.choice(self.num_states, p=self.P[state] if self.__dtype != np.float128 else self.P[state].astype(np.float64))
         
         return (
             next_state,
@@ -157,7 +168,7 @@ class LMDP:
             # TODO: keep working with sparse matrices here.
             self.P = self.P.toarray()
         
-        control = self.P * z
+        control = (self.P * z).astype(self.__dtype)
         control = control / np.sum(control, axis=1).reshape(-1, 1)
         
         # print(f"Control elements: {control.size}. Non zero: {np.count_nonzero(control)}")
@@ -191,7 +202,7 @@ class LMDP:
         - z (np.ndarray): Converged transformed value function vector.
         """
         G = np.diag(np.exp(self.R[:self.num_non_terminal_states] / self.lmbda))
-        z = np.ones(self.num_states, dtype=np.float128)
+        z = np.ones(self.num_states, dtype=self.__dtype)
         
         self._print(f"Power iteration LMDP...")
         if self.sparse_optimization:
@@ -206,7 +217,7 @@ class LMDP:
         while True:
             delta = 0
             z_new = G @ self.P @ z
-            z_new = np.concatenate((z_new, np.ones((self.num_terminal_states), dtype=np.float128)))
+            z_new = np.concatenate((z_new, np.ones((self.num_terminal_states), dtype=self.__dtype)), dtype=self.__dtype)
             Vs.append(self.get_value_function(z_new))
             
             delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z), ord=np.inf)
@@ -240,8 +251,8 @@ class LMDP:
         if z is None:
             z = self.z
         
-        result = np.log(z) * self.lmbda
-        result[result == -np.inf] = np.finfo(np.float128).min
+        result = np.log(z, dtype=self.__dtype) * self.lmbda
+        result[result == -np.inf] = np.finfo(self.__dtype).min
         
         return result
     
@@ -278,7 +289,8 @@ class LMDP:
             num_terminal_states=self.num_terminal_states,
             allowed_actions=[i for i in range(num_actions)],
             s0=self.s0,
-            verbose=self.verbose
+            verbose=self.verbose,
+            dtype=self.__dtype
             # gamma=0.9
         )
         
@@ -319,12 +331,13 @@ class LMDP:
             num_terminal_states=self.num_terminal_states,
             s0=self.s0,
             sparse_optimization=self.sparse_optimization,
-            verbose=self.verbose
+            verbose=self.verbose,
+            dtype=self.__dtype
         )
         
         lmdp_tdr.P = self.P.copy()
         for state in range(self.num_non_terminal_states):
-            lmdp_tdr.R[state, :] = np.full(shape=self.num_states, fill_value=self.R[state], dtype=np.float128)
+            lmdp_tdr.R[state, :] = np.full(shape=self.num_states, fill_value=self.R[state], dtype=self.__dtype)
         
         if self.sparse_optimization:
             lmdp_tdr.R = csr_matrix(lmdp_tdr.R)

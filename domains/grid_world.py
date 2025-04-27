@@ -208,8 +208,8 @@ class GridWorldEnv:
                         action = self.__get_manual_action()
                     else:
                         if isinstance(model, GridWorldMDP):
-                            action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64))
-                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :])
+                            action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64) if model.__dtype == np.float128 else policy[state_idx])
+                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :].astype(np.float64) if model.__dtype == np.float128 else model.P[state_idx, action, :])
                             if next_state != np.argmax(model.P[state_idx, action, :]):
                                 num_mistakes += 1
                                 self._print(f"MISTAKE [{num_mistakes} / {actions}]")
@@ -219,7 +219,7 @@ class GridWorldEnv:
                             # This function uses the C-long dtype, which is 32bit on windows and otherwise 64bit on 64bit platforms (and 32bit on 32bit ones).
                             # Since NumPy 2.0, NumPy’s default integer is 32bit on 32bit platforms and 64bit on 64bit platforms.
                             # Therefore, DO NOT CHANGE THE .astype(np.float64) from the following line.
-                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64))
+                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64) if model.__dtype == np.float128 else policy[state_idx])
                             if next_state != np.argmax(policy[state_idx]):
                                 num_mistakes += 1
                                 self._print(f"MISTAKE [{num_mistakes} / {actions}]")
@@ -306,7 +306,8 @@ class GridWorldMDP(MDP):
         gamma: float = 1.0,
         temperature: float = 0.0,
         mdp: MDP = None,
-        verbose: bool = True
+        verbose: bool = True,
+        dtype: np.dtype = np.float128
     ):
         """
         Initializes the grid world based on the provided map. Based on the allowed actions of the agent, it removes any state from the state space that cannot be reached by the agent.
@@ -322,7 +323,7 @@ class GridWorldMDP(MDP):
             mdp (MDP, optional): An existing MDP object to initialize the superclass. Defaults to None.
         """
         self.verbose = verbose
-        
+        self.__dtype = dtype
         if mdp is not None:
             assert type(mdp) == MDP, "MDP must be of type mdp"
             
@@ -357,7 +358,8 @@ class GridWorldMDP(MDP):
                 behaviour=self.behaviour,
                 gamma=gamma,
                 temperature=temperature,
-                verbose=self.verbose
+                verbose=self.verbose,
+                dtype=self.__dtype
             )
             if map.P is not None:
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
@@ -388,7 +390,8 @@ class GridWorldMDP(MDP):
                 behaviour=self.behaviour,
                 gamma=mdp.gamma,
                 temperature=mdp.temperature,
-                verbose=mdp.verbose
+                verbose=mdp.verbose,
+                dtype=mdp.__dtype
             )
             self.P = mdp.P
             self.R = mdp.R
@@ -404,11 +407,9 @@ class GridWorldMDP(MDP):
         for state in range(self.num_non_terminal_states):
             state_repr = self.gridworld_env.custom_grid.states[state]
             if self.gridworld_env.custom_grid.is_cliff(state_repr):
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=np.float128)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=self.__dtype)
             else:
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float128)
-    
-    
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=self.__dtype)
 
 
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
@@ -482,7 +483,8 @@ class GridWorldLMDP(LMDP):
         threads: int = 4,
         lmbda: float = 1.0,
         lmdp: LMDP = None,
-        verbose: bool = True
+        verbose: bool = True,
+        dtype: np.dtype = np.float128
     ) -> None:
         """
         Initializes the grid world based on the provided map and optionally inherits from an existing LMDP.
@@ -496,6 +498,7 @@ class GridWorldLMDP(LMDP):
             lmbda (float, optional): The temperature parameter controlling the penalty from the passive dynamics. Defaults to 1.0.
             lmdp (LMDP, optional): An existing LMDP object to initialize the superclass. Defaults to None.
         """
+        self.__dtype = dtype
         self.deterministic = False
         self.verbose = verbose
         if allowed_actions:
@@ -519,7 +522,8 @@ class GridWorldLMDP(LMDP):
                 s0=self.gridworld_env.custom_grid.states.index(self.start_state),
                 sparse_optimization=sparse_optimization,
                 lmbda=lmbda,
-                verbose=self.verbose
+                verbose=self.verbose,
+                dtype=self.__dtype
             )
             
             if map.P is not None:
@@ -547,7 +551,8 @@ class GridWorldLMDP(LMDP):
                 s0=lmdp.s0,
                 lmbda=lmdp.lmbda,
                 sparse_optimization=False, #TODO: update
-                verbose=lmdp.verbose
+                verbose=lmdp.verbose,
+                dtype=lmdp.__dtype
             )
             
             self.P = lmdp.P
@@ -562,10 +567,10 @@ class GridWorldLMDP(LMDP):
         Returns:
             None
         """
-        self.R[:] = np.float128(-5)
+        self.R[:] = self.__dtype(-5)
         cliff_states = [i for i in range(self.num_states) if self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[i])]
-        self.R[cliff_states] = np.float128(-50)
-        self.R[self.num_non_terminal_states:] = np.float128(0)
+        self.R[cliff_states] = self.__dtype(-50)
+        self.R[self.num_non_terminal_states:] = self.__dtype(0)
     
     
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
@@ -638,7 +643,8 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         lmbda: float = 1.0,
         threads: int = 4,
         lmdp_tdr: LMDP_TDR = None,
-        verbose: bool = True
+        verbose: bool = True,
+        dtype: np.dtype = np.float128
     ):
         """
         Initializes the GridWorldTDR environment using the provided map, and sets up the LMDP-TDR structure.
@@ -650,6 +656,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             benchmark_p (bool, optional): Flag indicating whether to benchmark the transition probabilities. Defaults to False.
             threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
         """
+        self.__dtype = dtype
         self.deterministic = False
         self.verbose = verbose
         if allowed_actions:
@@ -675,7 +682,8 @@ class GridWorldLMDP_TDR(LMDP_TDR):
                 s0=self.gridworld_env.custom_grid.states.index(self.start_state),
                 sparse_optimization=sparse_optimization,
                 lmbda=lmbda,
-                verbose=self.verbose
+                verbose=self.verbose,
+                dtype=self.__dtype
             )
             
             if map.P is not None:
@@ -701,7 +709,8 @@ class GridWorldLMDP_TDR(LMDP_TDR):
                 s0=lmdp_tdr.s0,
                 lmbda=lmdp_tdr.lmbda,
                 sparse_optimization=lmdp_tdr.sparse_optimization,
-                verbose=lmdp_tdr.verbose
+                verbose=lmdp_tdr.verbose,
+                dtype=lmdp_tdr.__dtype
             )
             self.P = lmdp_tdr.P
             self.R = lmdp_tdr.R
@@ -729,11 +738,11 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             
         for i, j in zip(indices[0], indices[1]):
             if self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[j]) or self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[i]):
-                self.R[i, j] = np.float128(-50)
+                self.R[i, j] = self.__dtype(-50)
             elif self.gridworld_env.custom_grid.is_terminal(self.gridworld_env.custom_grid.state_index_mapper[j]):
-                self.R[i, j] = np.float128(0)
+                self.R[i, j] = self.__dtype(0)
             else:
-                self.R[i, j] = np.float128(-5)
+                self.R[i, j] = self.__dtype(-5)
         
         if self.sparse_optimization:
             self._print("Converting R into sparse matrix...")

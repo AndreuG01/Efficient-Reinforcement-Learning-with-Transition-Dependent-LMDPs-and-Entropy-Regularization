@@ -167,8 +167,8 @@ class CustomMinigridEnv(MiniGridEnv):
                     state_idx = next(k for k, v in self.custom_grid.state_index_mapper.items() if v == state)
                     
                     if isinstance(model, MinigridMDP):
-                        action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64))
-                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :])
+                        action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64) if model.__dtype == np.float128 else policy[state_idx])
+                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :].astype(np.float64) if model.__dtype == np.float128 else model.P[state_idx, action, :])
                         if next_state != np.argmax(model.P[state_idx, action, :]):
                             self._print(f"MISTAKE {num_mistakes}")
                             num_mistakes += 1
@@ -177,7 +177,7 @@ class CustomMinigridEnv(MiniGridEnv):
                             
                     else:
                         # next_state = np.argmax(policy[state_idx])
-                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64))
+                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64) if model.__dtype == np.float128 else policy[state_idx])
                         if next_state != np.argmax(policy[state_idx]):
                             self._print(f"MISTAKE {num_mistakes}")
                             num_mistakes += 1
@@ -271,7 +271,8 @@ class MinigridMDP(MDP):
         gamma: float = 1.0,
         temperature: float = 0.0,
         mdp: MDP = None,
-        verbose: bool = True
+        verbose: bool = True,
+        dtype: np.dtype = np.float128
     ):
         """
         Initializes a MinigridMDP instance.
@@ -285,6 +286,7 @@ class MinigridMDP(MDP):
             gamma (float, optional): The discount factor for the MDP. Defaults to 1.0
             mdp (MDP, optional): If provided, initializes this MinigridMDP using an existing MDP's parameters. Defaults to None.
         """
+        self.__dtype = dtype
         self.verbose = verbose
         self.stochastic_prob = stochastic_prob
         assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
@@ -318,7 +320,8 @@ class MinigridMDP(MDP):
                 behaviour=self.behaviour,
                 gamma=gamma,
                 temperature=temperature,
-                verbose=self.verbose
+                verbose=self.verbose,
+                dtype=self.__dtype
             )
             if map.P is not None:
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
@@ -361,7 +364,8 @@ class MinigridMDP(MDP):
                 deterministic=mdp.deterministic,
                 behaviour=self.behaviour,
                 temperature=mdp.temperature,
-                verbose=mdp.verbose
+                verbose=mdp.verbose,
+                dtype=mdp.__dtype
             )
             
             self.P = mdp.P
@@ -380,9 +384,9 @@ class MinigridMDP(MDP):
             state_repr = self.minigrid_env.custom_grid.states[state]
             if self.minigrid_env.custom_grid.is_cliff(state_repr):
                 # For precision purposes, do not use rewards non strictily lower than np.log(np.finfo(np.float128).tiny) = -708
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=np.float128)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=self.__dtype)
             else:
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=np.float128)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=self.__dtype)
 
     
     def states_to_goal(self, include_actions: bool = False) -> list[int] | tuple[list[int], list[int]]:
@@ -403,7 +407,7 @@ class MinigridMDP(MDP):
         
         while not self.minigrid_env.custom_grid.is_terminal(curr_state):
             if self.behaviour == "stochastic":
-                curr_state_idx = np.random.choice(self.minigrid_env.custom_grid.get_num_states(), p=self.P[curr_state_idx, self.policy[curr_state_idx], :])
+                curr_state_idx = np.random.choice(self.minigrid_env.custom_grid.get_num_states(), p=self.P[curr_state_idx, self.policy[curr_state_idx], :].astype(np.float64) if self.__dtype == np.float128 else self.P[curr_state_idx, self.policy[curr_state_idx], :])
                 curr_state = self.minigrid_env.custom_grid.state_index_mapper[curr_state_idx]
             elif self.behaviour == "deterministic":
                 curr_action = self.policy[curr_state_idx]
@@ -481,7 +485,8 @@ class MinigridLMDP(LMDP):
         threads: int = 4,
         lmbda: float = 1.0,
         lmdp: LMDP = None,
-        verbose: bool = True
+        verbose: bool = True,
+        dtype: np.dtype = np.float128
     ):
         """
         Initializes a MinigridLMDP instance.
@@ -495,6 +500,7 @@ class MinigridLMDP(LMDP):
             threads (int): Number of threads for the transition probability matrix computation. Defaults to 4.
             lmdp (LMDP, optional): If provided, initializes this MinigridLMDP using an existing LMDP's parameters. Defaults to None.
         """
+        self.__dtype = dtype
         self.verbose = verbose
         if allowed_actions:
             self.num_actions = len(allowed_actions)
@@ -518,7 +524,8 @@ class MinigridLMDP(LMDP):
                 s0=self.minigrid_env.custom_grid.states.index(self.start_state),
                 lmbda=lmbda,
                 sparse_optimization=sparse_optimization,
-                verbose=self.verbose
+                verbose=self.verbose,
+                dtype=self.__dtype
             )
 
             if map.P is not None:
@@ -547,7 +554,8 @@ class MinigridLMDP(LMDP):
                 s0=lmdp.s0,
                 lmbda=lmdp.lmbda,
                 sparse_optimization=lmdp.sparse_optimization,
-                verbose=lmdp.verbose
+                verbose=lmdp.verbose,
+                dtype=lmdp.__dtype
             )
             self.P = lmdp.P
             self.R = lmdp.R
@@ -561,10 +569,10 @@ class MinigridLMDP(LMDP):
         Returns:
             None
         """
-        self.R[:] = np.float128(-5)
+        self.R[:] = self.__dtype(-5)
         cliff_states = [i for i in range(self.num_states) if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i])]
-        self.R[cliff_states] = np.float128(-50)
-        self.R[self.num_non_terminal_states:] = np.float128(0)
+        self.R[cliff_states] = self.__dtype(-50)
+        self.R[self.num_non_terminal_states:] = self.__dtype(0)
 
     
     def states_to_goal(self, stochastic: bool = False) -> list[int]:
@@ -583,7 +591,7 @@ class MinigridLMDP(LMDP):
         
         while not self.minigrid_env.custom_grid.is_terminal(curr_state):        
             if stochastic:
-                curr_state_idx = np.random.choice(self.minigrid_env.custom_grid.get_num_states(), p=self.policy[curr_state_idx])
+                curr_state_idx = np.random.choice(self.minigrid_env.custom_grid.get_num_states(), p=self.policy[curr_state_idx].astype(np.float64) if self.__dtype == np.float128 else self.policy[curr_state_idx])
             else:
                 curr_state_idx = np.argmax(self.policy[curr_state_idx])
             
@@ -652,7 +660,8 @@ class MinigridLMDP_TDR(LMDP_TDR):
         benchmark_p: bool = False,
         threads: int = 4,
         verbose: bool = True,
-        lmdp: LMDP_TDR = None
+        lmdp: LMDP_TDR = None,
+        dtype: np.dtype = np.float128
     ):
         """
         Initializes a MinigridLMDP_TDR instance.
@@ -665,6 +674,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
             benchmark_p (bool): Whether to time the transition probability matrix generation. Defaults to False.
             threads (int): Number of threads for the transition probability matrix computation. Defaults to 4.
         """
+        self.__dtype = dtype
         self.verbose = verbose
         if allowed_actions:
             self.num_actions = len(allowed_actions)
@@ -685,7 +695,8 @@ class MinigridLMDP_TDR(LMDP_TDR):
                 num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
                 s0=self.minigrid_env.custom_grid.states.index(self.start_state),
                 sparse_optimization=sparse_optimization,
-                verbose=self.verbose
+                verbose=self.verbose,
+                dtype=self.__dtype
             )
 
             if map.P is not None:
@@ -711,7 +722,8 @@ class MinigridLMDP_TDR(LMDP_TDR):
                 lmbda=lmdp.lmbda,
                 s0=lmdp.s0,
                 sparse_optimization=lmdp.sparse_optimization,
-                verbose=lmdp.verbose
+                verbose=lmdp.verbose,
+                dtype=lmdp.__dtype
             )
             self.P = lmdp.P
             self.R = lmdp.R
@@ -739,9 +751,9 @@ class MinigridLMDP_TDR(LMDP_TDR):
         
         for i, j in zip(indices[0], indices[1]):
             if self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[j]) or self.minigrid_env.custom_grid.is_cliff(self.minigrid_env.custom_grid.state_index_mapper[i]):
-                self.R[i, j] = np.float128(-50)
+                self.R[i, j] = self.__dtype(-50)
             else:
-                self.R[i, j] = np.float128(-5)
+                self.R[i, j] = self.__dtype(-5)
 
         # Matrix R is now sparese as well, so if sparse_optimization is activated, we convert it.
         if self.sparse_optimization:
