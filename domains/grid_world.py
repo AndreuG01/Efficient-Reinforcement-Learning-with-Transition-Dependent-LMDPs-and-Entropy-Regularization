@@ -208,7 +208,7 @@ class GridWorldEnv:
                         action = self.__get_manual_action()
                     else:
                         if isinstance(model, GridWorldMDP):
-                            action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx])
+                            action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64))
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :])
                             if next_state != np.argmax(model.P[state_idx, action, :]):
                                 num_mistakes += 1

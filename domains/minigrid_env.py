@@ -58,7 +58,7 @@ class CustomMinigridEnv(MiniGridEnv):
             self.allowed_actions = [i for i in range(self.num_actions)]
         
         
-        self.custom_grid = CustomGrid("minigrid", map=map, properties=properties, allowed_actions=allowed_actions)
+        self.custom_grid = CustomGrid("minigrid", map=map, properties=properties, allowed_actions=allowed_actions, verbose=self.verbose)
         self.agent_start_pos = self.custom_grid.start_pos
         self.agent_start_dir = agent_start_dir
         
@@ -167,7 +167,7 @@ class CustomMinigridEnv(MiniGridEnv):
                     state_idx = next(k for k, v in self.custom_grid.state_index_mapper.items() if v == state)
                     
                     if isinstance(model, MinigridMDP):
-                        action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx])
+                        action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64))
                         next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :])
                         if next_state != np.argmax(model.P[state_idx, action, :]):
                             self._print(f"MISTAKE {num_mistakes}")
@@ -177,7 +177,7 @@ class CustomMinigridEnv(MiniGridEnv):
                             
                     else:
                         # next_state = np.argmax(policy[state_idx])
-                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float128))
+                        next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64))
                         if next_state != np.argmax(policy[state_idx]):
                             self._print(f"MISTAKE {num_mistakes}")
                             num_mistakes += 1
@@ -317,7 +317,8 @@ class MinigridMDP(MDP):
                 deterministic=deterministic,
                 behaviour=self.behaviour,
                 gamma=gamma,
-                temperature=temperature
+                temperature=temperature,
+                verbose=self.verbose
             )
             if map.P is not None:
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
@@ -359,7 +360,8 @@ class MinigridMDP(MDP):
                 gamma=mdp.gamma,
                 deterministic=mdp.deterministic,
                 behaviour=self.behaviour,
-                temperature=mdp.temperature
+                temperature=mdp.temperature,
+                verbose=mdp.verbose
             )
             
             self.P = mdp.P
@@ -515,7 +517,8 @@ class MinigridLMDP(LMDP):
                 num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
                 s0=self.minigrid_env.custom_grid.states.index(self.start_state),
                 lmbda=lmbda,
-                sparse_optimization=sparse_optimization
+                sparse_optimization=sparse_optimization,
+                verbose=self.verbose
             )
 
             if map.P is not None:
@@ -543,7 +546,8 @@ class MinigridLMDP(LMDP):
                 num_terminal_states=lmdp.num_terminal_states,
                 s0=lmdp.s0,
                 lmbda=lmdp.lmbda,
-                sparse_optimization=lmdp.sparse_optimization
+                sparse_optimization=lmdp.sparse_optimization,
+                verbose=lmdp.verbose
             )
             self.P = lmdp.P
             self.R = lmdp.R
@@ -647,7 +651,8 @@ class MinigridLMDP_TDR(LMDP_TDR):
         sparse_optimization: bool = True,
         benchmark_p: bool = False,
         threads: int = 4,
-        verbose: bool = True
+        verbose: bool = True,
+        lmdp: LMDP_TDR = None
     ):
         """
         Initializes a MinigridLMDP_TDR instance.
@@ -674,29 +679,43 @@ class MinigridLMDP_TDR(LMDP_TDR):
         
         self.num_states = self.minigrid_env.custom_grid.get_num_states()
         
-        super().__init__(
-            self.num_states,
-            num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
-            s0=self.minigrid_env.custom_grid.states.index(self.start_state),
-            sparse_optimization=sparse_optimization
-        )
-
-        if map.P is not None:
-            assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
-            self.P = map.P
-        else:
-            self.p_time = self.generate_P(
-                self.minigrid_env.custom_grid,
-                self.allowed_actions,
-                benchmark=benchmark_p,
-                num_threads=threads
+        if lmdp is None:
+            super().__init__(
+                self.num_states,
+                num_terminal_states=self.minigrid_env.custom_grid.get_num_terminal_states(),
+                s0=self.minigrid_env.custom_grid.states.index(self.start_state),
+                sparse_optimization=sparse_optimization,
+                verbose=self.verbose
             )
-            
-        if map.R is not None:
-            assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
-            self.R = map.R
+
+            if map.P is not None:
+                assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
+                self.P = map.P
+            else:
+                self.p_time = self.generate_P(
+                    self.minigrid_env.custom_grid,
+                    self.allowed_actions,
+                    benchmark=benchmark_p,
+                    num_threads=threads
+                )
+                
+            if map.R is not None:
+                assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
+                self.R = map.R
+            else:
+                self._generate_R()
         else:
-            self._generate_R()
+            super().__init__(
+                num_states=lmdp.num_states,
+                num_terminal_states=lmdp.num_terminal_states,
+                lmbda=lmdp.lmbda,
+                s0=lmdp.s0,
+                sparse_optimization=lmdp.sparse_optimization,
+                verbose=lmdp.verbose
+            )
+            self.P = lmdp.P
+            self.R = lmdp.R
+        
         self._print(f"Created LMDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
     
                   
