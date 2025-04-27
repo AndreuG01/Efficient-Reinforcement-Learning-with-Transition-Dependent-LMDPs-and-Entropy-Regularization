@@ -313,7 +313,7 @@ class MDP(ABC):
             max_values = np.max(expected_utilities, axis=1, keepdims=True)
             policy = (expected_utilities == max_values).astype(int)  # Binary mask for optimal actions
             if not multiple_actions:
-                policy = policy.astype(np.float64) / np.sum(policy, axis=1).reshape(-1, 1)
+                policy = policy.astype(np.float128) / np.sum(policy, axis=1).reshape(-1, 1)
         else:
             policy = np.exp(expected_utilities / temperature) / np.sum(np.exp(expected_utilities / temperature), axis=1).reshape(-1,1)
         
@@ -321,7 +321,7 @@ class MDP(ABC):
         return policy
     
         
-    def to_LMDP(self):
+    def to_LMDP(self, lmbda: float = None):
         self._print(f"Computing the LMDP embedding of this MDP...")
         
         
@@ -330,7 +330,7 @@ class MDP(ABC):
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=True,
             # lmbda=self.temperature if self.temperature != 0 else 0.1, # TODO: change lmbda value when temperature is 0
-            lmbda=1,
+            lmbda=1 if lmbda is None else lmbda,
             s0=self.s0,
             verbose=self.verbose
         )
@@ -374,8 +374,8 @@ class MDP(ABC):
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, lmdp.stats = lmdp.power_iteration()
         lmdp.V = lmdp.get_value_function(z)
-        V_mdp, stats = self.value_iteration()
-        # V_mdp, stats = self.value_iteration(temp=lmdp.lmbda)
+        # V_mdp, stats = self.value_iteration()
+        V_mdp, stats = self.value_iteration(temp=lmdp.lmbda)
         
         if not hasattr(self, "stats"):
             self.stats = stats

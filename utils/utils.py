@@ -529,9 +529,9 @@ def regularized_embedding_error_plot(map: Map, min_temp: float = 0.1, max_temp: 
             temperature=temp
         )
         
-        embedded_lmdp_state = mdp.to_LMDP()
+        embedded_lmdp_state = mdp.to_LMDP(lmbda=temp)
         embedded_lmdp_state.compute_value_function()
-        embedded_lmdp_trans = mdp.to_LMDP_TDR()
+        embedded_lmdp_trans = mdp.to_LMDP_TDR(temp)
         embedded_lmdp_trans.compute_value_function()
         mdp.compute_value_function()
         
