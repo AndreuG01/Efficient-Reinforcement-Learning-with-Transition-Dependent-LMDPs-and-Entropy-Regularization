@@ -65,7 +65,7 @@ class MDP(ABC):
         assert 0 <= gamma <= 1, "Discount factor must be in the range [0, 1]"
         assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
         
-        self.__dtype = dtype
+        self.dtype = dtype
         
         self.num_states = num_states
         self.num_terminal_states = num_terminal_states
@@ -77,13 +77,13 @@ class MDP(ABC):
         self.deterministic = deterministic
         self.behaviour = behaviour
         self.temperature = temperature
-        self.policy_ref = np.full((self.num_states, self.num_actions), 1.0 / self.num_actions, dtype=self.__dtype)        
+        self.policy_ref = np.full((self.num_states, self.num_actions), 1.0 / self.num_actions, dtype=self.dtype)        
 
 
         
         # Initialize transition probabilities and rewards to zero
-        self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states), dtype=self.__dtype)
-        self.R = np.zeros((self.num_states, self.num_actions), dtype=self.__dtype)
+        self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states), dtype=self.dtype)
+        self.R = np.zeros((self.num_states, self.num_actions), dtype=self.dtype)
         
         
         self.verbose = verbose
@@ -174,7 +174,7 @@ class MDP(ABC):
         - terminal (bool): True if the next state is a terminal state, False otherwise.
         """
         # With probability P, choose one of the next states
-        next_state = np.random.choice(self.num_states, p=self.P[state, action] if self.__dtype != np.float128 else self.P[state, action].astype(np.float64))
+        next_state = np.random.choice(self.num_states, p=self.P[state, action] if self.dtype != np.float128 else self.P[state, action].astype(np.float64))
         
         return (
             next_state,
@@ -194,7 +194,7 @@ class MDP(ABC):
         - V (np.ndarray): The optimal value function for each state.
         - ModelBasedAlgsStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
         """
-        V = np.zeros(self.num_states, dtype=self.__dtype)
+        V = np.zeros(self.num_states, dtype=self.dtype)
         iterations = 0
         cumulative_reward = 0
         rewards = []
@@ -244,7 +244,7 @@ class MDP(ABC):
         else:
             temperature = self.temperature
         
-        V = np.zeros(self.num_states, dtype=self.__dtype)
+        V = np.zeros(self.num_states, dtype=self.dtype)
 
         iterations = 0
         start_time = time.time()
@@ -256,12 +256,12 @@ class MDP(ABC):
             delta = 0
             # expected_values = np.tensordot(self.P, V, axes=((2), (0))) # num_non_teminal X num_actions
             expected_values = self.P @ V
-            Q = self.R + self.gamma * np.concatenate((expected_values, self.R[self.num_non_terminal_states:, :])).astype(self.__dtype) # num_states X num_actions
+            Q = self.R + self.gamma * np.concatenate((expected_values, self.R[self.num_non_terminal_states:, :])).astype(self.dtype) # num_states X num_actions
 
             if temperature == 0:
-                V_new =  np.max(Q, axis=1).astype(self.__dtype)
+                V_new =  np.max(Q, axis=1).astype(self.dtype)
             else:
-                V_new = (temperature * np.log(np.sum(self.policy_ref * np.exp(Q / temperature), axis=1))).astype(self.__dtype)
+                V_new = (temperature * np.log(np.sum(self.policy_ref * np.exp(Q / temperature), axis=1))).astype(self.dtype)
             
             Vs.append(V_new)
             delta = np.linalg.norm(V - V_new, np.inf)
@@ -311,13 +311,13 @@ class MDP(ABC):
         
         
         expected_utilities = self.R[:self.num_non_terminal_states] + \
-                     self.gamma * np.einsum("saj,j->sa", self.P[:self.num_non_terminal_states], V, dtype=self.__dtype)
+                     self.gamma * np.einsum("saj,j->sa", self.P[:self.num_non_terminal_states], V, dtype=self.dtype)
         
         if self.temperature == 0:
             max_values = np.max(expected_utilities, axis=1, keepdims=True)
             policy = (expected_utilities == max_values).astype(int)  # Binary mask for optimal actions
             if not multiple_actions:
-                policy = policy.astype(self.__dtype) / np.sum(policy, axis=1).reshape(-1, 1)
+                policy = policy.astype(self.dtype) / np.sum(policy, axis=1).reshape(-1, 1)
         else:
             policy = np.exp(expected_utilities / temperature) / np.sum(np.exp(expected_utilities / temperature), axis=1).reshape(-1,1)
         
@@ -337,7 +337,7 @@ class MDP(ABC):
             lmbda=1 if lmbda is None else lmbda,
             s0=self.s0,
             verbose=self.verbose,
-            dtype=self.__dtype
+            dtype=self.dtype
         )
         
         if self.deterministic and False:   
@@ -356,7 +356,7 @@ class MDP(ABC):
                 
                 # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
                 B[B == 0] = epsilon
-                B /= np.sum(B, axis=1).reshape(-1, 1).astype(self.__dtype)
+                B /= np.sum(B, axis=1).reshape(-1, 1).astype(self.dtype)
                 
                 log_B = np.where(B != 0, np.log(B), B)
                 v = self.R[state] + lmdp.lmbda * np.sum(B * log_B, axis=1)
@@ -374,7 +374,7 @@ class MDP(ABC):
                 
                 R = lmdp.lmbda * np.log(np.sum(np.exp(x / lmdp.lmbda)))
                 lmdp.R[state] = R
-                lmdp.P[state, ~zero_cols] = np.exp((x - R * np.ones(shape=x.shape, dtype=self.__dtype)) / lmdp.lmbda)
+                lmdp.P[state, ~zero_cols] = np.exp((x - R * np.ones(shape=x.shape, dtype=self.dtype)) / lmdp.lmbda)
                 
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, lmdp.stats = lmdp.power_iteration()
@@ -402,7 +402,7 @@ class MDP(ABC):
             lmbda=lmbda,
             s0=self.s0,
             verbose=self.verbose,
-            dtype=self.__dtype
+            dtype=self.dtype
         )
         
         if self.deterministic and False:
@@ -464,7 +464,7 @@ class MDP(ABC):
             lmbda=1,
             s0=self.s0,
             verbose=self.verbose,
-            dtype=self.__dtype
+            dtype=self.dtype
         )
         
         R_1 = np.einsum("san,na->sn", self.P, self.R) / self.num_actions
@@ -548,7 +548,7 @@ class MDP(ABC):
             lmbda=1,
             s0=self.s0,
             verbose=self.verbose,
-            dtype=self.__dtype
+            dtype=self.dtype
         )
         
         if self.deterministic and False:
@@ -590,7 +590,7 @@ class MDP(ABC):
             lmbda=self.temperature if self.temperature != 0 else 0.8, # TODO: change lmbda value when temperature is 0
             s0=self.s0,
             verbose=self.verbose,
-            dtype=self.__dtype
+            dtype=self.dtype
         )
         
         if self.deterministic and False:

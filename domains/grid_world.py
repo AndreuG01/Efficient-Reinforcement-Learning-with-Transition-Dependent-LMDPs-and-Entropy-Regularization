@@ -6,6 +6,8 @@
 # or GridWorldLMDP in the GridworldEnv class without them having been defined yet.
 from __future__ import annotations
 
+import os
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1" # To hide the welcome message of the pygame library
 import matplotlib.axes
 import matplotlib.cm as cm
 import matplotlib.image as mpimg
@@ -19,7 +21,6 @@ from models.LMDP_TDR import LMDP_TDR
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-import os
 from .grid import CustomGrid, CellType, GridWorldActions
 from utils.state import State
 from typing import Literal
@@ -140,7 +141,8 @@ class GridWorldEnv:
         manual_play: bool = False,
         num_times: int = 10,
         save_gif: bool = False,
-        save_path: str = None
+        save_path: str = None,
+        show_window: bool = True
     ):
         """
         It allows to visualize the control policy of an agent inf `manual_play` is set to False. Otherwise, the user can
@@ -153,6 +155,7 @@ class GridWorldEnv:
             num_times (int, optional): The number of times to play the game. Defaults to 10.
             save_gif (bool, optional): If True, saves the game sequence as a GIF. Defaults to False.
             save_path (str, optional): Path to save the GIF if `save_gif` is True.
+            show_window (bool, optional): Whether to show the window or not. Defaults to True
 
         Returns:
             None
@@ -182,24 +185,25 @@ class GridWorldEnv:
                     state = State(self.__agent_pos[0], self.__agent_pos[1], next_layout, **next_properties)
                     state_idx = next(k for k, v in self.custom_grid.state_index_mapper.items() if v == state)
                     
-                    frame_img = self.state_to_image(state, plotter, direction)
-                    if save_gif:
-                        frames.append(frame_img)
-                    else:
-                        frame_surface = pygame.image.fromstring(
-                            frame_img.tobytes(), frame_img.size, frame_img.mode
-                        )
-                        if screen is None:
-                            screen = pygame.display.set_mode(frame_surface.get_size())
-                            pygame.display.set_caption("GridWorld Visualization")
+                    if show_window:
+                        frame_img = self.state_to_image(state, plotter, direction)
+                        if save_gif:
+                            frames.append(frame_img)
+                        elif show_window:
+                            frame_surface = pygame.image.fromstring(
+                                frame_img.tobytes(), frame_img.size, frame_img.mode
+                            )
+                            if screen is None:
+                                screen = pygame.display.set_mode(frame_surface.get_size())
+                                pygame.display.set_caption("GridWorld Visualization")
 
-                        screen.blit(frame_surface, (0, 0))
-                        pygame.display.flip()
+                            screen.blit(frame_surface, (0, 0))
+                            pygame.display.flip()
 
-                        for event in pygame.event.get():
-                            if event.type == pygame.QUIT:
-                                pygame.quit()
-                                return
+                            for event in pygame.event.get():
+                                if event.type == pygame.QUIT:
+                                    pygame.quit()
+                                    return
 
                     done = self.custom_grid.is_terminal(state)
                     if done: break
@@ -208,8 +212,8 @@ class GridWorldEnv:
                         action = self.__get_manual_action()
                     else:
                         if isinstance(model, GridWorldMDP):
-                            action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64) if model.__dtype == np.float128 else policy[state_idx])
-                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :].astype(np.float64) if model.__dtype == np.float128 else model.P[state_idx, action, :])
+                            action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64) if model.dtype == np.float128 else policy[state_idx])
+                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :].astype(np.float64) if model.dtype == np.float128 else model.P[state_idx, action, :])
                             if next_state != np.argmax(model.P[state_idx, action, :]):
                                 num_mistakes += 1
                                 self._print(f"MISTAKE [{num_mistakes} / {actions}]")
@@ -219,7 +223,7 @@ class GridWorldEnv:
                             # This function uses the C-long dtype, which is 32bit on windows and otherwise 64bit on 64bit platforms (and 32bit on 32bit ones).
                             # Since NumPy 2.0, NumPy’s default integer is 32bit on 32bit platforms and 64bit on 64bit platforms.
                             # Therefore, DO NOT CHANGE THE .astype(np.float64) from the following line.
-                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64) if model.__dtype == np.float128 else policy[state_idx])
+                            next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64) if model.dtype == np.float128 else policy[state_idx])
                             if next_state != np.argmax(policy[state_idx]):
                                 num_mistakes += 1
                                 self._print(f"MISTAKE [{num_mistakes} / {actions}]")
@@ -323,7 +327,7 @@ class GridWorldMDP(MDP):
             mdp (MDP, optional): An existing MDP object to initialize the superclass. Defaults to None.
         """
         self.verbose = verbose
-        self.__dtype = dtype
+        self.dtype = dtype
         if mdp is not None:
             assert type(mdp) == MDP, "MDP must be of type mdp"
             
@@ -359,7 +363,7 @@ class GridWorldMDP(MDP):
                 gamma=gamma,
                 temperature=temperature,
                 verbose=self.verbose,
-                dtype=self.__dtype
+                dtype=self.dtype
             )
             if map.P is not None:
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
@@ -391,7 +395,7 @@ class GridWorldMDP(MDP):
                 gamma=mdp.gamma,
                 temperature=mdp.temperature,
                 verbose=mdp.verbose,
-                dtype=mdp.__dtype
+                dtype=mdp.dtype
             )
             self.P = mdp.P
             self.R = mdp.R
@@ -407,12 +411,12 @@ class GridWorldMDP(MDP):
         for state in range(self.num_non_terminal_states):
             state_repr = self.gridworld_env.custom_grid.states[state]
             if self.gridworld_env.custom_grid.is_cliff(state_repr):
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=self.__dtype)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-50, dtype=self.dtype)
             else:
-                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=self.__dtype)
+                self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=self.dtype)
 
 
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> None:
         """
         Visualizes the policy by running the environment with the given policies. If there are no policies, the optimal one is computed.
         If the `save_gif` parameter is set to true, a GIF with the visualization is stored in the specified path. Otherwise, the policy is displayed to
@@ -431,9 +435,9 @@ class GridWorldMDP(MDP):
         if policies is None:
             self._print("Computing value function...")
             self.compute_value_function()
-            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
         else:
-            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
             
     def play_map(self) -> None:
         """
@@ -442,7 +446,7 @@ class GridWorldMDP(MDP):
         Returns:
             None
         """
-        self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
+        self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100, show_window=True)
     
     
     def _print(self, msg):
@@ -498,7 +502,7 @@ class GridWorldLMDP(LMDP):
             lmbda (float, optional): The temperature parameter controlling the penalty from the passive dynamics. Defaults to 1.0.
             lmdp (LMDP, optional): An existing LMDP object to initialize the superclass. Defaults to None.
         """
-        self.__dtype = dtype
+        self.dtype = dtype
         self.deterministic = False
         self.verbose = verbose
         if allowed_actions:
@@ -523,7 +527,7 @@ class GridWorldLMDP(LMDP):
                 sparse_optimization=sparse_optimization,
                 lmbda=lmbda,
                 verbose=self.verbose,
-                dtype=self.__dtype
+                dtype=self.dtype
             )
             
             if map.P is not None:
@@ -552,7 +556,7 @@ class GridWorldLMDP(LMDP):
                 lmbda=lmdp.lmbda,
                 sparse_optimization=False, #TODO: update
                 verbose=lmdp.verbose,
-                dtype=lmdp.__dtype
+                dtype=lmdp.dtype
             )
             
             self.P = lmdp.P
@@ -567,10 +571,10 @@ class GridWorldLMDP(LMDP):
         Returns:
             None
         """
-        self.R[:] = self.__dtype(-5)
+        self.R[:] = self.dtype(-5)
         cliff_states = [i for i in range(self.num_states) if self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[i])]
-        self.R[cliff_states] = self.__dtype(-50)
-        self.R[self.num_non_terminal_states:] = self.__dtype(0)
+        self.R[cliff_states] = self.dtype(-50)
+        self.R[self.num_non_terminal_states:] = self.dtype(0)
     
     
     def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
@@ -656,7 +660,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             benchmark_p (bool, optional): Flag indicating whether to benchmark the transition probabilities. Defaults to False.
             threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
         """
-        self.__dtype = dtype
+        self.dtype = dtype
         self.deterministic = False
         self.verbose = verbose
         if allowed_actions:
@@ -683,7 +687,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
                 sparse_optimization=sparse_optimization,
                 lmbda=lmbda,
                 verbose=self.verbose,
-                dtype=self.__dtype
+                dtype=self.dtype
             )
             
             if map.P is not None:
@@ -710,7 +714,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
                 lmbda=lmdp_tdr.lmbda,
                 sparse_optimization=lmdp_tdr.sparse_optimization,
                 verbose=lmdp_tdr.verbose,
-                dtype=lmdp_tdr.__dtype
+                dtype=lmdp_tdr.dtype
             )
             self.P = lmdp_tdr.P
             self.R = lmdp_tdr.R
@@ -738,11 +742,11 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             
         for i, j in zip(indices[0], indices[1]):
             if self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[j]) or self.gridworld_env.custom_grid.is_cliff(self.gridworld_env.custom_grid.state_index_mapper[i]):
-                self.R[i, j] = self.__dtype(-50)
+                self.R[i, j] = self.dtype(-50)
             elif self.gridworld_env.custom_grid.is_terminal(self.gridworld_env.custom_grid.state_index_mapper[j]):
-                self.R[i, j] = self.__dtype(0)
+                self.R[i, j] = self.dtype(0)
             else:
-                self.R[i, j] = self.__dtype(-5)
+                self.R[i, j] = self.dtype(-5)
         
         if self.sparse_optimization:
             self._print("Converting R into sparse matrix...")
@@ -751,7 +755,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             self._print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
 
                 
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> None:
         """
         Visualizes the policy by running the environment with the given policies. If there are no policies, the optimal one is computed.
         If the `save_gif` parameter is set to true, a GIF with the visualization is stored in the specified path. Otherwise, the policy is displayed to
@@ -770,9 +774,9 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         if policies is None:
             self._print("Computing value function...")
             self.compute_value_function()
-            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
         else:
-            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
+            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
 
     def play_map(self) -> None:
         """
@@ -781,7 +785,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         Returns:
             None
         """
-        self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
+        self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100, show_window=True)
 
 
     def _print(self, msg):

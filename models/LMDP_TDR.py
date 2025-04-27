@@ -20,7 +20,7 @@ class LMDP_TDR:
         dtype: np.dtype = np.float128
     ) -> None:
         
-        self.__dtype = dtype
+        self.dtype = dtype
         
         self.num_states = num_states
         self.num_terminal_states = num_terminal_states
@@ -29,8 +29,8 @@ class LMDP_TDR:
         self.lmbda = lmbda
         self.sparse_optimization = sparse_optimization
         
-        self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states), dtype=self.__dtype)
-        self.R = np.zeros((self.num_non_terminal_states, self.num_states), dtype=self.__dtype)
+        self.P: np.ndarray | csr_matrix = np.zeros((self.num_non_terminal_states, self.num_states), dtype=self.dtype)
+        self.R = np.zeros((self.num_non_terminal_states, self.num_states), dtype=self.dtype)
         
         self.verbose = verbose
     
@@ -102,7 +102,7 @@ class LMDP_TDR:
     
     
     def transition(self, state: int) -> tuple[int, float, bool]:
-        next_state = np.random.choice(self.num_states, p=self.P[state] if self.__dtype != np.float128 else self.P[state].astype(np.float64))
+        next_state = np.random.choice(self.num_states, p=self.P[state] if self.dtype != np.float128 else self.P[state].astype(np.float64))
         
         return (
             next_state,
@@ -118,7 +118,7 @@ class LMDP_TDR:
         else:
             control = self.P * o * z
         
-        control = control.astype(self.__dtype)
+        control = control.astype(self.dtype)
         control = control / np.sum(control, axis=1).reshape(-1, 1)
         # print(f"Control elements: {control.size}. Non zero: {np.count_nonzero(control)}")
         assert all(np.isclose(np.sum(control, axis=1), 1))
@@ -149,13 +149,13 @@ class LMDP_TDR:
             G = self.P * self.o
     
     
-        z = np.ones(self.num_states, dtype=self.__dtype)
+        z = np.ones(self.num_states, dtype=self.dtype)
         iterations = 0
         delta = 0
         
         while True:
             z_new = G @ z
-            z_new = np.concatenate((z_new, np.ones((self.num_terminal_states), dtype=self.__dtype)))
+            z_new = np.concatenate((z_new, np.ones((self.num_terminal_states), dtype=self.dtype)))
            
             delta = np.linalg.norm(self.get_value_function(z_new, temp=temp) - self.get_value_function(z, temp=temp), ord=np.inf)
             
@@ -182,8 +182,8 @@ class LMDP_TDR:
         if z is None:
             z = self.z
         
-        result = np.log(z, dtype=self.__dtype) * temperature
-        result[result == -np.inf] = np.finfo(self.__dtype).min
+        result = np.log(z, dtype=self.dtype) * temperature
+        result[result == -np.inf] = np.finfo(self.dtype).min
         
         return result
     
@@ -211,10 +211,10 @@ class LMDP_TDR:
             self.s0,
             sparse_optimization=False,
             verbose=self.verbose,
-            dtype=self.__dtype
+            dtype=self.dtype
         )
         
-        large_negative = self.__dtype(-1e10)
+        large_negative = self.dtype(-1e10)
         x = self.R + self.lmbda * np.where(self.P != 0, np.log(self.P), large_negative)
         
         lmdp.R = self.lmbda * np.log(np.sum(np.exp(x / self.lmbda), axis=1))
