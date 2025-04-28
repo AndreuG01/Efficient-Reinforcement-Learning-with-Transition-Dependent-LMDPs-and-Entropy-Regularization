@@ -66,3 +66,49 @@ class ModelBasedAlgsStats:
         for frame_file in frame_files:
             os.remove(frame_file)
         os.rmdir(tmp_dir_path)
+
+
+
+class GameStats:
+    """
+    This class contains the statistics of a simulation of a game in a GridWorld or MiniGrid environment.
+    """
+    def __init__(self, moves: list[int] = [], errors: list[int] = [], deaths: list[int] = []):
+        assert len(moves) == len(errors) == len(deaths), "Lenght mismatch"
+        self.GAME_INFO = ""
+        
+        self.moves = moves # The moves for each game
+        self.errors = errors # The errors for each game
+        self.deaths = deaths # The number of deaths for each game (times that the agent has fallen into a cliff state)
+        
+        self.num_games = len(moves)
+        
+        self.update_game_info()
+    
+    
+    def add_game_info(self, moves: int, errors: int, deaths: int) -> None:
+        self.moves.append(moves)
+        self.errors.append(errors)
+        self.deaths.append(deaths)
+        
+        self.num_games = len(self.moves)
+        
+        self.update_game_info()
+    
+    
+    def update_game_info(self):
+        if len(self.deaths) == 0:
+            self.GAME_INFO = "No games played yet"
+        else:
+            total_deaths = sum(self.deaths)
+            total_actions = sum(self.moves)
+            total_mistakes = sum(self.errors)
+            percentage_correct = round((total_actions - total_mistakes) / total_actions * 100, 2)
+            self.GAME_INFO = f"After {self.num_games} games. {total_deaths} deaths. {total_actions} total actions. {total_mistakes} mistakes. {percentage_correct}% correct actions."
+        
+    
+    def get_proportion_errors_round(self):
+        return [(error / moves) * 100 for error, moves in zip(self.errors, self.moves)]
+
+    def get_proportion_correct_moves_round(self):
+        return [(moves - error) / moves * 100 for error, moves in zip(self.errors, self.moves)]

@@ -18,6 +18,7 @@ from collections.abc import Callable
 from scipy.sparse import csr_matrix
 from sys import getsizeof
 from typing import Literal
+from utils.stats import GameStats
 
 
 
@@ -135,7 +136,7 @@ class CustomMinigridEnv(MiniGridEnv):
         save_gif: bool = False,
         save_path: str = None,
         show_window: bool = True
-    ) -> None:
+    ) -> GameStats:
         """
         Visualizes the behavior of the agent under some given policies by running multiple episodes, rendering each step, 
         and optionally saving the resulting frames as a GIF.
@@ -151,6 +152,7 @@ class CustomMinigridEnv(MiniGridEnv):
         Returns:
             None
         """
+        game_stats = deepcopy(GameStats())
         frames = []
         if not save_gif:
             self.render_mode = "human"
@@ -159,13 +161,12 @@ class CustomMinigridEnv(MiniGridEnv):
         
         for policy_epoch, policy in policies:
             self._print(f"Visualizing policy from training epoch: {policy_epoch}")
-            total_mistakes = 0
-            total_actions = 0
             for i in tqdm(range(num_times), desc=f"Playing {num_times} games"):
                 num_mistakes = 0
+                actions = 0
+                deaths = 0
                 self.reset()
                 done = False
-                actions = 0
                 next_properties = {k: v[0] for k, v in self.custom_grid.state_properties.items()}
                 
                 next_layout = self.custom_grid.layout_combinations[0]
@@ -191,6 +192,9 @@ class CustomMinigridEnv(MiniGridEnv):
                         action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                     
                     next_state, _, terminal = self.custom_grid.move(state, action)
+                    
+                    if self.custom_grid.is_cliff(state):
+                        deaths += 1
                     
                     next_properties = next_state.properties
                     next_layout = next_state.layout
@@ -224,11 +228,13 @@ class CustomMinigridEnv(MiniGridEnv):
                     if actions == self.max_steps:
                         break
             
-            total_mistakes += num_mistakes
-            total_actions += actions
+                game_stats.add_game_info(
+                    moves=actions,
+                    errors=num_mistakes,
+                    deaths=deaths
+                )
         
-        
-        self._print(f"After {num_times} games. {total_actions} total actions. {total_mistakes} mistakes. {round((total_actions - total_mistakes) / total_actions * 100, 2)}% correct actions")            
+        self._print(game_stats.GAME_INFO)
         if not save_gif:
             self.close()
         
@@ -240,6 +246,8 @@ class CustomMinigridEnv(MiniGridEnv):
                 duration=200,
                 loop=0  # Loop forever
             )
+    
+        return game_stats
     
     def _print(self, msg):
         if self.verbose:
@@ -438,7 +446,7 @@ class MinigridMDP(MDP):
         return states
 
 
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> None:
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> GameStats:
         """
         Visualizes the learnt policy on the MiniGrid environment.
 
@@ -455,10 +463,27 @@ class MinigridMDP(MDP):
         if policies is None:
             self._print(f"Computing value function...")
             self.compute_value_function()
-            self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
+            return self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
         else:
-            self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
+            return self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
 
+    
+    def to_LMDP_policy(self):
+        lmdp_policy = np.zeros((self.num_non_terminal_states, self.num_states), dtype=self.dtype)
+        
+        for s in range(self.num_non_terminal_states):
+            for a in range(self.num_actions):
+                next_s, _, terminal = self.minigrid_env.custom_grid.move(self.minigrid_env.custom_grid.states[s], a)
+                if not terminal:
+                    next_s_idx = self.minigrid_env.custom_grid.states.index(next_s)
+                else:
+                    next_s_idx = len(self.minigrid_env.custom_grid.states) + self.minigrid_env.custom_grid.terminal_states.index(next_s)
+                
+                lmdp_policy[s, next_s_idx] += self.policy[s, a]
+        
+        assert np.all(np.sum(lmdp_policy, axis=1))
+        
+        return lmdp_policy
     
     def _print(self, msg):
         if self.verbose:
@@ -614,7 +639,7 @@ class MinigridLMDP(LMDP):
         
     
     
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> None:
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> GameStats:
         """
         Visualizes the learnt policy on the MiniGrid environment.
 
@@ -631,10 +656,10 @@ class MinigridLMDP(LMDP):
         if not hasattr(self, "V") and policies is None:
             self._print(f"Computing value function...")
             self.compute_value_function()
-            self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
+            return self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
         else:
             assert policies is not None
-            self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
+            return self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
     
     
     def _print(self, msg):
@@ -775,7 +800,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
             self._print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
     
     
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> None:
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> GameStats:
         """
         Visualizes the learnt policy on the MiniGrid environment.
 
@@ -792,10 +817,10 @@ class MinigridLMDP_TDR(LMDP_TDR):
         if not hasattr(self, "V") and policies is None:
             self._print(f"Computing value function...")
             self.compute_value_function()
-            self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
+            return self.minigrid_env.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
         else:
             assert policies is not None
-            self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
+            return self.minigrid_env.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
 
     
     def _print(self, msg):

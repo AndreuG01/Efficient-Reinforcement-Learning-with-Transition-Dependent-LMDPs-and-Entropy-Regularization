@@ -204,7 +204,7 @@ class LMDP_TDR:
     
     
     def to_LMDP(self):
-        lmdp = models.LMDP.LMDP(
+        lmdp = models.LMDP(
             self.num_states,
             self.num_terminal_states,
             self.lmbda,

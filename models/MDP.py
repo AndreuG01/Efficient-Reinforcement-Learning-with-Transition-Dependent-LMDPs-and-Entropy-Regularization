@@ -329,7 +329,7 @@ class MDP(ABC):
         self._print(f"Computing the LMDP embedding of this MDP...")
         
         
-        lmdp = models.LMDP.LMDP(
+        lmdp = models.LMDP(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=True,
@@ -395,7 +395,7 @@ class MDP(ABC):
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
         
-        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+        lmdp_tdr = models.LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,
@@ -424,7 +424,7 @@ class MDP(ABC):
 
                 log_B = np.where(B != 0, np.log(B), B)
                 y = self.R[state] + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
-                B_dagger = np.linalg.pinv(B)
+                B_dagger = np.linalg.pinv(B.astype(np.float64))
                 x = B_dagger @ y
                 
                 if lmdp_tdr.lmbda != 0 and self.deterministic:
@@ -457,7 +457,7 @@ class MDP(ABC):
     def to_LMDP_TDR_2(self):
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
-        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+        lmdp_tdr = models.LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=True,
@@ -541,7 +541,7 @@ class MDP(ABC):
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
         self.compute_value_function()
-        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+        lmdp_tdr = models.LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,
@@ -583,7 +583,7 @@ class MDP(ABC):
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
         self.compute_value_function()
-        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+        lmdp_tdr = models.LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,

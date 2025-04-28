@@ -31,7 +31,9 @@ from tqdm import tqdm
 import pygame
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from PIL import Image
+from copy import deepcopy
 import io
+from utils.stats import GameStats
 
 
 class GridWorldEnv:
@@ -143,7 +145,7 @@ class GridWorldEnv:
         save_gif: bool = False,
         save_path: str = None,
         show_window: bool = True
-    ):
+    ) -> GameStats:
         """
         It allows to visualize the control policy of an agent inf `manual_play` is set to False. Otherwise, the user can
         manually control the agent with the keyboard keys.
@@ -160,6 +162,7 @@ class GridWorldEnv:
         Returns:
             None
         """
+        game_stats = deepcopy(GameStats())
         if not save_gif:
             pygame.init()
             screen = None
@@ -169,12 +172,11 @@ class GridWorldEnv:
         
         for policy_epoch, policy in policies:
             self._print(f"Visualizing policy from training epoch: {policy_epoch}")
-            total_mistakes = 0
-            total_actions = 0
             for i in tqdm(range(num_times), desc=f"Playing {num_times} games"):
                 num_mistakes = 0
-                done = False
                 actions = 0
+                deaths = 0
+                done = False
                 next_properties = {k: v[0] for k, v in self.custom_grid.state_properties.items()}
                 next_layout = self.custom_grid.layout_combinations[0]
                 self.__agent_pos = self.agent_start_pos
@@ -243,6 +245,7 @@ class GridWorldEnv:
                         direction = 0
                     
                     if self.custom_grid.is_cliff(state):    
+                        deaths += 1
                         break
                     else:
                         self.__agent_pos = (next_state.y, next_state.x)
@@ -254,10 +257,15 @@ class GridWorldEnv:
                     actions += 1
                     if actions == self.max_steps:
                         break
-            total_mistakes += num_mistakes
-            total_actions += actions
+            
+                game_stats.add_game_info(
+                    moves=actions,
+                    errors=num_mistakes,
+                    deaths=deaths
+                )
+            
+        self._print(game_stats.GAME_INFO)
         
-        self._print(f"After {num_times} games. {total_actions} total actions. {total_mistakes} mistakes. {round((total_actions - total_mistakes) / total_actions * 100, 2)}% correct actions")
         if save_gif and frames and save_path:
             frames[0].save(
                 save_path,
@@ -268,6 +276,8 @@ class GridWorldEnv:
             )
         
         pygame.quit()
+        
+        return game_stats
     
     def _print(self, msg):
         if self.verbose:
@@ -416,7 +426,14 @@ class GridWorldMDP(MDP):
                 self.R[state] = np.full(shape=self.num_actions, fill_value=-5, dtype=self.dtype)
 
 
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> None:
+    def visualize_policy(
+        self,
+        policies: list[tuple[int, np.ndarray]] = None,
+        num_times: int = 10,
+        save_gif: bool = False,
+        save_path: str = None,
+        show_window: bool = True
+    ) -> GameStats:
         """
         Visualizes the policy by running the environment with the given policies. If there are no policies, the optimal one is computed.
         If the `save_gif` parameter is set to true, a GIF with the visualization is stored in the specified path. Otherwise, the policy is displayed to
@@ -435,18 +452,37 @@ class GridWorldMDP(MDP):
         if policies is None:
             self._print("Computing value function...")
             self.compute_value_function()
-            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
+            return self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
         else:
-            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
+            return self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
             
-    def play_map(self) -> None:
+    def play_map(self) -> GameStats:
         """
         Allows the user to play with the agent manually through the map.
 
         Returns:
             None
         """
-        self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100, show_window=True)
+        return self.gridworld_env.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100, show_window=True)
+    
+    
+    def to_LMDP_policy(self):
+        lmdp_policy = np.zeros((self.num_non_terminal_states, self.num_states), dtype=self.dtype)
+        
+        for s in range(self.num_non_terminal_states):
+            for a in range(self.num_actions):
+                next_s, _, terminal = self.gridworld_env.custom_grid.move(self.gridworld_env.custom_grid.states[s], a)
+                if not terminal:
+                    next_s_idx = self.gridworld_env.custom_grid.states.index(next_s)
+                else:
+                    next_s_idx = len(self.gridworld_env.custom_grid.states) + self.gridworld_env.custom_grid.terminal_states.index(next_s)
+                
+                lmdp_policy[s, next_s_idx] += self.policy[s, a]
+        
+        assert np.all(np.sum(lmdp_policy, axis=1))
+        
+        return lmdp_policy
+    
     
     
     def _print(self, msg):
@@ -577,7 +613,7 @@ class GridWorldLMDP(LMDP):
         self.R[self.num_non_terminal_states:] = self.dtype(0)
     
     
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> None:
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None) -> GameStats:
         """
         Visualizes the policy by running the environment with the given policies. If there are no policies, the optimal one is computed.
         If the `save_gif` parameter is set to true, a GIF with the visualization is stored in the specified path. Otherwise, the policy is displayed to
@@ -596,9 +632,9 @@ class GridWorldLMDP(LMDP):
         if policies is None:
             self._print("Computing value function...")
             self.compute_value_function()
-            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
+            return self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path)
         else:
-            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
+            return self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
 
             
     def play_map(self) -> None:
@@ -755,7 +791,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             self._print(f"Memory usage after conversion: {getsizeof(self.R):,} bytes")
 
                 
-    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> None:
+    def visualize_policy(self, policies: list[tuple[int, np.ndarray]] = None, num_times: int = 10, save_gif: bool = False, save_path: str = None, show_window: bool = True) -> GameStats:
         """
         Visualizes the policy by running the environment with the given policies. If there are no policies, the optimal one is computed.
         If the `save_gif` parameter is set to true, a GIF with the visualization is stored in the specified path. Otherwise, the policy is displayed to
@@ -774,9 +810,9 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         if policies is None:
             self._print("Computing value function...")
             self.compute_value_function()
-            self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
+            return self.gridworld_env.play_game(model=self, policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
         else:
-            self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
+            return self.gridworld_env.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, show_window=show_window)
 
     def play_map(self) -> None:
         """

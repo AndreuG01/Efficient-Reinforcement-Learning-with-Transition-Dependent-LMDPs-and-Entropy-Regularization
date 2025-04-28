@@ -284,7 +284,7 @@ class LMDP:
         # The minimum number of actions that can be done to achieve the same behaviour in an MDP.
         num_actions = np.max(np.sum(control > 0, axis=1))
         
-        mdp = models.MDP.MDP(
+        mdp = models.MDP(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             allowed_actions=[i for i in range(num_actions)],
@@ -326,7 +326,7 @@ class LMDP:
 
 
     def to_LMDP_TDR(self):
-        lmdp_tdr = models.LMDP_TDR.LMDP_TDR(
+        lmdp_tdr = models.LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             s0=self.s0,
