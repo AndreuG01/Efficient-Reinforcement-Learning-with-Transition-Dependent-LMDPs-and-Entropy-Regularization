@@ -1,4 +1,4 @@
-# From the root directory (/Repo) run this file as python -m test.test_mdp
+# From the root directory (/Repo) run this file as python -m test.test_gridworld
 
 import unittest
 from domains.grid_world import GridWorldMDP, GridWorldActions, GridWorldLMDP, GridWorldLMDP_TDR
@@ -112,6 +112,47 @@ class GridWorldMDPTester(unittest.TestCase):
         except Exception as e:
             self.fail(f"visualize_policy() raised an exception {e}")
 
+    def test_LMDP_policy(self):
+        mdp = GridWorldMDP(
+            map=Map(grid_size=4),
+            allowed_actions=GridWorldActions.get_actions()[:4],
+            behaviour="stochastic",
+            verbose=False
+        )
+        
+        mdp.P = np.array([
+            [
+                [0.3, 0.2, 0.1, 0.4],
+                [0.4, 0.1, 0.1, 0.4],
+                [0.7, 0.1, 0, 0.1],
+                [0.7, 0.1, 0, 0.1]
+            ],
+            [
+                [0.8, 0.1, 0, 0.1],
+                [0.5, 0.3, 0.2, 0],
+                [0.1, 0.2, 0.3, 0.4],
+                [0.1, 0.2, 0.3, 0.4],
+            ],
+            [
+                [0.4, 0.2, 0.4, 0],
+                [0, 0, 0.3, 0.7],
+                [1, 0, 0, 0],
+                [1, 0, 0, 0]
+            ]
+        ])
+        mdp.policy = np.array([
+            [0.4, 0.1, 0.2, 0.3],
+            [0.5, 0.4, 0.1, 0],
+            [0.1, 0.5, 0.2, 0.2]
+        ])
+        
+        reference_policy = np.array([
+            [0.51, 0.14, 0.05, 0.25],
+            [0.61, 0.19, 0.11, 0.09],
+            [0.44, 0.02, 0.19, 0.35]
+        ])
+        
+        np.testing.assert_array_almost_equal(reference_policy, mdp.to_LMDP_policy())
     
 class GridWorldLMDPTester(unittest.TestCase):
     #TODO: complete

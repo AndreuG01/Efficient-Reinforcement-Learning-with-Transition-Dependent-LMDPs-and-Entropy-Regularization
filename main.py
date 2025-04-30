@@ -173,7 +173,7 @@ def policies_comparison(
 
     plt.rcParams.update({"text.usetex": True})
 
-    fig = plt.figure(figsize=(12, 6))
+    fig = plt.figure(figsize=(14, 6))
     gs = fig.add_gridspec(2, 3, height_ratios=[1, 1])
 
     ax1 = fig.add_subplot(gs[0, 0])
@@ -184,7 +184,6 @@ def policies_comparison(
     plt.subplots_adjust(left=0.05, right=0.85, bottom=0.1, top=0.85, wspace=0.3, hspace=0.4)
 
     if not hasattr(mdp, "policy"):
-        print("HERE")
         mdp.compute_value_function()
 
 
@@ -193,13 +192,22 @@ def policies_comparison(
     mdp_policy = mdp.to_LMDP_policy().astype(np.float64)
     stats_mdp = mdp.visualize_policy(num_times=game_times, show_window=False)
     print(f"MDP STATS: {stats_mdp.GAME_INFO}")
-
-    new_ldmp = MinigridLMDP_TDR(
-        map=mdp.minigrid_env.custom_grid.map,
-        allowed_actions=mdp.allowed_actions,
-        lmdp=lmdp,
-        verbose=False
-    )
+    
+    if type(mdp) == GridWorldMDP:
+        new_ldmp = GridWorldLMDP_TDR(
+            map=mdp.environment.custom_grid.map,
+            allowed_actions=mdp.allowed_actions,
+            lmdp_tdr=lmdp,
+            verbose=False
+        )
+    elif type(mdp) == MinigridMDP:
+        new_ldmp = MinigridLMDP_TDR(
+            map=mdp.environment.custom_grid.map,
+            allowed_actions=mdp.allowed_actions,
+            lmdp=lmdp,
+            verbose=False
+        )
+        
 
     new_ldmp.compute_value_function(temp=temp_1)
     kl_1 = kl_divergence(mdp_policy, new_ldmp.policy)
@@ -288,13 +296,13 @@ def policies_comparison(
     fig.colorbar(im1, cax=cbar_ax)
 
 
-    plt.suptitle(f"{'Zoomed policy' if zoom else 'Policy'} comparison between MDP $\mathcal{{M}}$ and embedded LMDP $\mathcal{{L}}$ with different $\\beta = \lambda$ on the value function computation. Stochastic prob: {mdp.stochastic_prob}")
+    plt.suptitle(f"{'Zoomed policy' if zoom else 'Policy'} comparison between MDP $\mathcal{{M}}$ and embedded LMDP $\mathcal{{L}}$ with different $\\beta = \lambda$ on the value function computation. Stochastic prob: {mdp.stochastic_prob}. {mdp.environment.custom_grid.map.name}")
 
     plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     if save_fig:
-        save_map_name = mdp.minigrid_env.custom_grid.map.name.lower().replace(" ", "_")
-        plt.savefig(f"assets/{'zoomed_' if zoom else ''}policy_comparison_{save_map_name}.png", dpi=300, bbox_inches="tight")
+        save_map_name = mdp.environment.custom_grid.map.name.lower().replace(" ", "_")
+        plt.savefig(f"assets/{'zoomed_' if zoom else ''}policy_comparison_{save_map_name}_p_{mdp.stochastic_prob}_beta_{mdp.temperature}_lmbda_{temp_2}.png", dpi=300, bbox_inches="tight")
     else:
         plt.show()
 
@@ -309,35 +317,20 @@ def kl_divergence(P: np.ndarray, Q: np.ndarray, epsilon: float = 1e-10) -> float
 
 
 if __name__ == "__main__":
-    # P = np.array([
-    #     [0.7, 0.1, 0.2, 0],
-    #     [0, 0.9, 0, 0.1],
-    #     [0.1, 0, 0.4, 0.5]
-    # ])
     
-    # Q = np.array([
-    #     [0.8, 0.1, 0.1, 0],
-    #     [0.3, 0.7, 0, 0],
-    #     [0.1, 0.1, 0.1, 0.7]
-    # ])
-    
-    # print(kl_divergence(P, Q, epsilon=1e-100))
-    
-    # exit()
-    
-    mdp = MinigridMDP(
-        map=Maps.DOUBLE_KEY,
-        allowed_actions=MinigridActions.get_actions(),
+    mdp = GridWorldMDP(
+        map=Map(grid_size=10),
+        allowed_actions=GridWorldActions.get_actions()[:4],
         behaviour="stochastic",
         stochastic_prob=0.3,
-        temperature=1,
-        verbose=True,
+        temperature=3,
+        verbose=False,
         dtype=np.float128
     )
     
     
     lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
     
-    policies_comparison(mdp, lmdp, temp_1=mdp.temperature, temp_2=92.2, save_fig=True, zoom=False)
+    policies_comparison(mdp, lmdp, temp_1=mdp.temperature, temp_2=1038.6, save_fig=True, zoom=False)
     # policies_comparison(mdp, lmdp, temp_1=mdp.temperature, temp_2=1381.9, save_fig=True, zoom=True, zoom_size=100)
     

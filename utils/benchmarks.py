@@ -1,6 +1,5 @@
 from domains.grid_world import GridWorldMDP
 from domains.minigrid_env import MinigridMDP, MinigridLMDP
-from domains.minigrid_env import MinigridMDP
 from domains.grid import MinigridActions
 from utils.maps import Map
 from utils.state import Object
@@ -212,7 +211,7 @@ def benchmark_mdp2lmdp_embedding(
     )
     
     
-    cliff_states = [state for state in range(minigrid_mdp.num_states) if minigrid_mdp.minigrid_env.custom_grid.is_cliff(minigrid_mdp.minigrid_env.custom_grid.state_index_mapper[state])]
+    cliff_states = [state for state in range(minigrid_mdp.num_states) if minigrid_mdp.environment.custom_grid.is_cliff(minigrid_mdp.environment.custom_grid.state_index_mapper[state])]
     
     embedded_lmdp = minigrid_mdp.to_LMDP()
     
