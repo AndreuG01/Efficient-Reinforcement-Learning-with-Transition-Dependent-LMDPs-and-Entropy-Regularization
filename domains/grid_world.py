@@ -70,7 +70,7 @@ class GridWorldEnv:
             self.allowed_actions = [i for i in range(self.num_actions)]
             
         self.custom_grid = CustomGrid("gridworld", map=map, allowed_actions=self.allowed_actions, verbose=self.verbose)
-        self.agent_start_pos = self.custom_grid.start_pos
+        self.agent_start_pos = (self.custom_grid.start_pos[1], self.custom_grid.start_pos[0])
         
         self.title = map.name
         
@@ -78,7 +78,7 @@ class GridWorldEnv:
         
         self.__agent_pos = self.agent_start_pos
         
-        self.max_steps = 10000#max_steps
+        self.max_steps = 300
 
     
     def __get_manual_action(self):
@@ -356,7 +356,7 @@ class GridWorldMDP(MDP):
         
         self.environment = GridWorldEnv(map=map, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.environment.custom_grid.start_pos
-        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
+        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[0] and state.y == start_pos[1]][0]
         
         
         self.num_states = self.environment.custom_grid.get_num_states()
@@ -541,7 +541,7 @@ class GridWorldLMDP(LMDP):
         
         self.environment = GridWorldEnv(map=map, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.environment.custom_grid.start_pos
-        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
+        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[0] and state.y == start_pos[1]][0]
         
         self.num_sates = self.environment.custom_grid.get_num_states()
         
@@ -699,7 +699,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         
         self.environment = GridWorldEnv(map=map, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.environment.custom_grid.start_pos
-        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
+        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[0] and state.y == start_pos[1]][0]
         
         
         self.num_sates = self.environment.custom_grid.get_num_states()
@@ -916,8 +916,8 @@ class GridWorldPlotter:
                 ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.START_COLOR))
 
         # Walls
-        for pos in grid_positions[CellType.WALL]:
-            ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.WALL_COLOR))
+        # for pos in grid_positions[CellType.WALL]:
+        #     ax.add_patch(plt.Rectangle((pos[0] - 0.5, pos[1] - 0.5), 1, 1, color=self.WALL_COLOR))
 
         # Goal
         if color_goal:
@@ -943,19 +943,19 @@ class GridWorldPlotter:
                 
             agent_im = mpimg.imread(os.path.join(self.__assets_path, agent_filename))
             agent_x, agent_y = state.x, state.y
-            ax.imshow(agent_im, extent=[agent_y - 0.5, agent_y + 0.5, agent_x + 0.5, agent_x - 0.5], zorder=10)
+            ax.imshow(agent_im, extent=[agent_x - 0.5, agent_x + 0.5, agent_y + 0.5, agent_y - 0.5], zorder=10)
             
             for pos, obj in state.layout.items():
-                pos_x = pos[0]
-                pos_y = pos[1]
+                pos_x = pos[1]
+                pos_y = pos[0]
                 if obj is None: continue
                 if obj.type == "key":
                     img = mpimg.imread(os.path.join(os.path.join(self.__assets_path, "key"), f"{obj.color}_key.png"))
-                    ax.imshow(img, extent=[pos_y - 0.5, pos_y + 0.5, pos_x + 0.5, pos_x - 0.5], zorder=10)
+                    ax.imshow(img, extent=[pos_x - 0.5, pos_x + 0.5, pos_y + 0.5, pos_y - 0.5], zorder=10)
                 else:
                     # Door
                     img = mpimg.imread(os.path.join(os.path.join(self.__assets_path, "door"), f"{obj.color}_door_{'opened' if state.properties[str(obj)] else 'closed'}.png"))
-                    ax.imshow(img, extent=[pos_y - 0.5, pos_y + 0.5, pos_x + 0.5, pos_x - 0.5], zorder=10)
+                    ax.imshow(img, extent=[pos_x - 0.5, pos_x + 0.5, pos_y + 0.5, pos_y - 0.5], zorder=10)
                     
         
         ax.set_xticks(np.arange(-0.5, grid.shape[1], 1))
@@ -1025,7 +1025,7 @@ class GridWorldPlotter:
             cbar.set_label("Value Function", fontsize=12)
 
         for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
-            curr_state = [s for s in self.environment.custom_grid.states if s.x == pos[1] and s.y == pos[0]][0]
+            curr_state = [s for s in self.environment.custom_grid.states if s.x == pos[0] and s.y == pos[1]][0]
             if self.environment.custom_grid.is_cliff(curr_state): continue
             if self.is_mdp:
                 if multiple_actions:
@@ -1035,19 +1035,19 @@ class GridWorldPlotter:
             else:
                 actions = policy[idx] if multiple_actions else [policy[idx]]
 
-            y, x = curr_state.y, curr_state.x
+            x, y = curr_state.x, curr_state.y
             if not self.gridworld.deterministic:
                 probs = self.gridworld.P[idx, actions[0], :] if self.is_mdp else policy[idx]
                 action_probs = self.get_action_probs(curr_state, probs)
 
-                ax.plot([y - 0.5, y + 0.5], [x - 0.5, x + 0.5], color="black", linewidth=0.2)
-                ax.plot([y - 0.5, y + 0.5], [x + 0.5, x - 0.5], color="black", linewidth=0.2)
+                ax.plot([x - 0.5, x + 0.5], [y - 0.5, y + 0.5], color="black", linewidth=0.2)
+                ax.plot([x - 0.5, x + 0.5], [y + 0.5, y - 0.5], color="black", linewidth=0.2)
 
                 quadrants = {
-                    0: [(y + 0.5, x - 0.5), (y, x), (y - 0.5, x - 0.5)],
-                    1: [(y + 0.5, x + 0.5), (y, x), (y + 0.5, x - 0.5)],
-                    2: [(y - 0.5, x + 0.5), (y, x), (y + 0.5, x + 0.5)],
-                    3: [(y - 0.5, x - 0.5), (y, x), (y - 0.5, x + 0.5)]
+                    3: [(x + 0.5, y - 0.5), (x, y), (x - 0.5, y - 0.5)],
+                    2: [(x + 0.5, y + 0.5), (x, y), (x + 0.5, y - 0.5)],
+                    1: [(x - 0.5, y + 0.5), (x, y), (x + 0.5, y + 0.5)],
+                    0: [(x - 0.5, y - 0.5), (x, y), (x - 0.5, y + 0.5)]
                 }
 
                 max_prob = max(action_probs.values())
@@ -1066,7 +1066,7 @@ class GridWorldPlotter:
                 for action in actions:
                     dy, dx = self.gridworld.OFFSETS[action]
                     ax.quiver(
-                        y, x, 0.35 * dy, 0.35 * dx, scale=1, scale_units="xy", angles="xy",
+                        x, y, 0.35 * dy, 0.35 * dx, scale=1, scale_units="xy", angles="xy",
                         width=0.005, color=self.POLICY_COLOR, headaxislength=3, headlength=3
                     )
 
@@ -1270,21 +1270,20 @@ class GridWorldPlotter:
         positions, cmap, norm = self._get_common_reward_params(cmap_name=cmap_name)
 
         for pos in positions:
-            y, x = pos
+            x, y = pos
             state_idx, state = self._get_state_index(x, y)
             if state_idx is None or state_idx >= self.gridworld.R.shape[0]:
                 continue
 
+            ax.plot([x - 0.5, x + 0.5], [y - 0.5, y + 0.5], color="black", linewidth=0.2)
+            ax.plot([x - 0.5, x + 0.5], [y + 0.5, y - 0.5], color="black", linewidth=0.2)
+
             quadrants = {
-                0: [(y + 0.5, x - 0.5), (y, x), (y - 0.5, x - 0.5)],
-                1: [(y + 0.5, x + 0.5), (y, x), (y + 0.5, x - 0.5)],
-                2: [(y - 0.5, x + 0.5), (y, x), (y + 0.5, x + 0.5)],
-                3: [(y - 0.5, x - 0.5), (y, x), (y - 0.5, x + 0.5)]
+                0: [(x + 0.5, y - 0.5), (x, y), (x - 0.5, y - 0.5)],
+                1: [(x + 0.5, y + 0.5), (x, y), (x + 0.5, y - 0.5)],
+                2: [(x - 0.5, y + 0.5), (x, y), (x + 0.5, y + 0.5)],
+                3: [(x - 0.5, y - 0.5), (x, y), (x - 0.5, y + 0.5)]
             }
-
-
-            ax.plot([y - 0.5, y + 0.5], [x - 0.5, x + 0.5], color="black", linewidth=0.2)
-            ax.plot([y - 0.5, y + 0.5], [x + 0.5, x - 0.5], color="black", linewidth=0.2)
 
             for i, verts in quadrants.items():
                 if isinstance(self.gridworld, GridWorldMDP):
@@ -1329,13 +1328,13 @@ class GridWorldPlotter:
         positions, cmap, norm = self._get_common_reward_params(cmap_name=cmap_name)
 
         for pos in positions:
-            y, x = pos
+            x, y = pos
             state_idx, _ = self._get_state_index(x, y)
             if state_idx is None:
                 continue
 
             reward = self.gridworld.R[state_idx]
-            ax.add_patch(plt.Rectangle((y - 0.5, x - 0.5), 1, 1, color=cmap(norm(reward))))
+            ax.add_patch(plt.Rectangle((x - 0.5, y - 0.5), 1, 1, color=cmap(norm(reward))))
 
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])

@@ -2,11 +2,15 @@
 
 import unittest
 from domains.grid_world import GridWorldMDP, GridWorldActions, GridWorldLMDP, GridWorldLMDP_TDR
-from utils.maps import Map
+from utils.maps import Map, Maps
 import numpy as np
 
 
 class GridWorldMDPTester(unittest.TestCase):
+    
+    def setUp(self):
+        print('\n', unittest.TestCase.id(self))
+    
     def test_one_thread(self):
         mdp = GridWorldMDP(
             map=Map(grid_size=4),
@@ -81,6 +85,7 @@ class GridWorldMDPTester(unittest.TestCase):
         except Exception as e:
             self.fail(f"visualize_policy() raised an exception {e}")
     
+    
     def test_visualize_stochastic_mdp_policy_64(self):
         mdp = GridWorldMDP(
             map=Map(grid_size=10),
@@ -111,6 +116,7 @@ class GridWorldMDPTester(unittest.TestCase):
             mdp.visualize_policy(num_times=3, show_window=True)
         except Exception as e:
             self.fail(f"visualize_policy() raised an exception {e}")
+
 
     def test_LMDP_policy(self):
         mdp = GridWorldMDP(
@@ -153,6 +159,106 @@ class GridWorldMDPTester(unittest.TestCase):
         ])
         
         np.testing.assert_array_almost_equal(reference_policy, mdp.to_LMDP_policy())
+    
+    
+    
+    # TODO: this does not currently work as lambda = 0 cannot be used in power iteration.
+    # def test_deterministic_lmdp_embedding(self):
+    #     mdp = GridWorldMDP(
+    #         map=Maps.CLIFF,
+    #         behaviour="deterministic",
+    #         temperature=0,
+    #         verbose=False
+    #     )
+    #     embedded_lmdp = mdp.to_LMDP()
+    #     self.assertIsNotNone(embedded_lmdp)
+    
+    
+    # TODO: this does not currently work as lambda = 0 cannot be used in power iteration.
+    # def test_stochastic_lmdp_embedding(self):
+    #     mdp = GridWorldMDP(
+    #         map=Maps.CLIFF,
+    #         behaviour="stochastic",
+    #         temperature=0,
+    #         stochastic_prob=0.1,
+    #         verbose=False
+    #     )
+    #     embedded_lmdp = mdp.to_LMDP()
+    #     self.assertIsNotNone(embedded_lmdp)
+    
+    
+    def test_reg_deterministic_lmdp_embedding(self):
+        mdp = GridWorldMDP(
+            map=Maps.CLIFF,
+            behaviour="deterministic",
+            temperature=5,
+            verbose=False
+        )
+        embedded_lmdp = mdp.to_LMDP()
+        self.assertIsNotNone(embedded_lmdp)
+    
+    
+    def test_reg_stochastic_lmdp_embedding(self):
+        mdp = GridWorldMDP(
+            map=Maps.CLIFF,
+            behaviour="stochastic",
+            temperature=3.5,
+            stochastic_prob=0.1,
+            verbose=False
+        )
+        embedded_lmdp = mdp.to_LMDP()
+        self.assertIsNotNone(embedded_lmdp)
+    
+    
+    # TODO: this does not currently work as lambda = 0 cannot be used in power iteration.
+    # def test_deterministic_lmdp_tdr_embedding(self):
+    #     mdp = GridWorldMDP(
+    #         map=Maps.CLIFF,
+    #         behaviour="deterministic",
+    #         temperature=0,
+    #         verbose=False,
+    #         dtype=np.float64
+    #     )
+    #     embedded_lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
+    #     self.assertIsNotNone(embedded_lmdp)
+    
+    
+    # TODO: this does not currently work as lambda = 0 cannot be used in power iteration.
+    # def test_stochastic_lmdp_tdr_embedding(self):
+    #     mdp = GridWorldMDP(
+    #         map=Maps.CLIFF,
+    #         behaviour="stochastic",
+    #         temperature=0,
+    #         stochastic_prob=0.1,
+    #         verbose=False,
+    #         dtype=np.float64
+    #     )
+    #     embedded_lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
+    #     self.assertIsNotNone(embedded_lmdp)
+    
+    
+    def test_reg_deterministic_lmdp_tdr_embedding(self):
+        mdp = GridWorldMDP(
+            map=Maps.CLIFF,
+            behaviour="deterministic",
+            temperature=5,
+            verbose=False
+        )
+        embedded_lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
+        self.assertIsNotNone(embedded_lmdp)
+    
+    
+    def test_reg_stochastic_lmdp_tdr_embedding(self):
+        mdp = GridWorldMDP(
+            map=Maps.CLIFF,
+            behaviour="stochastic",
+            temperature=3.5,
+            stochastic_prob=0.1,
+            verbose=False
+        )
+        embedded_lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
+        self.assertIsNotNone(embedded_lmdp)
+    
     
 class GridWorldLMDPTester(unittest.TestCase):
     #TODO: complete

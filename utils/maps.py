@@ -91,6 +91,11 @@ class Map:
 
 class Maps:
     
+    @classmethod
+    def get_maps(cls) -> list[Map]:
+        return [value for _, value in cls.__dict__.items() if type(value) == Map]
+        
+    
     EASIEST = Map(
         name="EASIEST",
         layout=[
@@ -446,4 +451,21 @@ class Maps:
         #     [-10, -10, -10, -10],
         #     [0, 0, 0, 0],
         # ])
+    )
+    
+    
+    TESTING_MAP = Map(
+        name="Testing map",
+        layout=[
+            "######",
+            "#S  C#",
+            "# C C#",
+            "# C###",
+            "#   G#",
+            "######",
+        ],
+        objects=[
+            Object(2, 3, "purple", "key", 0),
+            Object(4, 3, "purple", "door", 0),
+        ]
     )

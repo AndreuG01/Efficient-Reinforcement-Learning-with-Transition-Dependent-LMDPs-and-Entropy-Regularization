@@ -20,6 +20,7 @@ import pickle as pkl
 from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table, generate_parallel_p_table, different_gammas_plot, different_temperature_plots, regularized_embedding_error_plot, embedding_value_function_reg, embedding_errors_different_temp
 from sklearn.metrics import r2_score
 from scipy.stats import spearmanr
+from utils.stats import ModelBasedAlgsStats
 from typing import Literal
 import matplotlib.gridspec as gridspec
 from tqdm import tqdm
@@ -318,6 +319,23 @@ def kl_divergence(P: np.ndarray, Q: np.ndarray, epsilon: float = 1e-10) -> float
 
 if __name__ == "__main__":
     
+
+    for map in Maps.get_maps():
+        print(map.name)
+        mdp = MinigridLMDP_TDR(
+            map=map,
+            allowed_actions=MinigridActions.get_actions(),
+            # behaviour="deterministic",
+            threads=1
+        )
+        
+        
+        save_map_name = map.name.replace(" ", "_")
+        
+        mdp.visualize_policy(num_times=1, save_gif=True, save_path=f"assets/gifs/minigrid/lmdp_tdr/lmdptdr_{save_map_name}.gif")
+    
+    exit()
+        
     mdp = GridWorldMDP(
         map=Map(grid_size=10),
         allowed_actions=GridWorldActions.get_actions()[:4],

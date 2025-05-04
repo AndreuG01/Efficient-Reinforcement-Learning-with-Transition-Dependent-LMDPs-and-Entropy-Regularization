@@ -140,6 +140,10 @@ class CustomGrid:
         
         self.states, self.terminal_states = self._generate_states()
         
+        self.original_states = self.states.copy()
+        self.original_terminal_states = self.terminal_states.copy()
+        self.max_state_space_size = len(self.states) + len(self.terminal_states)
+        
         self.remove_unreachable_states()
         
     
@@ -157,14 +161,18 @@ class CustomGrid:
                 # if obj is not None and obj.type == "door" and not curr_dict[str(obj)]: continue
                 # if (pos[1] == 1 and pos[0] == 1) and (layout[(2, 1)] is not None and layout[(3, 1)] is None and layout[(1, 1)] is None and layout[(4, 2)] is None and layout[(3, 3)] is None and layout[(3, 2)] is None and layout[(4, 1)] is None): continue
                 # if not curr_dict["blue_door_0"] and (pos[1] == 3 and pos[0] == 3) and (layout[(2, 1)] is None and layout[(3, 1)] is None and layout[(1, 1)] is None and layout[(4, 2)] is None and layout[(3, 3)] is None and layout[(3, 2)] is not None and layout[(4, 1)] is None) and str(layout[(3, 2)]) == "blue_key_1": continue
-                states.append(State(pos[0], pos[1], layout=layout, **curr_dict))
+                curr_state = State(pos[1], pos[0], layout=layout, **curr_dict)
+                if curr_state in states:
+                    print(f"Duplicate state: {curr_state}")
+                else:
+                    states.append(curr_state)
         
         for pos in self.positions[CellType.GOAL]:
             for values, layout in product(self._get_property_combinations(), self.layout_combinations):
                 # TODO: a state where there is a key at the same position as the agent is not valid
                 # obj = layout[(pos[0], pos[1])]
                 # if obj is not None and obj.type == "key": continue
-                terminal_states.append(State(pos[0], pos[1], layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
+                terminal_states.append(State(pos[1], pos[0], layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
                 
         return states, terminal_states        
 
@@ -199,7 +207,9 @@ class CustomGrid:
             for key_obj, pos in zip(key_objects, key_positions):    
                 placement[pos] = key_obj
             
-            all_placements.append(placement)
+            if placement not in all_placements:
+                # Done to avoid adding the initial configuration once again
+                all_placements.append(placement)
 
         # Generate all possible ways to place n-1 keys
         for key_subset in combinations(key_objects, max(len(key_objects) - 1, 0)):
@@ -265,7 +275,8 @@ class CustomGrid:
             return self.__move_minigrid(state, action)
     
     
-    def __move_gridworld(self, state: State, action: int, offsets: dict ={0: (0, -1), 1: (1, 0), 2: (0, 1), 3: (-1, 0)}):
+    # def __move_gridworld(self, state: State, action: int, offsets: dict ={0: (0, -1), 1: (1, 0), 2: (0, 1), 3: (-1, 0)}):
+    def __move_gridworld(self, state: State, action: int, offsets: dict ={0: (-1, 0), 1: (0, 1), 2: (1, 0), 3: (0, -1)}):
         """
         Computes the next position after performing an action, and returns whether the move is valid and whether the agent has reached a terminal state.
 
@@ -281,7 +292,7 @@ class CustomGrid:
         
         if action == GridWorldActions.UP or action == GridWorldActions.RIGHT or action == GridWorldActions.DOWN or action == GridWorldActions.LEFT:
             dy, dx = offsets[action]
-            next_object = curr_layout.get((next_state.x + dx, next_state.y + dy)) if curr_layout else None
+            next_object = curr_layout.get((next_state.y + dy, next_state.x + dx)) if curr_layout else None
             if next_object is not None and next_object.type == "key":
                 # If there is a key in the next state, the agent remains at the same state.
                 in_bounds = True
@@ -300,63 +311,64 @@ class CustomGrid:
         
         elif action == GridWorldActions.PICKUP:
             # If the agent is facing a key, it gets it. Otherwise, it remains at the same state
-            if not curr_layout: return next_state, True, False
+            if not curr_layout: return next_state, True, self.is_terminal(next_state)
             layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
             agent_has_key = len(layout_keys) == self.get_num_keys() - 1
             
             for dy, dx in offsets.values():
                 new_x = next_state.x + dx
                 new_y = next_state.y + dy
-                next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
+                next_object = curr_layout.get((new_y, new_x)) if curr_layout else None
                 if next_object is not None and next_object.type == "key" and not agent_has_key:
                     # An object has been found
-                    next_state.layout[(new_x, new_y)] = None
+                    next_state.layout[(new_y, new_x)] = None
                     break
             
-            return next_state, True, False
+            return next_state, True, self.is_terminal(next_state)
                 
         elif action == GridWorldActions.TOGGLE:
             # If the agent is facing a door for which it has the key:
             #   - If the door is closed: it opens it.
             #   - If the door is opened: it closes it.
             # If the agent does not have the key, it remains where it is.
-            if not curr_layout: return next_state, True, False
+            if not curr_layout: return next_state, True, self.is_terminal(next_state)
             missing_key = [obj for obj in self.objects if obj not in curr_layout.values()]
             if len(missing_key) == 0:
-                return next_state, True, False
+                return next_state, True, self.is_terminal(next_state)
             
             missing_key: Object = missing_key[0]
             for dy, dx in offsets.values():
                 new_x, new_y = next_state.x + dx, next_state.y + dy
-                next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
+                next_object = curr_layout.get((new_y, new_x)) if curr_layout else None
                 if next_object is not None and next_object.type == "door" and missing_key.color == next_object.color:
 
                     next_state.properties[f"{next_object.color}_door_{next_object.id}"] = not next_state.properties[f"{next_object.color}_door_{next_object.id}"]
             
-            return next_state, True, False
+            return next_state, True, self.is_terminal(next_state)
         
         elif action == GridWorldActions.DROP:
             # If the agent is wearing a key and the position towards which it is facing is an empty square, then the agent can drop the object
-            if not curr_layout: return next_state, True, False
+            if not curr_layout: return next_state, True, self.is_terminal(next_state)
             layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
             agent_has_key = len(layout_keys) == self.get_num_keys() - 1
 
             for dy, dx in offsets.values():
                 new_x, new_y = next_state.x + dx, next_state.y + dy
-                next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
+                next_object = curr_layout.get((new_y, new_x)) if curr_layout else None
             
                 if next_object is None and agent_has_key and self.is_normal(State(new_y, new_x, curr_layout, **state.properties)):
                     carrying_object = [obj for obj in self.objects if obj.type == "key" and obj not in layout_keys][0]
                 
-                    next_state.layout[(new_x, new_y)] = carrying_object
+                    next_state.layout[(new_y, new_x)] = carrying_object
                     break
             
-            return next_state, True, False
+            return next_state, True, self.is_terminal(next_state)
     
         else:
-            return next_state, True, False
+            return next_state, True, self.is_terminal(next_state)
     
-    def __move_minigrid(self, state: State, action: int, offsets: dict ={0: (1, 0), 1: (0, 1), 2: (-1, 0), 3: (0, -1)}):
+    # def __move_minigrid(self, state: State, action: int, offsets: dict ={0: (1, 0), 1: (0, 1), 2: (-1, 0), 3: (0, -1)}):
+    def __move_minigrid(self, state: State, action: int, offsets: dict ={0: (0, 1), 1: (1, 0), 2: (0, -1), 3: (-1, 0)}):
         orientation = state.properties["orientation"]
         y, x, curr_layout = state.y, state.x, state.layout
         
@@ -365,11 +377,11 @@ class CustomGrid:
         if action in [MinigridActions.ROTATE_LEFT, MinigridActions.ROTATE_RIGHT]:
             next_state.properties["orientation"] = (orientation + (1 if action == MinigridActions.ROTATE_RIGHT else -1)) % 4
             
-            return next_state, True, False
+            return next_state, True, self.is_terminal(next_state)
 
         dy, dx = offsets[orientation]
         new_y, new_x = y + dy, x + dx
-        next_object = curr_layout.get((new_x, new_y)) if curr_layout else None
+        next_object = curr_layout.get((new_y, new_x)) if curr_layout else None
         
         if action == MinigridActions.FORWARD:
             if next_object is not None and next_object.type == "key":
@@ -396,42 +408,42 @@ class CustomGrid:
             agent_has_key = len(layout_keys) == self.get_num_keys() - 1
             if next_object is not None and next_object.type == "key" and not agent_has_key:
                 # print("pickup")
-                next_state.layout[(new_x, new_y)] = None
+                next_state.layout[(new_y, new_x)] = None
             
-            return next_state, True, False
+            return next_state, self.is_valid(next_state), self.is_terminal(next_state)
             
         elif action == MinigridActions.TOGGLE:
             # If the agent is facing a door for which it has the key:
             #   - If the door is closed: it opens it.
             #   - If the door is opened: it closes it.
             # If the agent does not have the key, it remains where it is.
-            if not curr_layout: return next_state, True, False
+            if not curr_layout: return next_state, self.is_valid(next_state), self.is_terminal(next_state)
             missing_key = [obj for obj in self.objects if obj not in curr_layout.values()]
             if len(missing_key) == 0:
-                return next_state, True, False
+                return next_state, self.is_valid(next_state), self.is_terminal(next_state)
             
             missing_key: Object = missing_key[0]
             
             if next_object is not None and next_object.type == "door" and missing_key.color == next_object.color:
                 # print("toggle")
                 next_state.properties[f"{next_object.color}_door_{next_object.id}"] = not next_state.properties[f"{next_object.color}_door_{next_object.id}"]
-            return next_state, True, False
+            return next_state, self.is_valid(next_state), self.is_terminal(next_state)
         
         elif action == MinigridActions.DROP:
             # If the agent is wearing a key and the position towards which it is facing is an empty square, then the agent can drop the object
-            if not curr_layout: return next_state, True, False
+            if not curr_layout: return next_state, self.is_valid(next_state), self.is_terminal(next_state)
             layout_keys = [obj for obj in curr_layout.values() if type(obj) == Object and obj.type == "key"]
             agent_has_key = len(layout_keys) == self.get_num_keys() - 1
            
             if next_object is None and agent_has_key and self.is_normal(State(new_y, new_x, curr_layout, **state.properties)):
                 carrying_object = [obj for obj in self.objects if obj.type == "key" and obj not in layout_keys][0]
             
-                next_state.layout[(new_x, new_y)] = carrying_object
+                next_state.layout[(new_y, new_x)] = carrying_object
             
-            return next_state, True, False
+            return next_state, self.is_valid(next_state), self.is_terminal(next_state)
         else:
             # Done actions have no effect yet
-            return next_state, True, False
+            return next_state, self.is_valid(next_state), self.is_terminal(next_state)
     
     
     def remove_unreachable_states(self) -> None:
@@ -444,7 +456,7 @@ class CustomGrid:
             None
         """
         self._print("Going to remove unreachable states")
-        start_state = [state for state in self.states if state.x == self.start_pos[1] and state.y == self.start_pos[0]][0]
+        start_state = [state for state in self.states if state.x == self.start_pos[0] and state.y == self.start_pos[1]][0]
         
         reachable_states = set()
         queue = [start_state]
@@ -464,11 +476,15 @@ class CustomGrid:
         states = [state for state in self.states if state in reachable_states]
         terminal_states = [state for state in self.terminal_states if state in reachable_states]
 
-        removed_states = len(self.states) - len(states)
+        removed_states = len(self.states) + len(self.terminal_states) - len(reachable_states)
         self._print(f"Removing {removed_states} states")
 
         self.states = states
         self.terminal_states = terminal_states
+        
+        assert len(self.states) == len(set(self.states)), "There are duplicate non-terminal states"
+        assert len(self.terminal_states) == len(set(self.terminal_states)), "There are duplicate terminal-states"
+        
         self.generate_state_index_mapper()
     
     
@@ -491,7 +507,7 @@ class CustomGrid:
                 if move_state == next_state:
                     return action
             else:
-                if move_state.y == next_state[0] and move_state.x == next_state[1]:
+                if move_state.y == next_state[1] and move_state.x == next_state[0]:
                     return action
                 
         return -1
@@ -550,7 +566,7 @@ class CustomGrid:
         Returns:
         - bool: True if the position is valid, False otherwise.
         """
-        return (state.y, state.x) not in self.positions[CellType.WALL]
+        return (state.x, state.y) not in self.positions[CellType.WALL]
 
 
     def is_terminal(self, state: State) -> bool:
@@ -601,14 +617,14 @@ class CustomGrid:
         return state.object is not None and state.object.type == "door"
     
     def is_normal(self, state: State) -> bool:
-        return (state.y, state.x) in self.positions[CellType.NORMAL] and (state.y, state.x) not in self.positions[CellType.CLIFF]
+        return (state.x, state.y) in self.positions[CellType.NORMAL] and (state.x, state.y) not in self.positions[CellType.CLIFF]
     
     
     def is_cliff(self, state: State | tuple[int, int]) -> bool:
         if type(state) == State:
-            return (state.y, state.x) in self.positions[CellType.CLIFF]
+            return (state.x, state.y) in self.positions[CellType.CLIFF]
         else:
-            return (state[0], state[1]) in self.positions[CellType.CLIFF]
+            return (state[1], state[0]) in self.positions[CellType.CLIFF]
     
     
     def get_num_keys(self) -> int:

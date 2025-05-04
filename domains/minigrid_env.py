@@ -128,6 +128,36 @@ class CustomMinigridEnv(MiniGridEnv):
         self.mission = self.title
     
     
+    def _add_frame_with_title(self, frame: np.ndarray, title_text: str) -> Image:
+        """
+        Adds a title to the given frame and returns the modified frame.
+
+        Args:
+            frame (np.ndarray): The frame to which the title will be added.
+            title_text (str): The text to display as the title.
+
+        Returns:
+            Image: The modified frame with the title.
+        """
+        curr_frame = Image.fromarray(frame)
+        draw = ImageDraw.Draw(curr_frame)
+        
+        title_height = 40
+        frame_with_title = Image.new("RGB", (curr_frame.width, curr_frame.height + title_height), "white")
+        frame_with_title.paste(curr_frame, (0, title_height))
+        
+        # Add the text to the frame
+        draw_title = ImageDraw.Draw(frame_with_title)
+        font = ImageFont.load_default()
+        # font = ImageFont.truetype("UbuntuMono.ttf", size=20)
+        text_bbox = draw_title.textbbox((0, 0), title_text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        text_position = ((frame_with_title.width - text_width) // 2, (title_height - text_height) // 2)
+        draw_title.text(text_position, title_text, fill="black", font=font)
+        
+        return frame_with_title
+
     def visualize_policy(
         self,
         model: MinigridLMDP | MinigridMDP,
@@ -171,7 +201,7 @@ class CustomMinigridEnv(MiniGridEnv):
                 
                 next_layout = self.custom_grid.layout_combinations[0]
                 while not done:
-                    state = State(self.agent_pos[0], self.agent_pos[1], next_layout, **next_properties)
+                    state = State(self.agent_pos[1], self.agent_pos[0], next_layout, **next_properties)
                     state_idx = next(k for k, v in self.custom_grid.state_index_mapper.items() if v == state)
                     
                     if isinstance(model, MinigridMDP):
@@ -202,26 +232,7 @@ class CustomMinigridEnv(MiniGridEnv):
     
                     if save_gif:
                         frame = self.render()
-                        curr_frame = Image.fromarray(frame)
-                        draw = ImageDraw.Draw(curr_frame)
-                        
-                        title_height = 40
-                        frame_with_title = Image.new("RGB", (curr_frame.width, curr_frame.height + title_height), "white")
-                        frame_with_title.paste(curr_frame, (0, title_height))
-                        
-                        # Add the text to the frame
-                        draw_title = ImageDraw.Draw(frame_with_title)
-                        title_text = f"Epoch: {policy_epoch}"
-                        
-                        font = ImageFont.load_default()
-                        # font = ImageFont.truetype("UbuntuMono.ttf", size=20)  
-                        text_bbox = draw_title.textbbox((0, 0), title_text, font=font)
-                        text_width = text_bbox[2] - text_bbox[0]
-                        text_height = text_bbox[3] - text_bbox[1]
-                        text_position = ((frame_with_title.width - text_width) // 2, (title_height - text_height) // 2)
-                        draw_title.text(text_position, title_text, fill="black", font=font)
-                        
-                        frames.append(frame_with_title)
+                        frames.append(self._add_frame_with_title(frame, f"Epoch: {policy_epoch}"))
                     _, _, done, _, info = self.step(action)
                     
                     actions += 1
@@ -233,6 +244,10 @@ class CustomMinigridEnv(MiniGridEnv):
                     errors=num_mistakes,
                     deaths=deaths
                 )
+            if save_gif:
+                # Add the last frame with title
+                frame = self.render()
+                frames.append(self._add_frame_with_title(frame, f"Epoch: {policy_epoch}"))
         
         self._print(game_stats.GAME_INFO)
         if not save_gif:
@@ -322,7 +337,7 @@ class MinigridMDP(MDP):
         
         self.environment = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.environment.custom_grid.start_pos
-        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
+        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[0] and state.y == start_pos[1]][0]
         
         
         self.num_states = self.environment.custom_grid.get_num_states()
@@ -430,13 +445,15 @@ class MinigridMDP(MDP):
                 curr_state_idx = np.random.choice(self.environment.custom_grid.get_num_states(), p=self.P[curr_state_idx, self.policy[curr_state_idx], :].astype(np.float64) if self.dtype == np.float128 else self.P[curr_state_idx, self.policy[curr_state_idx], :])
                 curr_state = self.environment.custom_grid.state_index_mapper[curr_state_idx]
             elif self.behaviour == "deterministic":
-                curr_action = self.policy[curr_state_idx]
+                curr_action = self.policy[curr_state_idx][0]
+                print(curr_state)
                 curr_state, _, terminal = self.environment.custom_grid.move(self.environment.custom_grid.state_index_mapper[curr_state_idx], curr_action)
                 if terminal:
                     curr_state_idx = self.environment.custom_grid.terminal_states.index(curr_state)
                 else:
                     curr_state_idx = self.environment.custom_grid.states.index(curr_state)
-            
+
+                
                 actions.append(curr_action)
             states.append(curr_state_idx)
         
@@ -539,7 +556,7 @@ class MinigridLMDP(LMDP):
         self.environment = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions, verbose=self.verbose)
         
         start_pos = self.environment.custom_grid.start_pos
-        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
+        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[0] and state.y == start_pos[1]][0]
         
         self.num_states = self.environment.custom_grid.get_num_states()
         
@@ -622,6 +639,7 @@ class MinigridLMDP(LMDP):
             else:
                 curr_state_idx = np.argmax(self.policy[curr_state_idx])
             
+            print(curr_state)
             curr_state = self.environment.custom_grid.state_index_mapper[curr_state_idx]
             states.append(curr_state_idx)
         
@@ -712,7 +730,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
         
         self.environment = CustomMinigridEnv(render_mode="rgb_array", map=map, properties=properties, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.environment.custom_grid.start_pos
-        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[1] and state.y == start_pos[0]][0]
+        self.start_state = [state for state in self.environment.custom_grid.states if state.x == start_pos[0] and state.y == start_pos[1]][0]
         
         self.num_states = self.environment.custom_grid.get_num_states()
         
@@ -816,4 +834,3 @@ class MinigridLMDP_TDR(LMDP_TDR):
     def _print(self, msg):
         if self.verbose:
             print(msg)
-    
