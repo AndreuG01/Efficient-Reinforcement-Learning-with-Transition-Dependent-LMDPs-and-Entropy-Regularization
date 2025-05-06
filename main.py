@@ -40,8 +40,6 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
             verbose=True
         )
         
-        lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
-        
         mdp.compute_value_function()
         
         plt.rcParams.update({"text.usetex": True})
@@ -68,14 +66,17 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
         step = 0
         while True:
             curr_lmbda = lmdp_lmbdas[-1]
+            lmdp = mdp.to_LMDP_TDR(curr_lmbda)
             lmdp.compute_value_function(temp=curr_lmbda)
             value_functions.append(lmdp.V)
             curr_error = np.mean(np.square(mdp.V - lmdp.V))
             errors.append(curr_error)
 
             if len(errors) > 1 and curr_error > errors[-2]:
+                break
                 for _ in range(right_extension_steps):
                     next_lmbda = lmdp_lmbdas[-1] + step
+                    lmdp = mdp.to_LMDP_TDR(next_lmbda)
                     lmdp.compute_value_function(temp=next_lmbda)
                     value_functions.append(lmdp.V)
                     lmdp_lmbdas.append(next_lmbda)
@@ -108,7 +109,8 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
 
         best_lmbda = lmdp_lmbdas[np.argmin(errors)]
         best_error = min(errors)
-        lmdp.compute_value_function(temp=best_lmbda)
+        lmdp = mdp.to_LMDP_TDR(lmbda=best_lmbda)
+        lmdp.compute_value_function()
         axes[0].plot(lmdp.V, label=f"Best LMDP ($\lambda = {round(best_lmbda, 2)})$", color="gray", zorder=3, linewidth=1.5, linestyle="dashed")
 
         for i, curr_lmbda in enumerate(lmdp_lmbdas):
@@ -129,7 +131,7 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
         axes[0].set_ylabel("$V(s)$")
         axes[0].legend(loc="lower left")
         
-        plt.suptitle(f"MDP with $\\beta = {mdp.temperature}$. Stochastic probability ${mdp.stochastic_prob if mdp.behaviour != 'deterministic' else '1'}$. LMDP with $\lambda = {lmdp.lmbda}$.\nMap: {map.name}")
+        plt.suptitle(f"MDP with $\\beta = {mdp.temperature}$. Stochastic probability ${mdp.stochastic_prob if mdp.behaviour != 'deterministic' else '1'}$. LMDP with $\lambda = {best_lmbda}$.\nMap: {map.name}")
 
         if save_fig:
             directory_1 = "assets/temperature_exploration/"
@@ -142,7 +144,7 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
             if not os.path.exists(directory_2):
                 os.mkdir(directory_2)
             
-            plt.savefig(os.path.join(directory_2, f"temp_{mdp.temperature}_prob_{mdp.stochastic_prob if mdp.behaviour != 'deterministic' else '1'}.png"), dpi=300, bbox_inches="tight")
+            plt.savefig(os.path.join(directory_2, f"temp_{mdp.temperature}_prob_{mdp.stochastic_prob if mdp.behaviour != 'deterministic' else '1'}_v2.png"), dpi=300, bbox_inches="tight")
     
     if not save_fig:
         plt.show()
@@ -319,36 +321,36 @@ def kl_divergence(P: np.ndarray, Q: np.ndarray, epsilon: float = 1e-10) -> float
 
 if __name__ == "__main__":
     
-
-    for map in Maps.get_maps():
-        print(map.name)
-        mdp = MinigridLMDP_TDR(
-            map=map,
-            allowed_actions=MinigridActions.get_actions(),
-            # behaviour="deterministic",
-            threads=1
-        )
-        
-        
-        save_map_name = map.name.replace(" ", "_")
-        
-        mdp.visualize_policy(num_times=1, save_gif=True, save_path=f"assets/gifs/minigrid/lmdp_tdr/lmdptdr_{save_map_name}.gif")
-    
-    exit()
-        
-    mdp = GridWorldMDP(
-        map=Map(grid_size=10),
-        allowed_actions=GridWorldActions.get_actions()[:4],
-        behaviour="stochastic",
-        stochastic_prob=0.3,
-        temperature=3,
-        verbose=False,
-        dtype=np.float128
+    mdp = MinigridLMDP(
+        map=Maps.DOUBLE_DOOR,
+        allowed_actions=MinigridActions.get_actions(),
+        # behaviour="deterministic",
+        # stochastic_prob=0.1,
     )
     
+    mdp.compute_value_function()
     
-    lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
     
-    policies_comparison(mdp, lmdp, temp_1=mdp.temperature, temp_2=1038.6, save_fig=True, zoom=False)
-    # policies_comparison(mdp, lmdp, temp_1=mdp.temperature, temp_2=1381.9, save_fig=True, zoom=True, zoom_size=100)
+    # fig = plt.figure(figsize=(10, 5))
     
+    # # for temperature in np.arange(mdp.temperature, 300, 0.5):
+    # for temperature in [8.5]:
+    #     lmdp = mdp.to_LMDP_TDR(lmbda=temperature)
+    #     lmdp.compute_value_function()
+    #     mdp.compute_value_function()
+        
+
+    #     plt.scatter(lmdp.lmbda, np.mean(np.square(mdp.V - lmdp.V)), color="blue")
+    
+    # plt.show()
+    
+    exit()
+    
+    
+    for map in [Map(grid_size=4), Map(grid_size=10), Map(grid_size=25), Map(grid_size=20)]:
+        for temperature in np.arange(1, 5, 0.5):
+            explore_temperature(
+                map=map,
+                mdp_temperature=temperature,
+                probs=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 0.9]
+            )

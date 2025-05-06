@@ -1,8 +1,7 @@
 import platform
 
-#TODO: test in windows
 class TerminalColor:
-    ENABLED = False
+    ENABLED = None
     CODES = {
         "blue": "\033[34m",
         "red": "\033[31m",
@@ -15,7 +14,7 @@ class TerminalColor:
     RESET = "\033[0m"
 
     @staticmethod
-    def init():
+    def _init():
         if platform.system() in ["Linux", "Darwin"]:
             TerminalColor.ENABLED = True
         elif platform.system() == "Windows":
@@ -28,7 +27,11 @@ class TerminalColor:
                 TerminalColor.ENABLED = False
 
     @staticmethod
-    def colorize(text: str, color: str) -> str:
+    def colorize(text: str, color: str, bold: bool = False) -> str:
+        if TerminalColor.ENABLED is None:
+            TerminalColor._init()
+
         if TerminalColor.ENABLED and color in TerminalColor.CODES:
-            return f"{TerminalColor.CODES[color]}{text}{TerminalColor.RESET}"
+            prefix = "\033[1m" if bold else ""
+            return f"{prefix}{TerminalColor.CODES[color]}{text}{TerminalColor.RESET}"
         return text

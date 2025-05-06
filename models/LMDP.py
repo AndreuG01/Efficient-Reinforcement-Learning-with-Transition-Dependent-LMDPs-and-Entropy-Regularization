@@ -100,7 +100,7 @@ class LMDP:
         if benchmark:
             start_time = time.time()
         
-        results = Parallel(n_jobs=min(num_threads, cpu_count()))(
+        results = Parallel(n_jobs=min(num_threads, cpu_count()), temp_folder="/tmp")(
             delayed(process_state)(state) for state in tqdm(range(self.num_non_terminal_states), 
                                                          desc="Generating transition matrix P", 
                                                          total=self.num_non_terminal_states)

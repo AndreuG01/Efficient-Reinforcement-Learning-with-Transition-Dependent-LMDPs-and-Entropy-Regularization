@@ -578,7 +578,7 @@ def create_models(map, f, t, temp_mdp, temp_lmdp, behaviour, stochastic_prob):
             stochastic_prob=stochastic_prob,
             temperature=temp_mdp
         )
-        lmdp = mdp.to_LMDP_TDR(lmbda=temp_mdp)
+        lmdp = mdp.to_LMDP_TDR(lmbda=temp_lmdp)
         lmdp = GridWorldLMDP_TDR(
             map=map,
             allowed_actions=GridWorldActions.get_actions()[:4],
@@ -678,7 +678,7 @@ def embedding_errors_different_temp(map, f="MDP", t="LMDP", behaviour="determini
     assert behaviour in ["deterministic", "stochastic", "mixed"]
 
     mdp_temps = [1, 2, 3, 4]
-    lmdp_range = np.arange(14, 25, 0.5)
+    lmdp_range = np.arange(1, 8, 0.2)
 
     plt.rcParams.update({"text.usetex": True})
     fig, axes = plt.subplots(1, 3, figsize=(25, 5))
@@ -711,6 +711,7 @@ def embedding_errors_different_temp(map, f="MDP", t="LMDP", behaviour="determini
     if save_fig:
         name = map.name.lower().replace(" ", "_")
         path = f"assets/{f}_to_{t}_prob_{stochastic_prob if behaviour != 'deterministic' else 'det'}_{name}_lmbda_choosing.png"
-        plt.savefig(path, dpi=300, bbox_inches="tight")
+        # plt.savefig(path, dpi=300, bbox_inches="tight")
+        plt.savefig("assets/new_version_2.png", dpi=300, bbox_inches="tight")
     else:
         plt.show()

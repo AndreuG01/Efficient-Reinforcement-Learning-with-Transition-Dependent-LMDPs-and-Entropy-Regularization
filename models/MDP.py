@@ -138,7 +138,7 @@ class MDP(ABC):
         total_time = 0
         if benchmark: start_time = time.time()
         
-        results = Parallel(n_jobs=min(num_threads, cpu_count()))(
+        results = Parallel(n_jobs=min(num_threads, cpu_count()), temp_folder="/tmp")(
             delayed(process_state)(state) for state in tqdm(range(self.num_non_terminal_states),
                                                             desc="Generating transition matrix P",
                                                             total=self.num_non_terminal_states)
@@ -379,8 +379,8 @@ class MDP(ABC):
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, lmdp.stats = lmdp.power_iteration()
         lmdp.V = lmdp.get_value_function(z)
-        V_mdp, stats = self.value_iteration()
-        # V_mdp, stats = self.value_iteration(temp=lmdp.lmbda)
+        # V_mdp, stats = self.value_iteration()
+        V_mdp, stats = self.value_iteration(temp=lmdp.lmbda)
         
         if not hasattr(self, "stats"):
             self.stats = stats
@@ -423,23 +423,26 @@ class MDP(ABC):
                 B /= np.sum(B, axis=1).reshape(-1, 1)
 
                 log_B = np.where(B != 0, np.log(B), B)
-                y = self.R[state] + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
+                # y = self.R[state] + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
+                y = self.R[state] - self.temperature * np.log(1 / self.policy_ref[state, :]) + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
                 B_dagger = np.linalg.pinv(B.astype(np.float64))
                 x = B_dagger @ y
                 
-                if lmdp_tdr.lmbda != 0 and self.deterministic:
-                    # TODO: vectorize or make it more efficient
-                    for i, next_state in enumerate(np.where(zero_cols == False)[0]):
-                        res = 0
-                        for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
-                            res += self.policy_ref[state, next_action] * np.exp(self.R[state, next_action] / lmdp_tdr.lmbda)
-                        res = lmdp_tdr.lmbda * np.log(res)
-                        x[i] = res
+                # if lmdp_tdr.lmbda != 0 and self.deterministic:
+                #     # TODO: vectorize or make it more efficient
+                #     for i, next_state in enumerate(np.where(zero_cols == False)[0]):
+                #         res = 0
+                #         for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
+                #             res += self.policy_ref[state, next_action] * np.exp(self.R[state, next_action] / lmdp_tdr.lmbda)
+                #         res = lmdp_tdr.lmbda * np.log(res)
+                #         x[i] = res
                 
                 support_x = [col for col in zero_cols if col == False]
                 len_support = len(support_x)
                 
                 lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support)
+                
+                assert all(lmdp_tdr.R[state, ~zero_cols] <= 0), f"Not all rewards for origin state {state} are negative:\n{lmdp_tdr.R[state, ~zero_cols]}"
                 lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
                 
         # lmdp_tdr.R = csr_matrix(lmdp_tdr.R)

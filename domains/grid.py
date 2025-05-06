@@ -6,6 +6,8 @@ from typing import Literal
 from utils.maps import Map
 import numpy as np
 from tqdm import tqdm
+import time
+from utils.coloring import TerminalColor
 
 class MinigridActions:
     """
@@ -150,28 +152,15 @@ class CustomGrid:
     def _generate_states(self):
         states = []
         terminal_states = []
-        for pos in self.positions[CellType.NORMAL]:
+        for pos in tqdm(self.positions[CellType.NORMAL], desc="Generating normal states", total=len(self.positions[CellType.NORMAL])):
             for values, layout in product(self._get_property_combinations(), self.layout_combinations):
-                # TODO: a state where there is a key at the same position as the agent is not valid
-
-                # if obj is not None and obj.type == "key": continue
                 
                 curr_dict = dict(zip(list(self.state_properties.keys()), values))
-
-                # if obj is not None and obj.type == "door" and not curr_dict[str(obj)]: continue
-                # if (pos[1] == 1 and pos[0] == 1) and (layout[(2, 1)] is not None and layout[(3, 1)] is None and layout[(1, 1)] is None and layout[(4, 2)] is None and layout[(3, 3)] is None and layout[(3, 2)] is None and layout[(4, 1)] is None): continue
-                # if not curr_dict["blue_door_0"] and (pos[1] == 3 and pos[0] == 3) and (layout[(2, 1)] is None and layout[(3, 1)] is None and layout[(1, 1)] is None and layout[(4, 2)] is None and layout[(3, 3)] is None and layout[(3, 2)] is not None and layout[(4, 1)] is None) and str(layout[(3, 2)]) == "blue_key_1": continue
                 curr_state = State(pos[1], pos[0], layout=layout, **curr_dict)
-                if curr_state in states:
-                    print(f"Duplicate state: {curr_state}")
-                else:
-                    states.append(curr_state)
+                states.append(curr_state)
         
-        for pos in self.positions[CellType.GOAL]:
+        for pos in tqdm(self.positions[CellType.GOAL], desc="Generating goal states", total=len(self.positions[CellType.GOAL])):
             for values, layout in product(self._get_property_combinations(), self.layout_combinations):
-                # TODO: a state where there is a key at the same position as the agent is not valid
-                # obj = layout[(pos[0], pos[1])]
-                # if obj is not None and obj.type == "key": continue
                 terminal_states.append(State(pos[1], pos[0], layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
                 
         return states, terminal_states        
@@ -275,7 +264,6 @@ class CustomGrid:
             return self.__move_minigrid(state, action)
     
     
-    # def __move_gridworld(self, state: State, action: int, offsets: dict ={0: (0, -1), 1: (1, 0), 2: (0, 1), 3: (-1, 0)}):
     def __move_gridworld(self, state: State, action: int, offsets: dict ={0: (-1, 0), 1: (0, 1), 2: (1, 0), 3: (0, -1)}):
         """
         Computes the next position after performing an action, and returns whether the move is valid and whether the agent has reached a terminal state.
@@ -367,7 +355,6 @@ class CustomGrid:
         else:
             return next_state, True, self.is_terminal(next_state)
     
-    # def __move_minigrid(self, state: State, action: int, offsets: dict ={0: (1, 0), 1: (0, 1), 2: (-1, 0), 3: (0, -1)}):
     def __move_minigrid(self, state: State, action: int, offsets: dict ={0: (0, 1), 1: (1, 0), 2: (0, -1), 3: (-1, 0)}):
         orientation = state.properties["orientation"]
         y, x, curr_layout = state.y, state.x, state.layout
@@ -446,6 +433,24 @@ class CustomGrid:
             return next_state, self.is_valid(next_state), self.is_terminal(next_state)
     
     
+    def _unrechable_info(self, steps, queue_len, reachable_len, last_count, last_time, start_time):
+        """
+        Prints the information message shown during the removal of unreachable states
+        """
+        now = time.time()
+        rate = (reachable_len - last_count) / (now - last_time) if now > last_time else 0
+        elapsed = now - start_time
+
+        msg = (
+            f"Steps: {str(steps)}" +
+            f" | In queue: {TerminalColor.colorize(str(queue_len), 'red')}" +
+            f" | Reachable: {str(reachable_len)}" +
+            f" | Discovery rate: {str(round(rate, 2))}/s" +
+            f" | Elapsed: {str(round(elapsed, 1))}s"
+        )
+        print(msg.ljust(100), end="\r")
+        return reachable_len, now
+
     def remove_unreachable_states(self) -> None:
         """
         Removes states that are unreachable from the start state.
@@ -455,7 +460,6 @@ class CustomGrid:
         Returns:
             None
         """
-        self._print("Going to remove unreachable states")
         start_state = [state for state in self.states if state.x == self.start_pos[0] and state.y == self.start_pos[1]][0]
         
         reachable_states = set()
@@ -464,13 +468,28 @@ class CustomGrid:
         for terminal_state in queue:
             reachable_states.add(terminal_state)
 
+        steps = 0
+        start_time = time.time()
+        last_count = 0
+        last_time = start_time
+        rate_interval = 500
+
         while queue:
+            if steps % 100 == 0:
+                if steps % rate_interval == 0:
+                    last_count, last_time = self._unrechable_info(steps, len(queue), len(reachable_states), last_count, last_time, start_time)
+                else:
+                    self._unrechable_info(steps, len(queue), len(reachable_states), last_count, last_time, start_time)
+            
             current_state = queue.pop(0)
             for action in self.allowed_actions:
                 next_state, _, _ = self.move(current_state, action)
                 if next_state not in reachable_states:
                     reachable_states.add(next_state)
                     queue.append(next_state)
+                steps += 1
+        self._unrechable_info(steps, len(queue), len(reachable_states), last_count, last_time, start_time)
+        print()
 
         
         states = [state for state in self.states if state in reachable_states]
@@ -643,6 +662,6 @@ class CustomGrid:
                 print(self.char_positions[type], end="")
             print()
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)
