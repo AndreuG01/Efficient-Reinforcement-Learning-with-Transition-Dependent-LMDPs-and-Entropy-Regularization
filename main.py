@@ -10,24 +10,12 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.gridspec as gridspec
 from matplotlib.colors import Normalize
-from PIL import Image
 import numpy as np
 from utils.maps import Maps, Map
 from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, benchmark_lmdp2mdp_embedding, benchmark_mdp2lmdp_embedding
-from minigrid.manual_control import ManualControl
 from custom_palette import CustomPalette
-import pickle as pkl
 from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table, generate_parallel_p_table, different_gammas_plot, different_temperature_plots, regularized_embedding_error_plot, embedding_value_function_reg, embedding_errors_different_temp
-from sklearn.metrics import r2_score
-from scipy.stats import spearmanr
-from utils.stats import ModelBasedAlgsStats
 from typing import Literal
-import matplotlib.gridspec as gridspec
-from tqdm import tqdm
-from scipy.stats import pearsonr
-import pickle
-from math import ceil
-import seaborn as sns
 
 def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], save_fig: bool = True):
     for prob in probs:
@@ -320,7 +308,6 @@ def kl_divergence(P: np.ndarray, Q: np.ndarray, epsilon: float = 1e-10) -> float
 
 
 if __name__ == "__main__":
-    
     mdp = MinigridLMDP(
         map=Maps.DOUBLE_DOOR,
         allowed_actions=MinigridActions.get_actions(),
