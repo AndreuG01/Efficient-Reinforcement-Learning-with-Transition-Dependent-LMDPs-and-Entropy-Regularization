@@ -321,6 +321,7 @@ class GridWorldMDP(MDP):
         temperature: float = 0.0,
         mdp: MDP = None,
         verbose: bool = True,
+        policy_ref: np.ndarray = None,
         dtype: np.dtype = np.float128
     ):
         """
@@ -373,6 +374,7 @@ class GridWorldMDP(MDP):
                 gamma=gamma,
                 temperature=temperature,
                 verbose=self.verbose,
+                policy_ref=policy_ref,
                 dtype=self.dtype
             )
             if map.P is not None:

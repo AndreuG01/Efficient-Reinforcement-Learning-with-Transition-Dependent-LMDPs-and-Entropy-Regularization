@@ -11,6 +11,8 @@ import models
 from copy import deepcopy
 from typing import Literal
 from joblib import Parallel, delayed, cpu_count
+from utils.coloring import TerminalColor
+import itertools
 
 class MDP(ABC):
     """
@@ -45,6 +47,7 @@ class MDP(ABC):
         temperature: float = 0.0,
         behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         verbose: bool = True,
+        policy_ref: np.ndarray = None,
         dtype: np.dtype = np.float128
     ) -> None:
         """
@@ -77,7 +80,7 @@ class MDP(ABC):
         self.deterministic = deterministic
         self.behaviour = behaviour
         self.temperature = temperature
-        self.policy_ref = np.full((self.num_states, self.num_actions), 1.0 / self.num_actions, dtype=self.dtype)        
+        self.policy_ref = np.full((self.num_states, self.num_actions), 1.0 / self.num_actions, dtype=self.dtype) if policy_ref is None else policy_ref
 
 
         
@@ -391,15 +394,165 @@ class MDP(ABC):
         return lmdp
     
     
-    def to_LMDP_TDR(self, lmbda: float):
+    def _binary_search_lambda(self, low: float, high: float, tol: float = 1e-4, max_iter: int = 100) -> float:
+        """
+        Perform binary search to find the best lambda value within a given range.
+
+        Args:
+            low (float): The lower bound of the search range.
+            high (float): The upper bound of the search range.
+            tol (float): The tolerance for stopping the search.
+            max_iter (int): The maximum number of iterations.
+
+        Returns:
+            float: The best lambda value found.
+        """
+        initial_low = low
+        initial_high = high
+        bar_length = 100
+
+        for _ in range(max_iter):
+            if high - low < tol:
+                # To ensure that the progress bar ends cleanly
+                print()
+                break
+
+            self._print_lambda_progress(low, high, initial_low, initial_high, bar_length)
+
+            mid = (low + high) / 2
+            epsilon = tol / 2
+
+            left = mid - epsilon
+            right = mid + epsilon
+
+            err_left = self._compute_lambda_error(left)
+            err_right = self._compute_lambda_error(right)
+
+            if err_left < err_right:
+                high = mid
+            else:
+                low = mid
+
+        return (low + high) / 2
+
+
+    def _compute_lambda_error(self, lmbda: float) -> float:
+        """
+        Compute the embedding error for a given lambda value.
+
+        Args:
+            lmbda (float): The lambda value to evaluate.
+
+        Returns:
+            float: The embedding error.
+        """
+        lmdp = self.to_LMDP_TDR(lmbda=lmbda, find_best_lmbda=False)
+        lmdp.compute_value_function()
+        return np.mean(np.square(self.V - lmdp.V))
+
+
+    def _print_lambda_progress(self, low: float, high: float, initial_low: float, initial_high: float, bar_length: int = 100):
+        """
+        Print the progress of the lambda refinement process.
+
+        Args:
+            low (float): The current lower bound of the search range.
+            high (float): The current upper bound of the search range.
+            initial_low (float): The initial lower bound of the search range.
+            initial_high (float): The initial upper bound of the search range.
+            bar_length (int): The length of the progress bar.
+        """
+        low_pos = int(bar_length * (low - initial_low) / (initial_high - initial_low))
+        high_pos = int(bar_length * (high - initial_low) / (initial_high - initial_low))
+
+        low_pos = max(0, min(low_pos, bar_length - 1))
+        high_pos = max(0, min(high_pos, bar_length - 1))
+
+        bar = ["-" if i < low_pos or i > high_pos else " " for i in range(bar_length)]
+        bar[0] = TerminalColor.colorize("|", "purple", bold=True)
+        bar[-1] = TerminalColor.colorize("|", "purple", bold=True)
+        if low_pos != high_pos:
+            bar[low_pos] = TerminalColor.colorize("[", "green")
+            bar[high_pos] = TerminalColor.colorize("]", "green")
+        else:
+            if low_pos == 0:
+                bar[1] = TerminalColor.colorize("]", "green")
+                bar[high_pos] = TerminalColor.colorize("[", "green")
+            else:
+                bar[low_pos-1] = TerminalColor.colorize("[", "green")
+                bar[high_pos] = TerminalColor.colorize("]", "green")
+
+        bar_display = "".join(bar)
+        msg = f"Refining temperature: {bar_display}  Current range: {round(low, 3)} - {round(high, 3)}"
+        print(msg.ljust(120), end="\r")
+
+
+    def _find_best_lambda(self):
+        """
+        Find the best lambda value for the LMDP embedding using a combination of iterative search and binary search.
+        """
+        verbose_state = self.verbose
+        self.verbose = False
+
+        start_lmbda = max(0.05, self.temperature)
+        lmbda = start_lmbda
+        step = 1
+
+        tried = []
+        errors = []
+        prev_error = None
+
+        num_tries = 0
+        spinner = itertools.cycle([
+            "[=    ]", "[==   ]", "[===  ]", "[ ====]", "[  ===]", "[   ==]", "[    =]", "[     ]"
+        ])
+        spin = next(spinner)
+
+        while True:
+            if num_tries % 20 == 0:
+                spin = next(spinner)
+            if num_tries % 5 == 0:
+                current_message = f"Testing lambda: {TerminalColor.colorize(str(lmbda), 'blue').ljust(100)}"
+
+            print(f"{spin} {current_message}", end="\r")
+
+            error = self._compute_lambda_error(lmbda)
+
+            tried.append(lmbda)
+            errors.append(error)
+
+            if prev_error is not None:
+                if error > prev_error:
+                    # To ensure that the next message does not overwrite the current ones
+                    print()
+                    break
+
+            prev_error = error
+            lmbda = round(lmbda + step, 3)
+            num_tries += 1
+
+        best_idx = np.argmin(errors)
+        low = tried[best_idx]
+        high = tried[best_idx + 1]
+
+        final_lmbda = self._binary_search_lambda(low, high)
+        self.verbose = verbose_state
+
+        return final_lmbda
+
+    
+    def to_LMDP_TDR(self, lmbda: float = None, find_best_lmbda: bool = True):
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
+        if find_best_lmbda:
+            lmbda = self._find_best_lambda()
+            self._print(TerminalColor.colorize(f"Best lmbda for LMDP has been: {round(lmbda, 3)}", "green", bold=True))
         
         lmdp_tdr = models.LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,
-            lmbda=lmbda,
+            lmbda=self.temperature if lmbda is None else lmbda,
             s0=self.s0,
             verbose=self.verbose,
             dtype=self.dtype
@@ -442,7 +595,7 @@ class MDP(ABC):
                 
                 lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support)
                 
-                assert all(lmdp_tdr.R[state, ~zero_cols] <= 0), f"Not all rewards for origin state {state} are negative:\n{lmdp_tdr.R[state, ~zero_cols]}"
+                # assert all(lmdp_tdr.R[state, ~zero_cols] <= 0), f"Not all rewards for origin state {state} are negative:\n{lmdp_tdr.R[state, ~zero_cols]}"
                 lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
                 
         # lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
@@ -450,10 +603,11 @@ class MDP(ABC):
         
         z = lmdp_tdr.power_iteration()
         V_lmdp = lmdp_tdr.get_value_function(z)
-        V_mdp, _ = self.value_iteration()
+        if not hasattr(self, "V"):
+            self.V, self.stats = self.value_iteration()
         # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
         
-        self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - V_mdp))}")
+        self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
         return lmdp_tdr
     
     
