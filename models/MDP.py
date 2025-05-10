@@ -1,13 +1,14 @@
 import numpy as np
 import time
-from utils.stats import ModelBasedAlgsStats
+from utils.stats import ModelBasedAlgsStats, EmbeddingStats
 from abc import ABC, abstractmethod
 from domains.grid import CellType, CustomGrid
 from collections.abc import Callable
 from utils.state import State
 from tqdm import tqdm
 from scipy.sparse import csr_matrix
-import models
+from models.LMDP_TDR import LMDP_TDR
+from models.LMDP import LMDP
 from copy import deepcopy
 from typing import Literal
 from joblib import Parallel, delayed, cpu_count
@@ -144,7 +145,8 @@ class MDP(ABC):
         results = Parallel(n_jobs=min(num_threads, cpu_count()), temp_folder="/tmp")(
             delayed(process_state)(state) for state in tqdm(range(self.num_non_terminal_states),
                                                             desc="Generating transition matrix P",
-                                                            total=self.num_non_terminal_states)
+                                                            total=self.num_non_terminal_states,
+                                                            disable=not self.verbose)
         )
         
         for row_updates in results:
@@ -332,7 +334,7 @@ class MDP(ABC):
         self._print(f"Computing the LMDP embedding of this MDP...")
         
         
-        lmdp = models.LMDP(
+        lmdp = LMDP(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=True,
@@ -343,41 +345,38 @@ class MDP(ABC):
             dtype=self.dtype
         )
         
-        if self.deterministic and False:   
-            pass
+        
+        epsilon = 1e-10
+        for state in range(self.num_non_terminal_states):
+            # print(f"STATE: {state}")
+            B = self.P[state, :, :]
+            zero_cols = np.all(B == 0, axis=0)
+            zero_cols_idx = np.where(zero_cols)[0]
             
-        else:
-            epsilon = 1e-10
-            for state in range(self.num_non_terminal_states):
-                # print(f"STATE: {state}")
-                B = self.P[state, :, :]
-                zero_cols = np.all(B == 0, axis=0)
-                zero_cols_idx = np.where(zero_cols)[0]
-                
-                # Remove 0 columns
-                B = B[:, ~zero_cols]
-                
-                # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
-                B[B == 0] = epsilon
-                B /= np.sum(B, axis=1).reshape(-1, 1).astype(self.dtype)
-                
-                log_B = np.where(B != 0, np.log(B), B)
-                v = self.R[state] + lmdp.lmbda * np.sum(B * log_B, axis=1)
-                B_dagger = np.linalg.pinv(B.astype(np.float64))
-                x = B_dagger @ v
-                
-                if lmdp.lmbda != 0 and self.deterministic:
-                    # TODO: vectorize or make it more efficient
-                    for i, next_state in enumerate(np.where(zero_cols == False)[0]):
-                        res = 0
-                        for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
-                            res += self.policy_ref[state, next_action] * np.exp(self.R[state, next_action] / lmdp.lmbda)
-                        res = lmdp.lmbda * np.log(res)
-                        x[i] = res
-                
-                R = lmdp.lmbda * np.log(np.sum(np.exp(x / lmdp.lmbda)))
-                lmdp.R[state] = R
-                lmdp.P[state, ~zero_cols] = np.exp((x - R * np.ones(shape=x.shape, dtype=self.dtype)) / lmdp.lmbda)
+            # Remove 0 columns
+            B = B[:, ~zero_cols]
+            
+            # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
+            B[B == 0] = epsilon
+            B /= np.sum(B, axis=1).reshape(-1, 1).astype(self.dtype)
+            
+            log_B = np.where(B != 0, np.log(B), B)
+            v = self.R[state] + lmdp.lmbda * np.sum(B * log_B, axis=1)
+            B_dagger = np.linalg.pinv(B.astype(np.float64))
+            x = B_dagger @ v
+            
+            if lmdp.lmbda != 0 and self.deterministic:
+                # TODO: vectorize or make it more efficient
+                for i, next_state in enumerate(np.where(zero_cols == False)[0]):
+                    res = 0
+                    for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
+                        res += self.policy_ref[state, next_action] * np.exp(self.R[state, next_action] / lmdp.lmbda)
+                    res = lmdp.lmbda * np.log(res)
+                    x[i] = res
+            
+            R = lmdp.lmbda * np.log(np.sum(np.exp(x / lmdp.lmbda)))
+            lmdp.R[state] = R
+            lmdp.P[state, ~zero_cols] = np.exp((x - R * np.ones(shape=x.shape, dtype=self.dtype)) / lmdp.lmbda)
                 
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
         z, lmdp.stats = lmdp.power_iteration()
@@ -394,13 +393,14 @@ class MDP(ABC):
         return lmdp
     
     
-    def _binary_search_lambda(self, low: float, high: float, tol: float = 1e-4, max_iter: int = 100) -> float:
+    def _binary_search_lambda(self, low: float, high: float, stats: EmbeddingStats, tol: float = 1e-4, max_iter: int = 100) -> float:
         """
         Perform binary search to find the best lambda value within a given range.
 
         Args:
             low (float): The lower bound of the search range.
             high (float): The upper bound of the search range.
+            stats (EmbeddingStats): The statistics object to store information about the search.
             tol (float): The tolerance for stopping the search.
             max_iter (int): The maximum number of iterations.
 
@@ -414,7 +414,7 @@ class MDP(ABC):
         for _ in range(max_iter):
             if high - low < tol:
                 # To ensure that the progress bar ends cleanly
-                print()
+                self._print("")
                 break
 
             self._print_lambda_progress(low, high, initial_low, initial_high, bar_length)
@@ -427,6 +427,8 @@ class MDP(ABC):
 
             err_left = self._compute_lambda_error(left)
             err_right = self._compute_lambda_error(right)
+            
+            stats.add_binary_search_info(mid, self._compute_lambda_error(mid))
 
             if err_left < err_right:
                 high = mid
@@ -446,12 +448,15 @@ class MDP(ABC):
         Returns:
             float: The embedding error.
         """
-        lmdp = self.to_LMDP_TDR(lmbda=lmbda, find_best_lmbda=False)
+        verbose = self.verbose
+        self.verbose = True
+        lmdp, _ = self.to_LMDP_TDR(lmbda=lmbda, find_best_lmbda=False)
         lmdp.compute_value_function()
+        self.verbose = verbose
         return np.mean(np.square(self.V - lmdp.V))
 
 
-    def _print_lambda_progress(self, low: float, high: float, initial_low: float, initial_high: float, bar_length: int = 100):
+    def _print_lambda_progress(self, low: float, high: float, initial_low: float, initial_high: float, bar_length: int = 100) -> None:
         """
         Print the progress of the lambda refinement process.
 
@@ -484,19 +489,16 @@ class MDP(ABC):
 
         bar_display = "".join(bar)
         msg = f"Refining temperature: {bar_display}  Current range: {round(low, 3)} - {round(high, 3)}"
-        print(msg.ljust(120), end="\r")
+        self._print(msg.ljust(120), end="\r")
 
 
-    def _find_best_lambda(self):
+    def _find_best_lambda(self, stats: EmbeddingStats):
         """
         Find the best lambda value for the LMDP embedding using a combination of iterative search and binary search.
         """
-        verbose_state = self.verbose
-        self.verbose = False
-
         start_lmbda = max(0.05, self.temperature)
         lmbda = start_lmbda
-        step = 1
+        step = 5 # TODO: need to adjust this based on the stochastic probability and the temperature
 
         tried = []
         errors = []
@@ -509,14 +511,15 @@ class MDP(ABC):
         spin = next(spinner)
 
         while True:
-            if num_tries % 20 == 0:
+            if num_tries % 2 == 0:
                 spin = next(spinner)
             if num_tries % 5 == 0:
                 current_message = f"Testing lambda: {TerminalColor.colorize(str(lmbda), 'blue').ljust(100)}"
 
-            print(f"{spin} {current_message}", end="\r")
+            self._print(f"{spin} {current_message}", end="\r")
 
             error = self._compute_lambda_error(lmbda)
+            stats.add_linear_search_info(lmbda, error)
 
             tried.append(lmbda)
             errors.append(error)
@@ -524,7 +527,7 @@ class MDP(ABC):
             if prev_error is not None:
                 if error > prev_error:
                     # To ensure that the next message does not overwrite the current ones
-                    print()
+                    self._print("")
                     break
 
             prev_error = error
@@ -535,71 +538,67 @@ class MDP(ABC):
         low = tried[best_idx]
         high = tried[best_idx + 1]
 
-        final_lmbda = self._binary_search_lambda(low, high)
-        self.verbose = verbose_state
+        final_lmbda = self._binary_search_lambda(low, high, stats)
+        stats.set_optimal_parameter(final_lmbda, self._compute_lambda_error(final_lmbda))
 
         return final_lmbda
 
     
-    def to_LMDP_TDR(self, lmbda: float = None, find_best_lmbda: bool = True):
+    def to_LMDP_TDR_iterative(self, lmbda: float = None, find_best_lmbda: bool = True) -> tuple[LMDP_TDR, EmbeddingStats]:
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
+        stats = EmbeddingStats("iterative")
+        stats.start_time()
         
         if find_best_lmbda:
-            lmbda = self._find_best_lambda()
-            self._print(TerminalColor.colorize(f"Best lmbda for LMDP has been: {round(lmbda, 3)}", "green", bold=True))
+            if np.all(np.sum(self.P == 1, axis=2)):
+                # If the transition probability matrix is deterministic, skip the process of finding the optimal temperature lambda,
+                # as we already know that lambda^* = beta
+                print(f"{TerminalColor.colorize('WARNING: ', 'red', 'bold')} Will not look for optimal lambdas because MDP is deterministic. Best lambda is beta.")
+            else:
+                # Otherwise, look for the best temperature
+                lmbda = self._find_best_lambda(stats=stats)
+                self._print(TerminalColor.colorize(f"Best lmbda for LMDP has been: {round(lmbda, 3)}", "green", bold=True))
         
-        lmdp_tdr = models.LMDP_TDR(
+        lmdp_tdr = LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
-            sparse_optimization=False,
+            sparse_optimization=True,
             lmbda=self.temperature if lmbda is None else lmbda,
             s0=self.s0,
             verbose=self.verbose,
             dtype=self.dtype
         )
-        
-        if self.deterministic and False:
-            pass
+        epsilon = 1e-10
+        for state in range(self.num_non_terminal_states):
+            # print(f"STATE: {state}")
+            B = self.P[state, :, :]
+            zero_cols = np.all(B == 0, axis=0)
             
-        else:
-            epsilon = 1e-10
-            for state in range(self.num_non_terminal_states):
-                # print(f"STATE: {state}")
-                B = self.P[state, :, :]
-                zero_cols = np.all(B == 0, axis=0)
-                
-                # Remove 0 columns
-                B = B[:, ~zero_cols]
-                
-                # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
-                B[B == 0] = epsilon
-                B /= np.sum(B, axis=1).reshape(-1, 1)
+            # Remove 0 columns
+            B = B[:, ~zero_cols]
+            
+            # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
+            B[B == 0] = epsilon
+            B /= np.sum(B, axis=1).reshape(-1, 1)
 
-                log_B = np.where(B != 0, np.log(B), B)
-                # y = self.R[state] + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
-                y = self.R[state] - self.temperature * np.log(1 / self.policy_ref[state, :]) + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
-                B_dagger = np.linalg.pinv(B.astype(np.float64))
-                x = B_dagger @ y
+            log_B = np.where(B != 0, np.log(B), B)
+            # y = self.R[state] + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
+            y = self.R[state] - self.temperature * np.log(1 / self.policy_ref[state, :]) + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
+            B_dagger = np.linalg.pinv(B.astype(np.float64))
+            x = B_dagger @ y
+            
+            support_x = [col for col in zero_cols if col == False]
+            len_support = len(support_x)
+            
+            lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support)
+            
+            # assert all(lmdp_tdr.R[state, ~zero_cols] <= 0), f"Not all rewards for origin state {state} are negative:\n{lmdp_tdr.R[state, ~zero_cols]}"
+            lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
                 
-                # if lmdp_tdr.lmbda != 0 and self.deterministic:
-                #     # TODO: vectorize or make it more efficient
-                #     for i, next_state in enumerate(np.where(zero_cols == False)[0]):
-                #         res = 0
-                #         for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
-                #             res += self.policy_ref[state, next_action] * np.exp(self.R[state, next_action] / lmdp_tdr.lmbda)
-                #         res = lmdp_tdr.lmbda * np.log(res)
-                #         x[i] = res
-                
-                support_x = [col for col in zero_cols if col == False]
-                len_support = len(support_x)
-                
-                lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support)
-                
-                # assert all(lmdp_tdr.R[state, ~zero_cols] <= 0), f"Not all rewards for origin state {state} are negative:\n{lmdp_tdr.R[state, ~zero_cols]}"
-                lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
-                
-        # lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
-        # lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
+        lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
+        lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
+        
+        stats.end_time()
         
         z = lmdp_tdr.power_iteration()
         V_lmdp = lmdp_tdr.get_value_function(z)
@@ -608,13 +607,98 @@ class MDP(ABC):
         # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
         
         self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
-        return lmdp_tdr
+        return lmdp_tdr, stats
+    
+    def to_LMDP_TDR_vectorized(self, lmbda: float = None, find_best_lmbda: bool = True) -> tuple[LMDP_TDR, EmbeddingStats]:
+        self._print(f"Computing the LMDP-TDR embedding of this MDP...")
+        stats = EmbeddingStats("vectorized")
+        stats.start_time()
+        
+        if find_best_lmbda:
+            if np.all(np.sum(self.P == 1, axis=2)):
+                # If the transition probability matrix is deterministic, skip the process of finding the optimal temperature lambda,
+                # as we already know that lambda^* = beta
+                print(f"{TerminalColor.colorize('WARNING: ', 'red', 'bold')} Will not look for optimal lambdas because MDP is deterministic. Best lambda is beta.")
+            else:
+                # Otherwise, look for the best temperature
+                lmbda = self._find_best_lambda(stats=stats)
+                self._print(TerminalColor.colorize(f"Best lmbda for LMDP has been: {round(lmbda, 3)}", "green", bold=True))
+        
+        lmdp_tdr = LMDP_TDR(
+            num_states=self.num_states,
+            num_terminal_states=self.num_terminal_states,
+            sparse_optimization=True,
+            lmbda=self.temperature if lmbda is None else lmbda,
+            s0=self.s0,
+            verbose=self.verbose,
+            dtype=self.dtype
+        )
+        
+        epsilon = 1e-10
+        possible_transitions = np.any(self.P != 0, axis=1)
+        num_possible_transitions = np.unique(np.sum(possible_transitions, axis=1))
+        
+        for num in num_possible_transitions:
+            # print(f"STATE: {state}")
+            states = np.where(np.sum(possible_transitions, axis=1) == num)[0]
+            
+            # Remove 0 columns
+            # Removing 0 columns cannot be done all in once, as not all 0 columns are in the same index
+            B = np.array([self.P[state_idx, :, possible_transitions[state_idx]] for state_idx in states])
+            # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
+            B[B == 0] = epsilon
+            B /= np.sum(B, axis=1, keepdims=True)
+            
+
+            log_B = np.where(B != 0, np.log(B), B)
+            # y = self.R[state] + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
+            y = self.R[states] - self.temperature * np.log(1 / self.policy_ref[states, :]) + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
+            B_dagger = np.linalg.pinv(B.astype(np.float64))
+            
+            x = np.einsum("sap,sp->sa", B_dagger.transpose(0, 2, 1), y)
+
+            
+            # if lmdp_tdr.lmbda != 0 and self.deterministic:
+            #     # TODO: vectorize or make it more efficient
+            #     for i, next_state in enumerate(np.where(zero_cols == False)[0]):
+            #         res = 0
+            #         for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
+            #             res += self.policy_ref[state, next_action] * np.exp(self.R[state, next_action] / lmdp_tdr.lmbda)
+            #         res = lmdp_tdr.lmbda * np.log(res)
+            #         x[i] = res
+            next_states = np.where(possible_transitions[states])[1]
+            states = np.repeat(states, num)
+            lmdp_tdr.R[states, next_states] = (x + lmdp_tdr.lmbda * np.log(num)).flatten()
+            
+            # assert all(lmdp_tdr.R[state, ~zero_cols] <= 0), f"Not all rewards for origin state {state} are negative:\n{lmdp_tdr.R[state, ~zero_cols]}"
+            lmdp_tdr.P[states, next_states] = np.exp(-np.log(num))
+                
+        lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
+        lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
+        
+        stats.end_time()
+        
+        z = lmdp_tdr.power_iteration()
+        V_lmdp = lmdp_tdr.get_value_function(z)
+        if not hasattr(self, "V"):
+            self.V, self.stats = self.value_iteration()
+        # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
+        
+        self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
+        return lmdp_tdr, stats
+    
+    
+    def to_LMDP_TDR(self, lmbda: float = None, find_best_lmbda: bool = True, vectorized: bool = True) -> tuple[LMDP_TDR, EmbeddingStats]:
+        if vectorized:
+            return self.to_LMDP_TDR_vectorized(lmbda, find_best_lmbda)
+        else:
+            return self.to_LMDP_TDR_iterative(lmbda, find_best_lmbda)
     
     
     def to_LMDP_TDR_2(self):
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
-        lmdp_tdr = models.LMDP_TDR(
+        lmdp_tdr = LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=True,
@@ -626,61 +710,56 @@ class MDP(ABC):
         
         R_1 = np.einsum("san,na->sn", self.P, self.R) / self.num_actions
         R_1[R_1 == 0] = 1e-10
-
-        
-        if self.deterministic and False:
-            pass
+                
+        epsilon = 1e-10
+        for state in range(self.num_non_terminal_states):
+            # print(f"STATE: {state}")
+            B = self.P[state, :, :]
+            zero_cols = np.all(B == 0, axis=0)
+            zero_cols_idx = np.where(zero_cols)[0]
             
-        else:
-            epsilon = 1e-10
-            for state in range(self.num_non_terminal_states):
-                # print(f"STATE: {state}")
-                B = self.P[state, :, :]
-                zero_cols = np.all(B == 0, axis=0)
-                zero_cols_idx = np.where(zero_cols)[0]
-                
-                # Remove 0 columns
-                B = B[:, ~zero_cols]
-                curr_r1 = R_1[state, ~zero_cols]
-                
-                # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
-                B[B == 0] = epsilon
-                B /= np.sum(B, axis=1).reshape(-1, 1)
-                
+            # Remove 0 columns
+            B = B[:, ~zero_cols]
+            curr_r1 = R_1[state, ~zero_cols]
+            
+            # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
+            B[B == 0] = epsilon
+            B /= np.sum(B, axis=1).reshape(-1, 1)
+            
 
-                log_B = np.where(B != 0, np.log(B), B)
-                y_1 = self.R[state] + np.sum(B * log_B, axis=1)
-                y = self.R[state] + np.sum(B * (lmdp_tdr.lmbda * log_B - curr_r1), axis=1)
-                
-                test_1 = np.zeros_like(self.R[state])
-                for s in range(self.num_states):
-                    if s in zero_cols_idx: continue
-                    test_1 += self.P[state, :, s] * (np.log(self.P[state, :, s]))
-                
-                test_1 += self.R[state]
-                assert np.all(test_1 == y_1)
-                
-                test_2 = np.zeros_like(self.R[state])
-                for s in range(self.num_states):
-                    if s in zero_cols_idx: continue
-                    test_2 += self.P[state, :, s] * (np.log(self.P[state, :, s]) - R_1[state, s])
-                
-                test_2 += self.R[state]
-                
-                assert np.all(test_2 == y)
-                
-                B_dagger = np.linalg.pinv(B)
-                x_1 = B_dagger @ y_1 # From first version of the embedding to do some checkings
-                x = B_dagger @ y
-                
-                assert np.all(np.isclose(np.sum(B_dagger * test_2, axis=1) + curr_r1, x_1)) # If this does not fail, it means that the results obtained here are the same as in the first embedding version and therefore, the LMDP and LMDP with TDR will be equivalent
-                
-                support_x = [col for col in zero_cols if col == False]
-                len_support = len(support_x)
-                
-                
-                lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support) # R_2
-                lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
+            log_B = np.where(B != 0, np.log(B), B)
+            y_1 = self.R[state] + np.sum(B * log_B, axis=1)
+            y = self.R[state] + np.sum(B * (lmdp_tdr.lmbda * log_B - curr_r1), axis=1)
+            
+            test_1 = np.zeros_like(self.R[state])
+            for s in range(self.num_states):
+                if s in zero_cols_idx: continue
+                test_1 += self.P[state, :, s] * (np.log(self.P[state, :, s]))
+            
+            test_1 += self.R[state]
+            assert np.all(test_1 == y_1)
+            
+            test_2 = np.zeros_like(self.R[state])
+            for s in range(self.num_states):
+                if s in zero_cols_idx: continue
+                test_2 += self.P[state, :, s] * (np.log(self.P[state, :, s]) - R_1[state, s])
+            
+            test_2 += self.R[state]
+            
+            assert np.all(test_2 == y)
+            
+            B_dagger = np.linalg.pinv(B)
+            x_1 = B_dagger @ y_1 # From first version of the embedding to do some checkings
+            x = B_dagger @ y
+            
+            assert np.all(np.isclose(np.sum(B_dagger * test_2, axis=1) + curr_r1, x_1)) # If this does not fail, it means that the results obtained here are the same as in the first embedding version and therefore, the LMDP and LMDP with TDR will be equivalent
+            
+            support_x = [col for col in zero_cols if col == False]
+            len_support = len(support_x)
+            
+            
+            lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support) # R_2
+            lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
                 
         lmdp_tdr.R += R_1
         lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
@@ -698,7 +777,7 @@ class MDP(ABC):
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         
         self.compute_value_function()
-        lmdp_tdr = models.LMDP_TDR(
+        lmdp_tdr = LMDP_TDR(
             num_states=self.num_states,
             num_terminal_states=self.num_terminal_states,
             sparse_optimization=False,
@@ -708,24 +787,20 @@ class MDP(ABC):
             dtype=self.dtype
         )
         
-        if self.deterministic and False:
-            pass
+        epsilon = 1e-10
+        for state in range(self.num_non_terminal_states):
+            x = np.sum(self.P[state, :, :] * self.R[state, :].reshape(-1, 1), axis=0)
+            denominator = np.sum(self.P[state, :, :], axis=0)
+            nonzero_cols = np.where(x != 0)[0]
+            len_support = len(nonzero_cols)
             
-        else:
-            epsilon = 1e-10
-            for state in range(self.num_non_terminal_states):
-                x = np.sum(self.P[state, :, :] * self.R[state, :].reshape(-1, 1), axis=0)
-                denominator = np.sum(self.P[state, :, :], axis=0)
-                nonzero_cols = np.where(x != 0)[0]
-                len_support = len(nonzero_cols)
-                
-                x = np.where(denominator != 0, x / denominator, 0)
-                
-                if state == 0: self._print("x ldmp-tdr", x)
-                
-                # lmdp_tdr.P[state, nonzero_cols] = np.exp(-np.log(len_support))
-                lmdp_tdr.P[state] = self.P[state, self.policy[state]]
-                lmdp_tdr.R[state] = x + lmdp_tdr.lmbda * np.log(len_support)
+            x = np.where(denominator != 0, x / denominator, 0)
+            
+            if state == 0: self._print("x ldmp-tdr", x)
+            
+            # lmdp_tdr.P[state, nonzero_cols] = np.exp(-np.log(len_support))
+            lmdp_tdr.P[state] = self.P[state, self.policy[state]]
+            lmdp_tdr.R[state] = x + lmdp_tdr.lmbda * np.log(len_support)
         
         
         z = lmdp_tdr.power_iteration()
@@ -735,36 +810,6 @@ class MDP(ABC):
         self._print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
         return lmdp_tdr
     
-    
-    def to_LMDP_TDR_4(self):
-        self._print(f"Computing the LMDP-TDR embedding of this MDP...")
-        
-        self.compute_value_function()
-        lmdp_tdr = models.LMDP_TDR(
-            num_states=self.num_states,
-            num_terminal_states=self.num_terminal_states,
-            sparse_optimization=False,
-            lmbda=self.temperature if self.temperature != 0 else 0.8, # TODO: change lmbda value when temperature is 0
-            s0=self.s0,
-            verbose=self.verbose,
-            dtype=self.dtype
-        )
-        
-        if self.deterministic and False:
-            pass
-            
-        else:
-            epsilon = 1e-10
-            for state in range(self.num_non_terminal_states):
-                pass
-        
-        
-        z = lmdp_tdr.power_iteration()
-        V_lmdp = lmdp_tdr.get_value_function(z)
-        V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
-        
-        self._print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
-        return lmdp_tdr
 
     def print_rewards(self):
         """
@@ -777,6 +822,7 @@ class MDP(ABC):
         for s in range(self.num_states):
             for a in range(self.num_actions):
                 print(f"{s:5d} | {a:6d} | {self.R[s, a]:.3f}")
+
 
     def print_action_values(self, V):
         """
@@ -798,6 +844,6 @@ class MDP(ABC):
                 print(f"{s:5d} | {a:6d} | {q_value:.3f}")
 
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)

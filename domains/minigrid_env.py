@@ -191,7 +191,7 @@ class CustomMinigridEnv(MiniGridEnv):
         
         for policy_epoch, policy in policies:
             self._print(f"Visualizing policy from training epoch: {policy_epoch}")
-            for i in tqdm(range(num_times), desc=f"Playing {num_times} games"):
+            for i in tqdm(range(num_times), desc=f"Playing {num_times} games", disable=not self.verbose):
                 num_mistakes = 0
                 actions = 0
                 deaths = 0
@@ -264,9 +264,9 @@ class CustomMinigridEnv(MiniGridEnv):
     
         return game_stats
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)
 
 
 class MinigridMDP(MDP):
@@ -492,9 +492,9 @@ class MinigridMDP(MDP):
         
         return lmdp_policy
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)
 
 
 class MinigridLMDP(LMDP):
@@ -670,9 +670,9 @@ class MinigridLMDP(LMDP):
             return self.environment.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
     
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)
 
 class MinigridLMDP_TDR(LMDP_TDR):
     """
@@ -831,6 +831,6 @@ class MinigridLMDP_TDR(LMDP_TDR):
             return self.environment.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
 
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)

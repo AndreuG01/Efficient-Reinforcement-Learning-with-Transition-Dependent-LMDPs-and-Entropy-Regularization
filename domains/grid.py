@@ -152,14 +152,13 @@ class CustomGrid:
     def _generate_states(self):
         states = []
         terminal_states = []
-        for pos in tqdm(self.positions[CellType.NORMAL], desc="Generating normal states", total=len(self.positions[CellType.NORMAL])):
+        for pos in tqdm(self.positions[CellType.NORMAL], desc="Generating normal states", total=len(self.positions[CellType.NORMAL]), disable=not self.verbose):
             for values, layout in product(self._get_property_combinations(), self.layout_combinations):
-                
                 curr_dict = dict(zip(list(self.state_properties.keys()), values))
                 curr_state = State(pos[1], pos[0], layout=layout, **curr_dict)
                 states.append(curr_state)
         
-        for pos in tqdm(self.positions[CellType.GOAL], desc="Generating goal states", total=len(self.positions[CellType.GOAL])):
+        for pos in tqdm(self.positions[CellType.GOAL], desc="Generating goal states", total=len(self.positions[CellType.GOAL]), disable=not self.verbose):
             for values, layout in product(self._get_property_combinations(), self.layout_combinations):
                 terminal_states.append(State(pos[1], pos[0], layout=layout, **dict(zip(list(self.state_properties.keys()), values))))
                 
@@ -448,7 +447,7 @@ class CustomGrid:
             f" | Discovery rate: {str(round(rate, 2))}/s" +
             f" | Elapsed: {str(round(elapsed, 1))}s"
         )
-        print(msg.ljust(100), end="\r")
+        self._print(msg.ljust(100), end="\r")
         return reachable_len, now
 
     def remove_unreachable_states(self) -> None:
@@ -489,7 +488,7 @@ class CustomGrid:
                     queue.append(next_state)
                 steps += 1
         self._unrechable_info(steps, len(queue), len(reachable_states), last_count, last_time, start_time)
-        print()
+        self._print("")
 
         
         states = [state for state in self.states if state in reachable_states]

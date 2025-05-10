@@ -244,7 +244,7 @@ class GridWorldMDPTester(unittest.TestCase):
             temperature=5,
             verbose=False
         )
-        embedded_lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
+        embedded_lmdp, _ = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
         self.assertIsNotNone(embedded_lmdp)
     
     
@@ -256,7 +256,7 @@ class GridWorldMDPTester(unittest.TestCase):
             stochastic_prob=0.1,
             verbose=False
         )
-        embedded_lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
+        embedded_lmdp, _ = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
         self.assertIsNotNone(embedded_lmdp)
     
     

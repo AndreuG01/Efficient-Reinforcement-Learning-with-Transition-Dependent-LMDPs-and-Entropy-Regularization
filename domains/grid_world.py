@@ -172,7 +172,7 @@ class GridWorldEnv:
         
         for policy_epoch, policy in policies:
             self._print(f"Visualizing policy from training epoch: {policy_epoch}")
-            for i in tqdm(range(num_times), desc=f"Playing {num_times} games"):
+            for i in range(num_times):
                 num_mistakes = 0
                 actions = 0
                 deaths = 0
@@ -218,7 +218,7 @@ class GridWorldEnv:
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :].astype(np.float64) if model.dtype == np.float128 else model.P[state_idx, action, :])
                             if next_state != np.argmax(model.P[state_idx, action, :]):
                                 num_mistakes += 1
-                                self._print(f"MISTAKE [{num_mistakes} / {actions}]")
+                                self._print(f"Game {i}. [{num_mistakes} mistakes / {actions} total actions]".ljust(50), end="\r")
                             # We need to get the action that leads to the next state
                             action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                         else:
@@ -228,7 +228,7 @@ class GridWorldEnv:
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64) if model.dtype == np.float128 else policy[state_idx])
                             if next_state != np.argmax(policy[state_idx]):
                                 num_mistakes += 1
-                                self._print(f"MISTAKE [{num_mistakes} / {actions}]")
+                                self._print(f"Game {i}. [{num_mistakes} mistakes / {actions} total actions]".ljust(50), end="\r")
                             action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                     
                     next_state, _, _ = self.custom_grid.move(state, action)
@@ -263,6 +263,7 @@ class GridWorldEnv:
                     errors=num_mistakes,
                     deaths=deaths
                 )
+            self._print("")
             
         self._print(game_stats.GAME_INFO)
         
@@ -279,9 +280,9 @@ class GridWorldEnv:
         
         return game_stats
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)
                 
 class GridWorldMDP(MDP):
     """
@@ -477,9 +478,9 @@ class GridWorldMDP(MDP):
     
     
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)
     
 class GridWorldLMDP(LMDP):
     """
@@ -638,9 +639,9 @@ class GridWorldLMDP(LMDP):
         """
         self.environment.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
 
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)
     
 class GridWorldLMDP_TDR(LMDP_TDR):
     """
@@ -816,9 +817,9 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         self.environment.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100, show_window=True)
 
 
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)
             
 class GridWorldPlotter:
     """

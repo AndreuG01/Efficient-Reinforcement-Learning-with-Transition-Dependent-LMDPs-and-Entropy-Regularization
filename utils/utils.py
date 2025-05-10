@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
 from custom_palette import CustomPalette
-from domains.minigrid_env import MinigridMDP, MinigridLMDP
+from domains.minigrid_env import MinigridMDP, MinigridLMDP, MinigridLMDP_TDR
 from domains.grid import MinigridActions, GridWorldActions
 from models.LMDP import LMDP
 from domains.grid_world import GridWorldMDP, GridWorldPlotter, GridWorldLMDP, GridWorldLMDP_TDR
@@ -16,6 +16,9 @@ import scipy.stats as stats
 from scipy.sparse import csr_matrix
 from sklearn.metrics import r2_score
 from typing import Literal
+from tqdm import tqdm
+import itertools
+from .spinner import Spinner
 
 def visualize_stochasticity_rewards_embedded_lmdp(state: int, map: Map, num_actions=3, save_fig: bool = True):
     """
@@ -531,7 +534,7 @@ def regularized_embedding_error_plot(map: Map, min_temp: float = 0.1, max_temp: 
         
         embedded_lmdp_state = mdp.to_LMDP(lmbda=temp)
         embedded_lmdp_state.compute_value_function()
-        embedded_lmdp_trans = mdp.to_LMDP_TDR(temp)
+        embedded_lmdp_trans, _ = mdp.to_LMDP_TDR(temp)
         embedded_lmdp_trans.compute_value_function()
         mdp.compute_value_function()
         
@@ -578,7 +581,7 @@ def create_models(map, f, t, temp_mdp, temp_lmdp, behaviour, stochastic_prob):
             stochastic_prob=stochastic_prob,
             temperature=temp_mdp
         )
-        lmdp = mdp.to_LMDP_TDR(lmbda=temp_lmdp)
+        lmdp, _ = mdp.to_LMDP_TDR(lmbda=temp_lmdp)
         lmdp = GridWorldLMDP_TDR(
             map=map,
             allowed_actions=GridWorldActions.get_actions()[:4],
@@ -715,3 +718,224 @@ def embedding_errors_different_temp(map, f="MDP", t="LMDP", behaviour="determini
         plt.savefig("assets/new_version_2.png", dpi=300, bbox_inches="tight")
     else:
         plt.show()
+
+
+def policies_comparison(
+    mdp: GridWorldMDP | MinigridMDP,
+    save_fig: bool = True,
+    zoom: bool = False,
+    zoom_size: int = 50
+):
+    def kl_divergence(P: np.ndarray, Q: np.ndarray, epsilon: float = 1e-10) -> float:
+    
+        Q_safe = np.clip(Q, epsilon, None)
+        Q_safe = Q_safe / np.sum(Q_safe, axis=1, keepdims=True)
+        
+        return np.mean(np.sum(P * (np.log(P + epsilon) - np.log(Q_safe)), axis=1))
+
+    def extract_diagonal_window(matrix: np.ndarray, size: int) -> np.ndarray:
+        n = matrix.shape[0]
+        center = n // 2
+        start = max(0, center - size // 2)
+        end = min(n, center + size // 2)
+        return matrix[start:end, start:end]
+
+    cmap = "jet"
+
+    plt.rcParams.update({"text.usetex": True})
+
+    fig = plt.figure(figsize=(14, 6))
+    gs = fig.add_gridspec(2, 3, height_ratios=[1, 1])
+
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax3 = fig.add_subplot(gs[0, 2])
+    ax_big = fig.add_subplot(gs[1, :])
+
+    plt.subplots_adjust(left=0.05, right=0.85, bottom=0.1, top=0.85, wspace=0.3, hspace=0.4)
+
+    if not hasattr(mdp, "policy"):
+        mdp.compute_value_function()
+
+    lmdp_1, _ = mdp.to_LMDP_TDR(find_best_lmbda=False)
+    lmdp_2, _ = mdp.to_LMDP_TDR(find_best_lmbda=True)
+
+    game_times = 1000
+
+    mdp_policy = mdp.to_LMDP_policy().astype(np.float64)
+    stats_mdp = mdp.visualize_policy(num_times=game_times, show_window=False)
+    print(f"MDP STATS: {stats_mdp.GAME_INFO}")
+    
+    if type(mdp) == GridWorldMDP:
+        new_ldmp_1 = GridWorldLMDP_TDR(
+            map=mdp.environment.custom_grid.map,
+            allowed_actions=mdp.allowed_actions,
+            lmdp_tdr=lmdp_1,
+            verbose=False
+        )
+        
+        new_ldmp_2 = GridWorldLMDP_TDR(
+            map=mdp.environment.custom_grid.map,
+            allowed_actions=mdp.allowed_actions,
+            lmdp_tdr=lmdp_2,
+            verbose=False
+        )
+    elif type(mdp) == MinigridMDP:
+        new_ldmp_1 = MinigridLMDP_TDR(
+            map=mdp.environment.custom_grid.map,
+            allowed_actions=mdp.allowed_actions,
+            lmdp=lmdp_1,
+            verbose=False
+        )
+        new_ldmp_2 = MinigridLMDP_TDR(
+            map=mdp.environment.custom_grid.map,
+            allowed_actions=mdp.allowed_actions,
+            lmdp=lmdp_2,
+            verbose=False
+        )
+        
+
+    new_ldmp_1.compute_value_function()
+    kl_1 = kl_divergence(mdp_policy, new_ldmp_1.policy)
+    print(f"kl_1: {kl_1}, mse1: {np.mean(np.square(mdp_policy - new_ldmp_1.policy))}")
+    policy_1 = new_ldmp_1.policy
+    stats_lmdp_1 = new_ldmp_1.visualize_policy(policies=[(0, policy_1)], num_times=game_times, show_window=False)
+    print(f"LMDP STATS 1: {stats_lmdp_1.GAME_INFO}")
+
+    new_ldmp_2.compute_value_function()
+    kl_2 = kl_divergence(mdp_policy, new_ldmp_2.policy)
+    print(f"kl_2: {kl_2}, mse2: {np.mean(np.square(mdp_policy - new_ldmp_2.policy))}")
+    policy_2 = new_ldmp_2.policy
+    stats_lmdp_2 = new_ldmp_2.visualize_policy(policies=[(0, policy_2)], num_times=game_times, show_window=False)
+    print(f"LMDP STATS 2: {stats_lmdp_2.GAME_INFO}")
+
+    policy_data = [
+        mdp_policy,
+        policy_1.astype(np.float64),
+        policy_2.astype(np.float64)
+    ]
+
+    min_kl = min(kl_1, kl_2)
+
+    if zoom:
+        policy_data = [extract_diagonal_window(data, zoom_size) for data in policy_data]
+
+    vmin = min(np.min(data) for data in policy_data if data is not None)
+    vmax = max(np.max(data) for data in policy_data if data is not None)
+
+    im1 = ax1.imshow(policy_data[0], vmin=vmin, vmax=vmax, cmap=cmap)
+    ax1.set_title(f"$\pi_{{\mathcal{{M}}}}^{{\\beta = {mdp.temperature}}}(s'\mid s)$")
+    ax1.set_xticks([])
+    ax1.set_yticks([])
+    ax1.set_aspect("equal")
+
+    im2 = ax2.imshow(policy_data[1], vmin=vmin, vmax=vmax, cmap=cmap)
+    ax2.set_title(f"$\pi_{{\mathcal{{L}}}}^{{\lambda = {new_ldmp_1.lmbda}}}(s'\mid s)$.")
+    kl_1_formatting = f"\\textbf{{{round(kl_1, 3)}}}" if kl_1 == min_kl else f"{round(kl_1, 3)}"
+    ax2.set_xlabel(f"KL$\left(\pi_{{\mathcal{{M}}}} (\cdot\mid s) || \pi_{{\mathcal{{L}}}}(\cdot \mid s)\\right) = {kl_1_formatting}$")
+    # ax2.set_xlabel(f"KL$\left(\pi_{{\mathcal{{M}}}} (\cdot\mid s) || \pi_{{\mathcal{{L}}}}(\cdot \mid s)\\right) = {kl_1_formatting}$\nMSE$(V_{{\mathcal{{M}}}}, V_{{\mathcal{{L}}}}) = {round(np.mean(np.square(mdp.V - new_ldmp_1.V)), 2)}$")
+    ax2.set_xticks([])
+    ax2.set_yticks([])
+    ax2.set_aspect("equal")
+
+    im3 = ax3.imshow(policy_data[2], vmin=vmin, vmax=vmax, cmap=cmap)
+    ax3.set_title(f"$\pi_{{\mathcal{{L}}}}^{{\lambda = {round(new_ldmp_2.lmbda, 3)}}}(s'\mid s)$.")
+    kl_2_formatting = f"\\textbf{{{round(kl_2, 3)}}}" if kl_2 == min_kl else f"{round(kl_2, 3)}"
+    ax3.set_xlabel(f"KL$\left(\pi_{{\mathcal{{M}}}} (\cdot\mid s) || \pi_{{\mathcal{{L}}}}(\cdot \mid s)\\right) = {kl_2_formatting}$")
+    # ax3.set_xlabel(f"KL$\left(\pi_{{\mathcal{{M}}}} (\cdot\mid s) || \pi_{{\mathcal{{L}}}}(\cdot \mid s)\\right) = {kl_2_formatting}$.\nMSE$(V_{{\mathcal{{M}}}}, V_{{\mathcal{{L}}}}) = {round(np.mean(np.square(mdp.V - new_ldmp_2.V)), 2)}$")
+    ax3.set_xticks([])
+    ax3.set_yticks([])
+    ax3.set_aspect("equal")
+
+    
+    # Bottom plot
+    ax_big.plot(stats_mdp.get_proportion_correct_moves_round(), label="MDP $\mathcal{M}$", linewidth=0.5, color="blue", alpha=0.5)
+    ax_big.hlines(np.mean(stats_mdp.get_proportion_correct_moves_round()), xmin=0, xmax=game_times, color="blue", linestyles="--", zorder=3)
+    ax_big.plot(stats_lmdp_1.get_proportion_correct_moves_round(), label=f"LMDP $\lambda = {new_ldmp_1.lmbda}$", linewidth=0.5, color="red", alpha=0.5)
+    ax_big.hlines(np.mean(stats_lmdp_1.get_proportion_correct_moves_round()), xmin=0, xmax=game_times, color="red", linestyles="--", zorder=3)
+    ax_big.plot(stats_lmdp_2.get_proportion_correct_moves_round(), label=f"LMDP $\lambda = {round(new_ldmp_2.lmbda, 3)}$", linewidth=0.5, color="green", alpha=0.5)
+    ax_big.hlines(np.mean(stats_lmdp_2.get_proportion_correct_moves_round()), xmin=0, xmax=game_times, color="green", linestyles="--", zorder=3)
+    
+    yticks_base = np.linspace(0, 1, 6) * 100
+    means = [
+        np.mean(stats_mdp.get_proportion_correct_moves_round()),
+        np.mean(stats_lmdp_1.get_proportion_correct_moves_round()),
+        np.mean(stats_lmdp_2.get_proportion_correct_moves_round())
+    ]
+    
+    yticks = np.unique(np.concatenate((yticks_base, means)))
+    yticks = np.sort(yticks)
+
+    threshold = 5
+    yticks = [yticks[0]] + [yticks[i] for i in range(1, len(yticks)) if yticks[i] - yticks[i - 1] > threshold]
+
+    ax_big.set_yticks(yticks)
+    ax_big.set_yticklabels([f"{tick:.2f}" for tick in yticks])
+    
+    
+    ax_big.legend()
+    ax_big.set_xlabel("Game number")
+    ax_big.set_ylabel("Correct actions ($\%$)")
+    # ax_big.set_aspect("equal")
+
+    cbar_ax = fig.add_axes([0.88, 0.15, 0.02, 0.7])
+    fig.colorbar(im1, cax=cbar_ax)
+
+    plt.suptitle(f"{'Zoomed policy' if zoom else 'Policy'} comparison between MDP $\mathcal{{M}}$ and embedded LMDP $\mathcal{{L}}$ with different $\\beta = \lambda$. Stochastic prob: {mdp.stochastic_prob}. {mdp.environment.custom_grid.map.name}")
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+
+    if save_fig:
+        save_map_name = mdp.environment.custom_grid.map.name.lower().replace(" ", "_")
+        plt.savefig(f"assets/{'zoomed_' if zoom else ''}policy_comparison_{save_map_name}_p_{mdp.stochastic_prob}_beta_{mdp.temperature}_lmbda_best_{round(lmdp_2.lmbda, 3)}.png", dpi=300, bbox_inches="tight")
+    else:
+        plt.show()
+        
+        
+
+def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path="assets/iterative_vs_vectorized_embedding.txt"):
+    
+    table_lines = []
+    header_line = "+------------+-----------------------+-----------------------+"
+    table_lines.append(header_line)
+    table_lines.append("| Num States | Vectorized Time (s)  | Iterative Time (s)    |")
+    table_lines.append(header_line)
+    
+    sizes = np.arange(3, max_grid_size, 2)
+    spinner = None
+    try:
+        for grid_size in sizes:
+            mdp = MinigridMDP(
+                map=Map(grid_size=grid_size),
+                allowed_actions=MinigridActions.get_actions(),
+                behaviour="stochastic",
+                stochastic_prob=0.3,
+                temperature=4.5,
+                verbose=False
+            )
+            spinner = Spinner(f"Grid size: {grid_size:>2} | Vectorized")
+            spinner.start()
+            _, vectorized_stats = mdp.to_LMDP_TDR(find_best_lmbda=True, vectorized=True)
+            spinner.stop()
+
+            spinner = Spinner(f"Grid size: {grid_size:>2} | Iterative ")
+            spinner.start()
+            _, iterative_stats = mdp.to_LMDP_TDR(find_best_lmbda=True, vectorized=False)
+            spinner.stop()
+
+            line = f"| {mdp.num_states:<10} | {vectorized_stats.get_total_time():<21.6f} | {iterative_stats.get_total_time():<21.6f} |"
+            table_lines.append(line)
+
+    except KeyboardInterrupt:
+        # If Ctrl + c is detected, stop possible spinner threads to guarantee a succsessful termination of the program
+        print(f"Stopping spinner threads".ljust(40))
+        if spinner and spinner.running:
+            spinner.stop(interrupted=True)
+        exit()
+    
+    table_lines.append(header_line)
+    table_str = "\n".join(table_lines)
+    print(table_str)
+
+    with open(save_path, "w") as f:
+        f.write(table_str)

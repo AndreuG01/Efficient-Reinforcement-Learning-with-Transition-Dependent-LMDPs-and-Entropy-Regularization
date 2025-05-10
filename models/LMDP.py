@@ -103,7 +103,8 @@ class LMDP:
         results = Parallel(n_jobs=min(num_threads, cpu_count()), temp_folder="/tmp")(
             delayed(process_state)(state) for state in tqdm(range(self.num_non_terminal_states), 
                                                          desc="Generating transition matrix P", 
-                                                         total=self.num_non_terminal_states)
+                                                         total=self.num_non_terminal_states,
+                                                         disable=not self.verbose)
         )
         
 
@@ -308,7 +309,7 @@ class LMDP:
         # np.random.seed(123) # TODO: remove when developing has finished.
         
         # Define the transition probability matrix of the MDP.
-        for s in tqdm(range(self.num_non_terminal_states), desc="Generating transition matrix P", total=self.num_non_terminal_states):
+        for s in tqdm(range(self.num_non_terminal_states), desc="Generating transition matrix P", total=self.num_non_terminal_states, disable=not self.verbose):
             non_zero_positions = np.where(control[s, :] != 0)[0]
             probs = control[s, non_zero_positions].flatten()
             for i, a in enumerate(range(num_actions), start=1):
@@ -344,6 +345,6 @@ class LMDP:
         
         return lmdp_tdr
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)

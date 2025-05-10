@@ -71,7 +71,8 @@ class LMDP_TDR:
         results = Parallel(n_jobs=min(num_threads, cpu_count()), temp_folder="/tmp")(
             delayed(process_state)(state) for state in tqdm(range(self.num_non_terminal_states), 
                                                          desc="Generating transition matrix P", 
-                                                         total=self.num_non_terminal_states)
+                                                         total=self.num_non_terminal_states,
+                                                         disable=not self.verbose)
         )
         
 
@@ -226,6 +227,46 @@ class LMDP_TDR:
 
         return lmdp
     
-    def _print(self, msg):
+    def _print(self, msg, end: str = "\n"):
         if self.verbose:
-            print(msg)
+            print(msg, end=end)
+    
+    def __eq__(self, obj):
+        """
+        Check if two LMDP_TDR instances are equal. The equality is defined as having the same attributes
+        except for the verbosity and sparse optimization.
+        Args:
+            obj (LMDP_TDR): The object to compare with.
+        Returns:
+            bool: True if the objects are equal, False otherwise.
+        """
+        if not isinstance(obj, LMDP_TDR):
+            return False
+
+        exclude_attributes = ["verbose", "sparse_optimization"]
+        for attr, self_val in self.__dict__.items():
+            if attr in exclude_attributes:
+                continue
+            
+            if not hasattr(obj, attr):
+                return False
+            
+            other_val = getattr(obj, attr)
+            
+            if isinstance(self_val, csr_matrix):
+                self_val = self_val.toarray()
+            if isinstance(other_val, csr_matrix):
+                other_val = other_val.toarray()
+            
+            
+            if isinstance(self_val, np.ndarray) and isinstance(other_val, np.ndarray):
+                if not np.all(np.isclose(self_val, other_val)):
+                    return False
+            elif isinstance(self_val, (float, int)) and isinstance(other_val, (float, int)):
+                if not np.isclose(self_val, other_val):
+                    return False
+            else:
+                if self_val != other_val:
+                    return False
+
+        return True
