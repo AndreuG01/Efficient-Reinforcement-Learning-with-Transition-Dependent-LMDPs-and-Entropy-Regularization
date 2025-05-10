@@ -165,7 +165,8 @@ class CustomMinigridEnv(MiniGridEnv):
         num_times: int=10,
         save_gif: bool = False,
         save_path: str = None,
-        show_window: bool = True
+        show_window: bool = True,
+        title: str = None,
     ) -> GameStats:
         """
         Visualizes the behavior of the agent under some given policies by running multiple episodes, rendering each step, 
@@ -191,7 +192,8 @@ class CustomMinigridEnv(MiniGridEnv):
         
         for policy_epoch, policy in policies:
             self._print(f"Visualizing policy from training epoch: {policy_epoch}")
-            for i in tqdm(range(num_times), desc=f"Playing {num_times} games", disable=not self.verbose):
+            for i in range(num_times):
+                game_title = f"Epoch: {policy_epoch}" if title is None else title
                 num_mistakes = 0
                 actions = 0
                 deaths = 0
@@ -209,7 +211,7 @@ class CustomMinigridEnv(MiniGridEnv):
                         next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :].astype(np.float64) if model.dtype == np.float128 else model.P[state_idx, action, :])
                         if next_state != np.argmax(model.P[state_idx, action, :]):
                             num_mistakes += 1
-                            self._print(f"MISTAKE {num_mistakes}")
+                            self._print(f"Game {i}. [{num_mistakes} mistakes / {actions} total actions]".ljust(50), end="\r")
                         # We need to get the action that leads to the next state
                         action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                             
@@ -218,7 +220,7 @@ class CustomMinigridEnv(MiniGridEnv):
                         next_state = np.random.choice(self.custom_grid.get_num_states(), p=policy[state_idx].astype(np.float64) if model.dtype == np.float128 else policy[state_idx])
                         if next_state != np.argmax(policy[state_idx]):
                             num_mistakes += 1
-                            self._print(f"MISTAKE {num_mistakes}")
+                            self._print(f"Game {i}. [{num_mistakes} mistakes / {actions} total actions]".ljust(50), end="\r")
                         action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                     
                     next_state, _, terminal = self.custom_grid.move(state, action)
@@ -232,7 +234,7 @@ class CustomMinigridEnv(MiniGridEnv):
     
                     if save_gif:
                         frame = self.render()
-                        frames.append(self._add_frame_with_title(frame, f"Epoch: {policy_epoch}"))
+                        frames.append(self._add_frame_with_title(frame, game_title))
                     _, _, done, _, info = self.step(action)
                     
                     actions += 1
@@ -244,10 +246,10 @@ class CustomMinigridEnv(MiniGridEnv):
                     errors=num_mistakes,
                     deaths=deaths
                 )
-            if save_gif:
-                # Add the last frame with title
-                frame = self.render()
-                frames.append(self._add_frame_with_title(frame, f"Epoch: {policy_epoch}"))
+                if save_gif:
+                    # Add the last frame with title
+                    frame = self.render()
+                    frames.append(self._add_frame_with_title(frame, game_title))
         
         self._print(game_stats.GAME_INFO)
         if not save_gif:
@@ -480,7 +482,7 @@ class MinigridMDP(MDP):
         if policies is None:
             self._print(f"Computing value function...")
             self.compute_value_function()
-            return self.environment.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
+            return self.environment.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window, title="Value Iteration policy")
         else:
             return self.environment.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
 
@@ -664,7 +666,7 @@ class MinigridLMDP(LMDP):
         if not hasattr(self, "V") and policies is None:
             self._print(f"Computing value function...")
             self.compute_value_function()
-            return self.environment.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
+            return self.environment.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window, title="Power Iteration policy")
         else:
             assert policies is not None
             return self.environment.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
@@ -825,7 +827,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
         if not hasattr(self, "V") and policies is None:
             self._print(f"Computing value function...")
             self.compute_value_function()
-            return self.environment.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
+            return self.environment.visualize_policy(policies=[[0, self.policy]], num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window, title="Power Iteration policy")
         else:
             assert policies is not None
             return self.environment.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
