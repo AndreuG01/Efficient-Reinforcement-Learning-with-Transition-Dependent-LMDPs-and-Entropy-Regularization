@@ -10,6 +10,7 @@ import models
 import models.LMDP
 from utils.coloring import TerminalColor
 from utils.utils import print_overflow_message
+from .utils import compare_models
 
 class LMDP_TDR:
     def __init__(
@@ -22,7 +23,7 @@ class LMDP_TDR:
         verbose: bool = True,
         dtype: np.dtype = np.float128
     ) -> None:
-        
+        assert dtype in [np.float32, np.float64, np.float128], f"Only allowed data types: {[np.float32, np.float64, np.float128]}"
         self.dtype = dtype
         
         self.num_states = num_states
@@ -241,40 +242,12 @@ class LMDP_TDR:
     
     def __eq__(self, obj):
         """
-        Check if two LMDP_TDR instances are equal. The equality is defined as having the same attributes
-        except for the verbosity and sparse optimization.
+        Compare two LMDP_TDR objects to check if they are equal.
+        The equality is defined as having the same attributes except for the excluded ones.
         Args:
-            obj (LMDP_TDR): The object to compare with.
+            obj (LMDP_TDR): The LMDP_TDR object to compare.
         Returns:
             bool: True if the objects are equal, False otherwise.
         """
-        if not isinstance(obj, LMDP_TDR):
-            return False
-
         exclude_attributes = ["verbose", "sparse_optimization"]
-        for attr, self_val in self.__dict__.items():
-            if attr in exclude_attributes:
-                continue
-            
-            if not hasattr(obj, attr):
-                return False
-            
-            other_val = getattr(obj, attr)
-            
-            if isinstance(self_val, csr_matrix):
-                self_val = self_val.toarray()
-            if isinstance(other_val, csr_matrix):
-                other_val = other_val.toarray()
-            
-            
-            if isinstance(self_val, np.ndarray) and isinstance(other_val, np.ndarray):
-                if not np.all(np.isclose(self_val, other_val)):
-                    return False
-            elif isinstance(self_val, (float, int)) and isinstance(other_val, (float, int)):
-                if not np.isclose(self_val, other_val):
-                    return False
-            else:
-                if self_val != other_val:
-                    return False
-
-        return True
+        return compare_models(self, obj, exclude_attributes=exclude_attributes)

@@ -11,6 +11,7 @@ import models.MDP
 import models.LMDP_TDR
 from utils.stats import ModelBasedAlgsStats
 from utils.utils import print_overflow_message
+from .utils import compare_models
 
 class LMDP:
     """
@@ -50,6 +51,7 @@ class LMDP:
         - lmbda (int): Regularization factor for KL divergence (default is 1).
         - s0 (int): Initial state index (default is 1).
         """
+        assert dtype in [np.float32, np.float64, np.float128], f"Only allowed data types: {[np.float32, np.float64, np.float128]}"
         self.dtype = dtype
         
         self.num_states = num_states
@@ -356,3 +358,18 @@ class LMDP:
     def _print(self, msg, end: str = "\n"):
         if self.verbose:
             print(msg, end=end)
+            
+    def __eq__(self, obj):
+        """
+        Compare two LMDP objects to check if they are equal.
+        The equality is defined as having the same attributes except for the excluded ones.
+        Args:
+            obj (LMDP): The LMDP object to compare.
+        Returns:
+            bool: True if the objects are equal, False otherwise.
+        """
+        if not isinstance(obj, LMDP):
+            return False
+
+        exclude_attributes = ["verbose", "sparse_optimization"] # Num actions and __allowed_actions can be ommitted from the comparison because they are accounted in the matrix P.
+        return compare_models(self, obj, exclude_attributes=exclude_attributes)

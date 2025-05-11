@@ -14,6 +14,7 @@ from typing import Literal
 from joblib import Parallel, delayed, cpu_count
 from utils.coloring import TerminalColor
 import itertools
+from .utils import compare_models
 
 class MDP(ABC):
     """
@@ -68,6 +69,7 @@ class MDP(ABC):
         assert num_terminal_states < num_states, "There must be fewer terminal states than the total number of states"
         assert 0 <= gamma <= 1, "Discount factor must be in the range [0, 1]"
         assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
+        assert dtype in [np.float32, np.float64, np.float128], f"Only allowed data types: {[np.float32, np.float64, np.float128]}"
         
         self.dtype = dtype
         
@@ -869,3 +871,19 @@ class MDP(ABC):
     def _print(self, msg, end: str = "\n"):
         if self.verbose:
             print(msg, end=end)
+    
+    
+    def __eq__(self, obj):
+        """
+        Compare two MDP objects to check if they are equal.
+        The equality is defined as having the same attributes except for the excluded ones.
+        Args:
+            obj (MDP): The MDP object to compare.
+        Returns:
+            bool: True if the objects are equal, False otherwise.
+        """
+        if not isinstance(obj, MDP):
+            return False
+
+        exclude_attributes = ["verbose", "num_actions", "__allowed_actions"] # Num actions and __allowed_actions can be ommitted from the comparison because they are accounted in the matrix P.
+        return compare_models(self, obj, exclude_attributes=exclude_attributes)

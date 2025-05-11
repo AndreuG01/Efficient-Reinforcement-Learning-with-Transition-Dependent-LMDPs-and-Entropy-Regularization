@@ -498,6 +498,8 @@ class MinigridMDP(MDP):
         if self.verbose:
             print(msg, end=end)
 
+    def __eq__(self, obj):
+        raise NotImplementedError("Method not implemented")
 
 class MinigridLMDP(LMDP):
     """
@@ -675,6 +677,10 @@ class MinigridLMDP(LMDP):
     def _print(self, msg, end: str = "\n"):
         if self.verbose:
             print(msg, end=end)
+    
+    
+    def __eq__(self, obj):
+        raise NotImplementedError("Method not implemented")
 
 class MinigridLMDP_TDR(LMDP_TDR):
     """
@@ -836,3 +842,7 @@ class MinigridLMDP_TDR(LMDP_TDR):
     def _print(self, msg, end: str = "\n"):
         if self.verbose:
             print(msg, end=end)
+
+    
+    def __eq__(self, obj):
+        raise NotImplementedError("Method not implemented")

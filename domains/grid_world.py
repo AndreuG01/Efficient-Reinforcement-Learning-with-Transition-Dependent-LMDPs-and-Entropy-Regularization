@@ -477,10 +477,13 @@ class GridWorldMDP(MDP):
         return lmdp_policy
     
     
-    
     def _print(self, msg, end: str = "\n"):
         if self.verbose:
             print(msg, end=end)
+    
+    
+    def __eq__(self, obj):
+        raise NotImplementedError("Method not implemented")
     
 class GridWorldLMDP(LMDP):
     """
@@ -642,6 +645,10 @@ class GridWorldLMDP(LMDP):
     def _print(self, msg, end: str = "\n"):
         if self.verbose:
             print(msg, end=end)
+    
+    
+    def __eq__(self, obj):
+        raise NotImplementedError("Method not implemented")
     
 class GridWorldLMDP_TDR(LMDP_TDR):
     """
@@ -820,6 +827,10 @@ class GridWorldLMDP_TDR(LMDP_TDR):
     def _print(self, msg, end: str = "\n"):
         if self.verbose:
             print(msg, end=end)
+    
+    
+    def __eq__(self, obj):
+        raise NotImplementedError("Method not implemented")
             
 class GridWorldPlotter:
     """
