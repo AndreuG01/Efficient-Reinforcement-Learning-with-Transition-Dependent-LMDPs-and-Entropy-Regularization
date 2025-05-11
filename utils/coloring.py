@@ -1,4 +1,5 @@
 import platform
+import re
 
 class TerminalColor:
     ENABLED = None
@@ -12,6 +13,7 @@ class TerminalColor:
         "orange": "\033[38;5;214m"
     }
     RESET = "\033[0m"
+    ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
     @staticmethod
     def _init():
@@ -35,3 +37,7 @@ class TerminalColor:
             prefix = "\033[1m" if bold else ""
             return f"{prefix}{TerminalColor.CODES[color]}{text}{TerminalColor.RESET}"
         return text
+
+    @staticmethod
+    def strip(text: str) -> str:
+        return TerminalColor.ANSI_ESCAPE_RE.sub("", text)

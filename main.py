@@ -11,9 +11,9 @@ import matplotlib.gridspec as gridspec
 from matplotlib.colors import Normalize
 import numpy as np
 from utils.maps import Maps, Map
-from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, benchmark_lmdp2mdp_embedding, benchmark_mdp2lmdp_embedding
+from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, benchmark_lmdp2mdp_embedding, benchmark_mdp2lmdp_embedding, benchmark_iterative_vectorized_embedding
 from custom_palette import CustomPalette
-from utils.utils import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table, generate_parallel_p_table, different_gammas_plot, different_temperature_plots, regularized_embedding_error_plot, embedding_value_function_reg, embedding_errors_different_temp, benchmark_iterative_vectorized_embedding
+from utils.experiments import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table, generate_parallel_p_table, different_gammas_plot, different_temperature_plots, regularized_embedding_error_plot, embedding_value_function_reg, embedding_errors_different_temp
 from typing import Literal
 import time
 
@@ -54,7 +54,7 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
         step = 0
         while True:
             curr_lmbda = lmdp_lmbdas[-1]
-            lmdp, _ = mdp.to_LMDP_TDR(curr_lmbda)
+            lmdp, _, _ = mdp.to_LMDP_TDR(curr_lmbda)
             lmdp.compute_value_function(temp=curr_lmbda)
             value_functions.append(lmdp.V)
             curr_error = np.mean(np.square(mdp.V - lmdp.V))
@@ -64,7 +64,7 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
                 break
                 for _ in range(right_extension_steps):
                     next_lmbda = lmdp_lmbdas[-1] + step
-                    lmdp, _ = mdp.to_LMDP_TDR(next_lmbda)
+                    lmdp, _, _ = mdp.to_LMDP_TDR(next_lmbda)
                     lmdp.compute_value_function(temp=next_lmbda)
                     value_functions.append(lmdp.V)
                     lmdp_lmbdas.append(next_lmbda)
@@ -150,6 +150,20 @@ if __name__ == "__main__":
     )
     
     mdp.to_LMDP_TDR(find_best_lmbda=True)
+    # fig = plt.figure(figsize=(10, 5))
+    # mdp.compute_value_function()
+    # for i in range(1, 8):
+    #     lmdp, _, _ = mdp.to_LMDP_TDR(lmbda=i, find_best_lmbda=False)
+    #     lmdp.compute_value_function()
+    #     plt.scatter(i, np.mean(np.square(mdp.V - lmdp.V)), color="blue")
+    
+    
+    # # plt.plot(mdp.V, label="MDP")
+    # # plt.plot(lmdp.V, label="LMDP")
+    # # plt.title(np.mean(np.square(mdp.V - lmdp.V)))
+    # plt.xlabel("Temperature")
+    # plt.ylabel("MSE")
+    # plt.savefig("vf.png", dpi=300, bbox_inches="tight")
     
     exit()
-    benchmark_iterative_vectorized_embedding(max_grid_size=60)
+    benchmark_iterative_vectorized_embedding()

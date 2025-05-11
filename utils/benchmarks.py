@@ -12,6 +12,7 @@ from utils.stats import ModelBasedAlgsStats
 from typing import Literal
 from collections import defaultdict
 from tqdm import tqdm
+from .spinner import Spinner
 
 
 def benchmark_value_iteration(savefig: bool = True):
@@ -213,7 +214,7 @@ def benchmark_mdp2lmdp_embedding(
     
     cliff_states = [state for state in range(minigrid_mdp.num_states) if minigrid_mdp.environment.custom_grid.is_cliff(minigrid_mdp.environment.custom_grid.state_index_mapper[state])]
     
-    embedded_lmdp = minigrid_mdp.to_LMDP()
+    embedded_lmdp, _ = minigrid_mdp.to_LMDP()
     
     stats_lmdp: ModelBasedAlgsStats = minigrid_mdp.stats
     stats_mdp: ModelBasedAlgsStats = embedded_lmdp.stats
@@ -259,3 +260,55 @@ def benchmark_mdp2lmdp_embedding(
         plt.show()
     
     return stats_mdp, stats_lmdp
+
+
+def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path="assets/iterative_vs_vectorized_embedding_2.txt"):
+    
+    table_lines = []
+    header_line = "+------------+-----------------------+-----------------------+"
+    table_lines.append(header_line)
+    table_lines.append("| Num States | Vectorized Time (s)  | Iterative Time (s)    |")
+    table_lines.append(header_line)
+    
+    sizes = np.arange(3, max_grid_size, 2)
+    spinner = None
+    try:
+        for grid_size in sizes:
+            mdp = MinigridMDP(
+                map=Map(grid_size=grid_size),
+                allowed_actions=MinigridActions.get_actions(),
+                behaviour="stochastic",
+                stochastic_prob=0.3,
+                temperature=4.5,
+                verbose=False
+            )
+            mdp.compute_value_function()
+            
+            
+            spinner = Spinner(f"Grid size: {grid_size:>2} | Vectorized")
+            spinner.start()
+            _, vectorized_stats, _ = mdp.to_LMDP_TDR(find_best_lmbda=True, vectorized=True)
+            spinner.stop()
+
+            spinner = Spinner(f"Grid size: {grid_size:>2} | Iterative ")
+            spinner.start()
+            _, iterative_stats, _ = mdp.to_LMDP_TDR(find_best_lmbda=True, vectorized=False)
+            spinner.stop()
+
+            
+            line = f"| {mdp.num_states:<10} | {vectorized_stats.get_total_time():<21.6f} | {iterative_stats.get_total_time():<21.6f} |"
+            table_lines.append(line)
+
+    except KeyboardInterrupt:
+        # If Ctrl + c is detected, stop possible spinner threads to guarantee a succsessful termination of the program
+        print(f"Stopping spinner threads".ljust(40))
+        if spinner and spinner.running:
+            spinner.stop(interrupted=True)
+        exit()
+    
+    table_lines.append(header_line)
+    table_str = "\n".join(table_lines)
+    print(table_str)
+
+    with open(save_path, "w") as f:
+        f.write(table_str)

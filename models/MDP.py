@@ -330,7 +330,7 @@ class MDP(ABC):
         return policy
     
         
-    def to_LMDP(self, lmbda: float = None):
+    def to_LMDP(self, lmbda: float = None) -> tuple[LMDP, bool]:
         self._print(f"Computing the LMDP embedding of this MDP...")
         
         
@@ -379,18 +379,21 @@ class MDP(ABC):
             lmdp.P[state, ~zero_cols] = np.exp((x - R * np.ones(shape=x.shape, dtype=self.dtype)) / lmdp.lmbda)
                 
         lmdp.R[self.num_non_terminal_states:] = np.sum(self.R[self.num_non_terminal_states:], axis=1) / self.num_actions
-        z, lmdp.stats = lmdp.power_iteration()
-        lmdp.V = lmdp.get_value_function(z)
-        # V_mdp, stats = self.value_iteration()
-        V_mdp, stats = self.value_iteration(temp=lmdp.lmbda)
+        z, lmdp.stats, overflow = lmdp.power_iteration()
         
-        if not hasattr(self, "stats"):
-            self.stats = stats
-        if not hasattr(self, "V"):
-            self.V = V_mdp
+        if not overflow:
+            lmdp.V = lmdp.get_value_function(z)
+            # V_mdp, stats = self.value_iteration()
+            V_mdp, stats = self.value_iteration(temp=lmdp.lmbda)
+            
+            if not hasattr(self, "stats"):
+                self.stats = stats
+            if not hasattr(self, "V"):
+                self.V = V_mdp
+            
+            self._print(f"EMBEDDING ERROR MDP to LMDP: {np.mean(np.square(lmdp.V - V_mdp))}")
         
-        self._print(f"EMBEDDING ERROR MDP to LMDP: {np.mean(np.square(lmdp.V - V_mdp))}")
-        return lmdp
+        return lmdp, overflow
     
     
     def _binary_search_lambda(self, low: float, high: float, stats: EmbeddingStats, tol: float = 1e-4, max_iter: int = 100) -> float:
@@ -438,7 +441,7 @@ class MDP(ABC):
         return (low + high) / 2
 
 
-    def _compute_lambda_error(self, lmbda: float) -> float:
+    def _compute_lambda_error(self, lmbda: float) -> tuple[float, bool]:
         """
         Compute the embedding error for a given lambda value.
 
@@ -449,11 +452,13 @@ class MDP(ABC):
             float: The embedding error.
         """
         verbose = self.verbose
-        self.verbose = True
-        lmdp, _ = self.to_LMDP_TDR(lmbda=lmbda, find_best_lmbda=False)
-        lmdp.compute_value_function()
+        self.verbose = False
+        lmdp, _, overflow = self.to_LMDP_TDR(lmbda=lmbda, find_best_lmbda=False)
+        if not overflow:
+            lmdp.compute_value_function()
+        
         self.verbose = verbose
-        return np.mean(np.square(self.V - lmdp.V))
+        return np.mean(np.square(self.V - lmdp.V)) if not overflow else -1, overflow
 
 
     def _print_lambda_progress(self, low: float, high: float, initial_low: float, initial_high: float, bar_length: int = 100) -> None:
@@ -498,7 +503,7 @@ class MDP(ABC):
         """
         start_lmbda = max(0.05, self.temperature)
         lmbda = start_lmbda
-        step = 5 # TODO: need to adjust this based on the stochastic probability and the temperature
+        step = 2
 
         tried = []
         errors = []
@@ -518,7 +523,13 @@ class MDP(ABC):
 
             self._print(f"{spin} {current_message}", end="\r")
 
-            error = self._compute_lambda_error(lmbda)
+            error, overflow = self._compute_lambda_error(lmbda)
+            if overflow:
+                # TODO: The lambda chosen is too big. Need to make it smaller and reduce the step size.
+                print("overflow")
+                step = max(0, step - 0.5)
+                lmbda = tried[-1] + step
+                continue
             stats.add_linear_search_info(lmbda, error)
 
             tried.append(lmbda)
@@ -544,7 +555,7 @@ class MDP(ABC):
         return final_lmbda
 
     
-    def to_LMDP_TDR_iterative(self, lmbda: float = None, find_best_lmbda: bool = True) -> tuple[LMDP_TDR, EmbeddingStats]:
+    def to_LMDP_TDR_iterative(self, lmbda: float = None, find_best_lmbda: bool = True) -> tuple[LMDP_TDR, EmbeddingStats, bool]:
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         stats = EmbeddingStats("iterative")
         stats.start_time()
@@ -600,16 +611,19 @@ class MDP(ABC):
         
         stats.end_time()
         
-        z = lmdp_tdr.power_iteration()
-        V_lmdp = lmdp_tdr.get_value_function(z)
-        if not hasattr(self, "V"):
-            self.V, self.stats = self.value_iteration()
-        # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
+        z, overflow = lmdp_tdr.power_iteration()
         
-        self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
-        return lmdp_tdr, stats
+        if not overflow:
+            V_lmdp = lmdp_tdr.get_value_function(z)
+            if not hasattr(self, "V"):
+                self.V, self.stats = self.value_iteration()
+            # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
+            
+            self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
+        
+        return lmdp_tdr, stats, overflow
     
-    def to_LMDP_TDR_vectorized(self, lmbda: float = None, find_best_lmbda: bool = True) -> tuple[LMDP_TDR, EmbeddingStats]:
+    def to_LMDP_TDR_vectorized(self, lmbda: float = None, find_best_lmbda: bool = True) -> tuple[LMDP_TDR, EmbeddingStats, bool]:
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         stats = EmbeddingStats("vectorized")
         stats.start_time()
@@ -678,17 +692,20 @@ class MDP(ABC):
         
         stats.end_time()
         
-        z = lmdp_tdr.power_iteration()
-        V_lmdp = lmdp_tdr.get_value_function(z)
-        if not hasattr(self, "V"):
-            self.V, self.stats = self.value_iteration()
-        # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
+        z, overflow = lmdp_tdr.power_iteration()
         
-        self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
-        return lmdp_tdr, stats
+        if not overflow:
+            V_lmdp = lmdp_tdr.get_value_function(z)
+            if not hasattr(self, "V"):
+                self.V, self.stats = self.value_iteration()
+            # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
+            
+            self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
+        
+        return lmdp_tdr, stats, overflow
     
     
-    def to_LMDP_TDR(self, lmbda: float = None, find_best_lmbda: bool = True, vectorized: bool = True) -> tuple[LMDP_TDR, EmbeddingStats]:
+    def to_LMDP_TDR(self, lmbda: float = None, find_best_lmbda: bool = True, vectorized: bool = True) -> tuple[LMDP_TDR, EmbeddingStats, bool]:
         if vectorized:
             return self.to_LMDP_TDR_vectorized(lmbda, find_best_lmbda)
         else:
@@ -765,12 +782,14 @@ class MDP(ABC):
         lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
         lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
         
-        z = lmdp_tdr.power_iteration()
-        V_lmdp = lmdp_tdr.get_value_function(z)
-        V_mdp, _ = self.value_iteration()
+        z, overflow = lmdp_tdr.power_iteration()
+        if not overflow:
+            V_lmdp = lmdp_tdr.get_value_function(z)
+            V_mdp, _ = self.value_iteration()
+            
+            self._print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
         
-        self._print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
-        return lmdp_tdr
+        return lmdp_tdr, overflow
 
     
     def to_LMDP_TDR_3(self):
@@ -803,12 +822,15 @@ class MDP(ABC):
             lmdp_tdr.R[state] = x + lmdp_tdr.lmbda * np.log(len_support)
         
         
-        z = lmdp_tdr.power_iteration()
-        V_lmdp = lmdp_tdr.get_value_function(z)
-        V_mdp, _ = self.value_iteration()
+        z, overflow = lmdp_tdr.power_iteration()
         
-        self._print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
-        return lmdp_tdr
+        if not overflow:
+            V_lmdp = lmdp_tdr.get_value_function(z)
+            V_mdp, _ = self.value_iteration()
+            
+            self._print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        
+        return lmdp_tdr, overflow
     
 
     def print_rewards(self):

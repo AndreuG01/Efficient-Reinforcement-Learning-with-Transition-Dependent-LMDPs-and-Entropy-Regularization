@@ -8,6 +8,9 @@ import time
 from tqdm import tqdm
 import models
 import models.LMDP
+from utils.coloring import TerminalColor
+from utils.utils import print_overflow_message
+
 class LMDP_TDR:
     def __init__(
         self,
@@ -134,7 +137,7 @@ class LMDP_TDR:
         return probs
 
     
-    def power_iteration(self, epsilon=1e-10, temp: float = None) -> np.ndarray:
+    def power_iteration(self, epsilon=1e-10, temp: float = None) -> tuple[np.ndarray, bool]:
         if temp is not None:
             temperature = temp
         else:
@@ -153,10 +156,15 @@ class LMDP_TDR:
         z = np.ones(self.num_states, dtype=self.dtype)
         iterations = 0
         delta = 0
-        
+        overflow = False
         while True:
             z_new = G @ z
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states), dtype=self.dtype)))
+            
+            if np.inf in z_new or -np.inf in z_new:
+                overflow = True
+                print_overflow_message(z_new, z, self.dtype, temperature)
+                break
            
             delta = np.linalg.norm(self.get_value_function(z_new, temp=temp) - self.get_value_function(z, temp=temp), ord=np.inf)
             
@@ -171,7 +179,7 @@ class LMDP_TDR:
         
         self.z = z
         self._print(f"Converged in {iterations} iterations")
-        return z
+        return z, overflow
         
     
     def get_value_function(self, z: np.ndarray = None, temp: float = None) -> np.ndarray:

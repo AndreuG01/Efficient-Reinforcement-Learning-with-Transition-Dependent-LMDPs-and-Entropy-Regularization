@@ -10,6 +10,7 @@ import time
 import models.MDP
 import models.LMDP_TDR
 from utils.stats import ModelBasedAlgsStats
+from utils.utils import print_overflow_message
 
 class LMDP:
     """
@@ -192,7 +193,7 @@ class LMDP:
         
     
     
-    def power_iteration(self, epsilon=1e-10, max_iterations=100000) -> np.ndarray:
+    def power_iteration(self, epsilon=1e-10, max_iterations=100000) -> tuple[np.ndarray, ModelBasedAlgsStats, bool]:
         """
         Perform power iteration to compute the value function approximation.
 
@@ -214,11 +215,18 @@ class LMDP:
         start_time = time.time()
         deltas = []
         Vs = []
+        overflow = False
         
         while True:
             delta = 0
             z_new = G @ self.P @ z
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states), dtype=self.dtype)), dtype=self.dtype)
+            
+            if np.inf in z_new or -np.inf in z_new:
+                overflow = True
+                print_overflow_message(z_new, z, self.dtype, self.lmbda)
+                break
+            
             Vs.append(self.get_value_function(z_new))
             
             delta = np.linalg.norm(self.get_value_function(z_new) - self.get_value_function(z), ord=np.inf)
@@ -237,7 +245,7 @@ class LMDP:
         
         self.z = z
         self._print(f"Converged in {iterations} iterations")
-        return z, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "PI")
+        return z, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "PI"), overflow
 
     def get_value_function(self, z: np.ndarray = None) -> np.ndarray:
         """
@@ -264,7 +272,7 @@ class LMDP:
         """
         if not hasattr(self, "z"):
             self._print("Will compute power iteration")
-        _, self.stats = self.power_iteration()
+        _, self.stats, _ = self.power_iteration()
         
         self.V = self.get_value_function()
         
@@ -278,7 +286,7 @@ class LMDP:
         Returns:
         - mdp (MDP): The converted Markov Decision Process.
         """
-        z, _ = self.power_iteration()
+        z, _, _ = self.power_iteration()
         
         control = self.get_control(z)
         self._print(f"Computing the MDP embedding of this LMDP...")

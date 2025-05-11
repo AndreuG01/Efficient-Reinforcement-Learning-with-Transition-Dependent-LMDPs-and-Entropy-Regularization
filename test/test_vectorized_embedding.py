@@ -20,8 +20,8 @@ class VectorizedEmbeddingTester(unittest.TestCase):
                     verbose=False
                 )
                 
-                lmdp_vectorized, _ = mdp.to_LMDP_TDR(find_best_lmbda=True, vectorized=True)
-                lmdp_iterative, _ = mdp.to_LMDP_TDR(find_best_lmbda=True, vectorized=False)
+                lmdp_vectorized, _, _ = mdp.to_LMDP_TDR(find_best_lmbda=True, vectorized=True)
+                lmdp_iterative, _, _ = mdp.to_LMDP_TDR(find_best_lmbda=True, vectorized=False)
                 self.assertEqual(lmdp_vectorized, lmdp_iterative)
 
 

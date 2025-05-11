@@ -27,6 +27,7 @@ class Spinner:
         self.running = False
         self._thread = None
         self.padding = padding
+        self.time = None
     
     
     def __animate(self):
@@ -58,6 +59,7 @@ class Spinner:
         """
         self.running = True
         self._thread = threading.Thread(target=self.__animate)
+        self.time = time.time()
         self._thread.start()
     
     def stop(self, interrupted: bool = False):
@@ -71,7 +73,8 @@ class Spinner:
         Returns:
             None
         """
+        self.time = time.time() - self.time
         self.running = False
         self._thread.join()
         if not interrupted:
-            print(f"{self.message}\tFINISHED")
+            print(f"{self.message}\tFINISHED in {round(self.time, 3)}s")
