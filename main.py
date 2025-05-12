@@ -144,12 +144,13 @@ if __name__ == "__main__":
     mdp = GridWorldMDP(
         map=Map(grid_size=4),
         behaviour="stochastic",
-        stochastic_prob=0.8,
+        stochastic_prob=0.4,
         temperature=1,
         verbose=True
     )
     
-    mdp.to_LMDP_TDR(find_best_lmbda=True)
+    _, stats, _ = mdp.to_LMDP_TDR(find_best_lmbda=True)
+    stats.plot_stats(save_fig=False)
     # fig = plt.figure(figsize=(10, 5))
     # mdp.compute_value_function()
     # for i in range(1, 8):
@@ -166,4 +167,4 @@ if __name__ == "__main__":
     # plt.savefig("vf.png", dpi=300, bbox_inches="tight")
     
     exit()
-    benchmark_iterative_vectorized_embedding()
+    benchmark_iterative_vectorized_embedding(max_grid_size=10)

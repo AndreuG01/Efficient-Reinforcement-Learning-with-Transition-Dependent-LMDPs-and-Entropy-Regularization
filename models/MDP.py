@@ -398,9 +398,9 @@ class MDP(ABC):
         return lmdp, overflow
     
     
-    def _binary_search_lambda(self, low: float, high: float, stats: EmbeddingStats, tol: float = 1e-4, max_iter: int = 100) -> float:
+    def _ternary_search_lambda(self, low: float, high: float, stats: EmbeddingStats, tol: float = 1e-4, max_iter: int = 100) -> float:
         """
-        Perform binary search to find the best lambda value within a given range.
+        Perform ternary search to find the best lambda value within a given range.
 
         Args:
             low (float): The lower bound of the search range.
@@ -422,23 +422,23 @@ class MDP(ABC):
                 self._print("")
                 break
 
-            self._print_lambda_progress(low, high, initial_low, initial_high, bar_length)
-
-            mid = (low + high) / 2
-            epsilon = tol / 2
-
-            left = mid - epsilon
-            right = mid + epsilon
-
-            err_left = self._compute_lambda_error(left)
-            err_right = self._compute_lambda_error(right)
+            mid_1 = low + (high - low) / 3
+            mid_2 = high - (high - low) / 3
             
-            stats.add_binary_search_info(mid, self._compute_lambda_error(mid))
+            self._print_lambda_progress(low, high, initial_low, initial_high, bar_length)
+    
+            err_1, _ = self._compute_lambda_error(mid_1)
+            err_2, _ = self._compute_lambda_error(mid_2)
 
-            if err_left < err_right:
-                high = mid
+            if err_1 < err_2:
+                high = mid_2
+                error, _ = self._compute_lambda_error(mid_2)
+                stats.add_ternary_search_info(mid_2, error)
             else:
-                low = mid
+                low = mid_1
+                error, _ = self._compute_lambda_error(mid_1)
+                stats.add_ternary_search_info(mid_1, error)
+                
 
         return (low + high) / 2
 
@@ -452,6 +452,7 @@ class MDP(ABC):
 
         Returns:
             float: The embedding error.
+            bool: Whether lmbda generates overflow or not
         """
         verbose = self.verbose
         self.verbose = False
@@ -501,7 +502,7 @@ class MDP(ABC):
 
     def _find_best_lambda(self, stats: EmbeddingStats):
         """
-        Find the best lambda value for the LMDP embedding using a combination of iterative search and binary search.
+        Find the best lambda value for the LMDP embedding using a combination of iterative search and ternary search.
         """
         start_lmbda = max(0.05, self.temperature)
         lmbda = start_lmbda
@@ -551,8 +552,9 @@ class MDP(ABC):
         low = tried[best_idx]
         high = tried[best_idx + 1]
 
-        final_lmbda = self._binary_search_lambda(low, high, stats)
-        stats.set_optimal_parameter(final_lmbda, self._compute_lambda_error(final_lmbda))
+        final_lmbda = self._ternary_search_lambda(low, high, stats)
+        error_optimal, _ = self._compute_lambda_error(final_lmbda)
+        stats.set_optimal_parameter(final_lmbda, error_optimal)
 
         return final_lmbda
 

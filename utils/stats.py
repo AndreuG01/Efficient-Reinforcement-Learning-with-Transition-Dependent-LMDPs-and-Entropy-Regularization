@@ -119,15 +119,15 @@ class GameStats:
 class EmbeddingStats:
     """
     This class contains the statistics of the embedding process of a MDP into a LMDP.
-    It contains the information of the linear search and the binary search.
+    It contains the information of the linear search and the ternary search.
     """
     def __init__(
         self,
         type: Literal["vectorized", "iterative"],
         linear_search_lambdas: list[float] = [],
-        binary_search_lambdas: list[float] = [],
+        ternary_search_lambdas: list[float] = [],
         linear_search_errors: list[float] = [],
-        binary_search_errors: list[float] = [],
+        ternary_search_errors: list[float] = [],
         optimal_lambda: float = None,
         error_optimal_lambda: float = None,
         total_time: float = None
@@ -136,9 +136,9 @@ class EmbeddingStats:
         Args:
             type (str): The type of the embedding process. Can be "vectorized" or "iterative".
             linear_search_lambdas (list[float]): The lambdas used in the linear search.
-            binary_search_lambdas (list[float]): The lambdas used in the binary search.
+            ternary_search_lambdas (list[float]): The lambdas used in the ternary search.
             linear_search_errors (list[float]): The errors of the linear search.
-            binary_search_errors (list[float]): The errors of the binary search.
+            ternary_search_errors (list[float]): The errors of the ternary search.
             optimal_lambda (float): The optimal lambda found.
             error_optimal_lambda (float): The error of the optimal lambda found.
             total_time (float): The total time taken for the embedding process.
@@ -148,9 +148,9 @@ class EmbeddingStats:
         self.type = type
         
         self.linear_search_lambdas = linear_search_lambdas
-        self.binary_search_lambdas = binary_search_lambdas
+        self.ternary_search_lambdas = ternary_search_lambdas
         self.linear_search_errors = linear_search_errors
-        self.binary_search_errors = binary_search_errors
+        self.ternary_search_errors = ternary_search_errors
         
         self._optimal_lambda = optimal_lambda
         self._error_optimal_lambda = error_optimal_lambda
@@ -168,15 +168,15 @@ class EmbeddingStats:
         self.linear_search_errors.append(error)
     
     
-    def add_binary_search_info(self, lmbda: float, error: float) -> None:
+    def add_ternary_search_info(self, lmbda: float, error: float) -> None:
         """
-        Add the information of the binary search to the stats.
+        Add the information of a ternary search to the stats.
         Args:
-            lmbda (float): The lambda used in the binary search.
-            error (float): The error of the binary search.
+            lmbda (float): The lambda used in the ternary search.
+            error (float): The error of the ternary search.
         """
-        self.binary_search_lambdas.append(lmbda)
-        self.binary_search_errors.append(error)
+        self.ternary_search_lambdas.append(lmbda)
+        self.ternary_search_errors.append(error)
     
     
     def start_time(self):
@@ -230,14 +230,14 @@ class EmbeddingStats:
         axes[0].scatter(self.linear_search_lambdas, self.linear_search_errors, color="blue", marker="x", s=20, label="Attempted $\lambda$")
         axes[0].scatter(self._optimal_lambda, self._error_optimal_lambda, color="red", zorder=3, s=40)
         
-        axes[1].set_title("Refined binary search")
-        axes[1].plot(self.binary_search_lambdas, self.binary_search_errors, color="blue", linewidth=0.5, alpha=0.5)
-        axes[1].scatter(self.binary_search_lambdas, self.binary_search_errors, color="blue", marker="x", s=20, label="Attempted $\lambda$")
+        axes[1].set_title("Refined ternary search")
+        axes[1].plot(self.ternary_search_lambdas, self.ternary_search_errors, color="blue", linewidth=0.5, alpha=0.5)
+        axes[1].scatter(self.ternary_search_lambdas, self.ternary_search_errors, color="blue", marker="x", s=20, label="Attempted $\lambda$")
         axes[1].scatter(self._optimal_lambda, self._error_optimal_lambda, color="red", zorder=3, s=40, label=f"Optimal $\lambda = {round(self._optimal_lambda, 3)}$")
     
         # Interpolation of expected error
-        if len(self.binary_search_lambdas) >= 2:
-            sorted_lambdas, sorted_errors = zip(*sorted(zip(self.binary_search_lambdas, self.binary_search_errors)))
+        if len(self.ternary_search_lambdas) >= 2:
+            sorted_lambdas, sorted_errors = zip(*sorted(zip(self.ternary_search_lambdas, self.ternary_search_errors)))
             interp_func = interp1d(sorted_lambdas, sorted_errors, kind="cubic")
             dense_lambdas = np.linspace(min(sorted_lambdas), max(sorted_lambdas), 300)
             dense_errors = interp_func(dense_lambdas)
@@ -246,7 +246,7 @@ class EmbeddingStats:
         
         min_delta = 0.05
         last_annotated = None
-        for i, (x, y) in enumerate(zip(self.binary_search_lambdas, self.binary_search_errors)):
+        for i, (x, y) in enumerate(zip(self.ternary_search_lambdas, self.ternary_search_errors)):
             if last_annotated is None or abs(x - last_annotated) >= min_delta:
                 axes[1].text(x, y, str(i + 1), fontsize=8, color="black", ha="right", va="bottom")
                 last_annotated = x
