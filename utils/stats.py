@@ -1,6 +1,9 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 from tqdm import tqdm
 from PIL import Image
 from typing import Literal
@@ -128,6 +131,14 @@ class EmbeddingStats:
         ternary_search_lambdas: list[float] = [],
         linear_search_errors: list[float] = [],
         ternary_search_errors: list[float] = [],
+        ternary_search_mid_1s: list[float] = [],
+        ternary_search_errors_mid_1s: list[float] = [],
+        ternary_search_mid_2s: list[float] = [],
+        ternary_search_errors_mid_2s: list[float] = [],
+        ternary_search_lefts: list[float] = [],
+        ternary_search_error_lefts: list[float] = [],
+        ternary_search_rights: list[float] = [],
+        ternary_search_error_rights: list[float] = [],
         optimal_lambda: float = None,
         error_optimal_lambda: float = None,
         total_time: float = None
@@ -151,6 +162,14 @@ class EmbeddingStats:
         self.ternary_search_lambdas = ternary_search_lambdas
         self.linear_search_errors = linear_search_errors
         self.ternary_search_errors = ternary_search_errors
+        self.ternary_search_mid_1s = ternary_search_mid_1s
+        self.ternary_search_errors_mid_1s = ternary_search_errors_mid_1s
+        self.ternary_search_mid_2s = ternary_search_mid_2s
+        self.ternary_search_errors_mid_2s = ternary_search_errors_mid_2s
+        self.ternary_search_lefts = ternary_search_lefts
+        self.ternary_search_errors_lefts = ternary_search_error_lefts
+        self.ternary_search_rights = ternary_search_rights
+        self.ternary_search_errors_rights = ternary_search_error_rights
         
         self._optimal_lambda = optimal_lambda
         self._error_optimal_lambda = error_optimal_lambda
@@ -168,7 +187,7 @@ class EmbeddingStats:
         self.linear_search_errors.append(error)
     
     
-    def add_ternary_search_info(self, lmbda: float, error: float) -> None:
+    def add_optimal_ternary_search_info(self, lmbda: float, error: float) -> None:
         """
         Add the information of a ternary search to the stats.
         Args:
@@ -177,6 +196,31 @@ class EmbeddingStats:
         """
         self.ternary_search_lambdas.append(lmbda)
         self.ternary_search_errors.append(error)
+    
+    
+    def add_ternary_search_info(self, m1: float, error_m1: float, m2: float, error_m2: float, left: float, error_left: float, right: float, error_right) -> None:
+        """
+        Add the information of a ternary search to the stats.
+        Args:
+            m1 (float): The first midpoint of the ternary search.
+            error_m1 (float): The error of the first midpoint of the ternary search.
+            m2 (float): The second midpoint of the ternary search.
+            error_m2 (float): The error of the second midpoint of the ternary search.
+            left (float): The left bound of the ternary search.
+            error_left (float): The error of the left bound of the ternary search.
+            right (float): The right bound of the ternary search.
+            error_right (float): The error of the right bound of the ternary search.
+        Returns:
+            None
+        """
+        self.ternary_search_mid_1s.append(m1)
+        self.ternary_search_errors_mid_1s.append(error_m1)
+        self.ternary_search_mid_2s.append(m2)
+        self.ternary_search_errors_mid_2s.append(error_m2)
+        self.ternary_search_lefts.append(left)
+        self.ternary_search_rights.append(right)
+        self.ternary_search_errors_lefts.append(error_left)
+        self.ternary_search_errors_rights.append(error_right)
     
     
     def start_time(self):
@@ -210,6 +254,27 @@ class EmbeddingStats:
         self._optimal_lambda = lmbda
         self._error_optimal_lambda = error
         
+        
+    def _interpolate_errors(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Interpolate the errors of the ternary search to get a smoother curve.
+        Returns:
+            tuple: A tuple containing the dense lambdas and the dense errors.
+        """
+        # sorted_lambdas, sorted_errors = zip(*sorted(zip(self.ternary_search_lambdas, self.ternary_search_errors)))
+        sorted_lambdas, sorted_errors = zip(*sorted(zip((self.ternary_search_lambdas + self.ternary_search_lefts + self.ternary_search_rights), (self.ternary_search_errors + self.ternary_search_errors_lefts + self.ternary_search_errors_rights))))
+        unique = {}
+        for lmbda, error in zip(sorted_lambdas, sorted_errors):
+            if lmbda not in unique: unique[lmbda] = error
+        
+        sorted_lambdas = list(unique.keys())
+        sorted_errors = list(unique.values())
+    
+        interp_func = interp1d(sorted_lambdas, sorted_errors, kind="cubic")
+        dense_lambdas = np.linspace(min(sorted_lambdas), max(sorted_lambdas), 300)
+        dense_errors = interp_func(dense_lambdas)
+        
+        return dense_lambdas, dense_errors
     
     
     def plot_stats(self, save_fig: bool = True):
@@ -237,10 +302,7 @@ class EmbeddingStats:
     
         # Interpolation of expected error
         if len(self.ternary_search_lambdas) >= 2:
-            sorted_lambdas, sorted_errors = zip(*sorted(zip(self.ternary_search_lambdas, self.ternary_search_errors)))
-            interp_func = interp1d(sorted_lambdas, sorted_errors, kind="cubic")
-            dense_lambdas = np.linspace(min(sorted_lambdas), max(sorted_lambdas), 300)
-            dense_errors = interp_func(dense_lambdas)
+            dense_lambdas, dense_errors = self._interpolate_errors()
             axes[1].plot(dense_lambdas, dense_errors, linestyle="--", color="gray", label="Interpolated error")
 
         
@@ -257,3 +319,60 @@ class EmbeddingStats:
             plt.savefig(f"assets/embedding_stats.png", dpi=300, bbox_inches="tight")
         else:
             plt.show()
+    
+    
+    def visualize_ternary_search(self, save_fig: bool = True) -> None:
+        """
+        Visualize the ternary search process through an animation.
+        
+        Args:
+            save_fig (bool): Whether to save the figure or not. Defaults to True.
+        Returns:
+            None
+        """
+        plt.rcParams.update({"text.usetex": True})
+        fig = plt.figure(figsize=(10, 5))
+        self.dense_lambdas, self.dense_errors = self._interpolate_errors()
+        
+        animation_res = animation.FuncAnimation(fig, self._animate, frames=2 * len(self.ternary_search_mid_1s), interval=400, repeat=True)
+        
+        if save_fig:
+            animation_res.save(f"assets/ternary_search_lambdas_{self._optimal_lambda}.gif", dpi=300)
+        else:
+            plt.show()
+    
+    def _animate(self, i) -> None:
+        """
+        Animation function for the ternary search visualization.
+        
+        Args:
+            i (int): The current frame index.
+        Returns:
+            None
+        """
+        idx = i // 2
+        plt.clf()
+        plt.plot(self.dense_lambdas, self.dense_errors, color="black", label="Interpolated error", linestyle="--")
+        
+        legend_elements = [
+            plt.Line2D([0], [0], color="red", label="$m_1$", linewidth=0.5),
+            plt.Line2D([0], [0], color="blue", label="$m_2$", linewidth=0.5),
+            plt.Line2D([0], [0], color="gray", label="Search region", alpha=0.2, linewidth=5),
+            plt.Line2D([0], [0], color="black", label="Interpolated error", linestyle="--"),
+            Line2D([0], [0], color="#79FF00", label=fr"$\lambda_{{\mathrm{{curr}}}}^* = {round(self.ternary_search_lambdas[idx], 4)}$", linestyle="None", markersize=6, marker="x")
+        ]
+
+        plt.xlabel("$\lambda$")
+        plt.ylabel("Error")
+        plt.title(f"Optimal $\lambda$ Finding through Ternary Search. Step [{idx + 1} / {len(self.ternary_search_errors_mid_1s)}]")
+        
+        plt.axvline(self.ternary_search_mid_1s[idx], color="red", linewidth=0.5)
+        plt.axvline(self.ternary_search_mid_2s[idx], color="blue", linewidth=0.5)
+        if i % 2 != 0:
+            plt.axvline(self.ternary_search_lambdas[idx], color="#4EA300", linewidth=0.5)
+            plt.scatter(self.ternary_search_lambdas[idx], self.ternary_search_errors[idx], color="#79FF00", marker="x", zorder=3)
+            
+        plt.axvspan(self.ternary_search_lefts[idx], self.ternary_search_rights[idx], color="gray", alpha=0.2)
+        
+        
+        plt.legend(handles=legend_elements, loc="upper left")

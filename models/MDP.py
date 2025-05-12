@@ -429,15 +429,19 @@ class MDP(ABC):
     
             err_1, _ = self._compute_lambda_error(mid_1)
             err_2, _ = self._compute_lambda_error(mid_2)
+            
+            err_left, _ = self._compute_lambda_error(low)
+            err_right, _ = self._compute_lambda_error(high)
+            stats.add_ternary_search_info(mid_1, err_1, mid_2, err_2, low, err_left, high, err_right)
 
             if err_1 < err_2:
                 high = mid_2
-                error, _ = self._compute_lambda_error(mid_2)
-                stats.add_ternary_search_info(mid_2, error)
+                error, _ = self._compute_lambda_error(mid_1)
+                stats.add_optimal_ternary_search_info(mid_1, error)
             else:
                 low = mid_1
-                error, _ = self._compute_lambda_error(mid_1)
-                stats.add_ternary_search_info(mid_1, error)
+                error, _ = self._compute_lambda_error(mid_2)
+                stats.add_optimal_ternary_search_info(mid_2, error)
                 
 
         return (low + high) / 2

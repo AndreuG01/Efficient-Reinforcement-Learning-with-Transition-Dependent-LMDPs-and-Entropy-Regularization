@@ -150,7 +150,8 @@ if __name__ == "__main__":
     )
     
     _, stats, _ = mdp.to_LMDP_TDR(find_best_lmbda=True)
-    stats.plot_stats(save_fig=False)
+    # stats.plot_stats(save_fig=False)
+    stats.visualize_ternary_search()
     # fig = plt.figure(figsize=(10, 5))
     # mdp.compute_value_function()
     # for i in range(1, 8):
