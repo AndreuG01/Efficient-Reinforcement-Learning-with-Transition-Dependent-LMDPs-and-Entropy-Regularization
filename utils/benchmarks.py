@@ -26,7 +26,7 @@ def benchmark_value_iteration(savefig: bool = True):
             behaviour="deterministic"
         )
         print(f"[{size} / {max_size}]. Efficient...")
-        _, stats_efficient = gridworld_mdp.value_iteration()
+        _, stats_efficient, _ = gridworld_mdp.value_iteration()
         print(f"[{size} / {max_size}]. Inefficient...")
         _, stats_inefficient = gridworld_mdp.value_iteration_inefficient()
         

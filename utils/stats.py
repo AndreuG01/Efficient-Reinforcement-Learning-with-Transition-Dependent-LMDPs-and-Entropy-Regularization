@@ -11,6 +11,7 @@ from typing_extensions import Self
 from custom_palette import CustomPalette
 import time
 from scipy.interpolate import interp1d
+from .spinner import Spinner
 
 class ModelBasedAlgsStats:
     def __init__(self, time: float, iterations: int, deltas: list[float], num_states: int, vs: list[np.ndarray], descriptor: Literal["VI", "PI"]):
@@ -24,6 +25,12 @@ class ModelBasedAlgsStats:
     def print_statistics(self):
         print(f"Converged in {self.iterations} iterations.")
         print(f"Time taken: {self.time:.4f} seconds.")
+        
+    
+    def _remove_directory(self, dir_name):
+        for file in os.listdir(dir_name):
+            os.remove(os.path.join(dir_name, file))
+        os.rmdir(dir_name)
     
     def value_fun_evolution_gif(self, out_path: str, out_name: str, other_stats: Self = None):
         custom_palette = CustomPalette()
@@ -32,45 +39,57 @@ class ModelBasedAlgsStats:
         
         tmp_dir_path = os.path.join(out_path, "__tmp")
         os.mkdir(tmp_dir_path)
+        spinner = None
+        try:
         
-        max_iterations = max(len(self.vs), len(other_stats.vs) if other_stats else 0)
-        
-        min_value = min(
-            [min(v) for v in self.vs] +
-            ([min(v) for v in other_stats.vs] if other_stats else [])
-        )
-        
-        frame_files = []
-        for i in tqdm(range(max_iterations), total=max_iterations, desc="Generating GIF..."):
-            fig = plt.figure(figsize=(10, 5))
-            plt.rcParams.update({"text.usetex": True})
+            max_iterations = max(len(self.vs), len(other_stats.vs) if other_stats else 0)
             
-            v_self = self.vs[i] if i < len(self.vs) else self.vs[-1]
-            plt.plot(np.arange(len(v_self)), v_self, color=self_color, label=self.descriptor)
+            min_value = min(
+                [min(v) for v in self.vs] +
+                ([min(v) for v in other_stats.vs] if other_stats else [])
+            )
             
-            if other_stats:
-                v_other = other_stats.vs[i] if i < len(other_stats.vs) else other_stats.vs[-1]
-                plt.plot(np.arange(len(v_other)), v_other, color=other_color, label=other_stats.descriptor)
-                min_value = min(min_value, min(v_other))
+            frame_files = []
+            for i in tqdm(range(max_iterations), total=max_iterations, desc="Generating GIF Frames..."):
+                fig = plt.figure(figsize=(10, 5))
+                plt.rcParams.update({"text.usetex": True})
+                
+                v_self = self.vs[i] if i < len(self.vs) else self.vs[-1]
+                plt.plot(np.arange(len(v_self)), v_self, color=self_color, label=self.descriptor)
+                
+                if other_stats:
+                    v_other = other_stats.vs[i] if i < len(other_stats.vs) else other_stats.vs[-1]
+                    plt.plot(np.arange(len(v_other)), v_other, color=other_color, label=other_stats.descriptor)
+                    min_value = min(min_value, min(v_other))
+                
+                plt.ylim(min_value, 0)
+                plt.title(f"Value Function at iteration {i}")
+                plt.grid()
+                plt.xlabel("States")
+                plt.ylabel("Value Function")
+                plt.legend()
+                
+                frame_file = os.path.join(tmp_dir_path, f"frame_{i}.png")
+                plt.savefig(frame_file, dpi=300)
+                frame_files.append(frame_file)
+                plt.close(fig)
             
-            plt.ylim(min_value, 0)
-            plt.title(f"Value Function at iteration {i}")
-            plt.grid()
-            plt.xlabel("States")
-            plt.ylabel("Value Function")
-            plt.legend()
+            spinner = Spinner("Creating GIF")
+            spinner.start()
+            frames = [Image.open(frame) for frame in frame_files]
+            frames[0].save(os.path.join(out_path, out_name), save_all=True, append_images=frames[1:], duration=250, loop=0)
+            spinner.stop()
             
-            frame_file = os.path.join(tmp_dir_path, f"frame_{i}.png")
-            plt.savefig(frame_file, dpi=300)
-            frame_files.append(frame_file)
-            plt.close(fig)
+            self._remove_directory(tmp_dir_path)
         
-        frames = [Image.open(frame) for frame in frame_files]
-        frames[0].save(os.path.join(out_path, out_name), save_all=True, append_images=frames[1:], duration=250, loop=0)
-        
-        for frame_file in frame_files:
-            os.remove(frame_file)
-        os.rmdir(tmp_dir_path)
+        except KeyboardInterrupt:
+            if spinner and spinner.running:
+                print(f"Stopping spinner threads".ljust(40))
+                spinner.stop(interrupted=True)
+            
+            print(f"Ctrl+C detected. Removing temporary directory: {tmp_dir_path}")
+            self._remove_directory(tmp_dir_path)
+            exit()
 
 
 

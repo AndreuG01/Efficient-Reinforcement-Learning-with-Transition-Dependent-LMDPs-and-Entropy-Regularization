@@ -15,6 +15,8 @@ from joblib import Parallel, delayed, cpu_count
 from utils.coloring import TerminalColor
 import itertools
 from .utils import compare_models
+from utils.utils import print_overflow_message
+
 
 class MDP(ABC):
     """
@@ -232,7 +234,7 @@ class MDP(ABC):
         return V, ModelBasedAlgsStats(elapsed_time, rewards, iterations, deltas, self.num_states, descriptor="VI")
     
     
-    def value_iteration(self, epsilon=1e-10, max_iterations=20000, temp: float = None) -> tuple[np.ndarray, ModelBasedAlgsStats]:
+    def value_iteration(self, epsilon=1e-10, max_iterations=10000, temp: float = None) -> tuple[np.ndarray, ModelBasedAlgsStats, bool]:
         """
         Perform value iteration to compute the optimal value function.
         Efficiently implemented with matrix operations
@@ -244,6 +246,7 @@ class MDP(ABC):
         Returns:
         - V (np.ndarray): The optimal value function for each state.
         - ModelBasedAlgsStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
+        - overflow (bool): True if overflow occurred during the computation, False otherwise.        
         """
         
         if temp is not None:
@@ -258,6 +261,9 @@ class MDP(ABC):
         deltas = []
         Vs = []
         self._print(f"Value iteration...")
+        
+        Q_old = np.zeros((self.num_states, self.num_actions), dtype=self.dtype)
+        overflow = False
 
         while True:
             delta = 0
@@ -268,7 +274,12 @@ class MDP(ABC):
             if temperature == 0:
                 V_new =  np.max(Q, axis=1).astype(self.dtype)
             else:
-                V_new = (temperature * np.log(np.sum(self.policy_ref * np.exp(Q / temperature), axis=1))).astype(self.dtype)
+                exp_Q = self.policy_ref * np.exp(Q / temperature)
+                if 0 in exp_Q:
+                    print_overflow_message(exp_Q, self.policy_ref * np.exp(Q_old / temperature), self.dtype, temperature, target_value=0)
+                    overflow = True
+                    break
+                V_new = (temperature * np.log(np.sum(exp_Q, axis=1))).astype(self.dtype)
             
             Vs.append(V_new)
             delta = np.linalg.norm(V - V_new, np.inf)
@@ -281,19 +292,28 @@ class MDP(ABC):
                 break
 
             V = V_new
+            self.Q = Q
+            Q_old = Q
             iterations += 1
             deltas.append(delta)
 
         elapsed_time = time.time() - start_time
-        self._print(f"Converged in {iterations} iterations")
-        return V, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "VI")
+        if not overflow and iterations != max_iterations:
+            self._print(f"Converged in {iterations} iterations")
+        elif overflow:
+            self._print(f"Not converged due to overflow.")
+        else:
+            self._print(f"Not converged due to max iterations reach.")
+            
+            
+        return V, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "VI"), overflow
     
     
     def compute_value_function(self, temp: float = None):
         """
         Computes the value function using value iteration and extracts the optimal policy.
         """
-        self.V, self.stats = self.value_iteration(temp=temp)
+        self.V, self.stats, _ = self.value_iteration(temp=temp)
         
         self.policy = self.get_optimal_policy(self.V, temp=temp)
         self.policy_multiple_actions = self.get_optimal_policy(self.V, multiple_actions=True, temp=temp)
@@ -317,8 +337,7 @@ class MDP(ABC):
             temperature = self.temperature
         
         
-        expected_utilities = self.R[:self.num_non_terminal_states] + \
-                     self.gamma * np.einsum("saj,j->sa", self.P[:self.num_non_terminal_states], V, dtype=self.dtype)
+        expected_utilities = self.Q
         
         if self.temperature == 0:
             max_values = np.max(expected_utilities, axis=1, keepdims=True)
@@ -385,8 +404,8 @@ class MDP(ABC):
         
         if not overflow:
             lmdp.V = lmdp.get_value_function(z)
-            # V_mdp, stats = self.value_iteration()
-            V_mdp, stats = self.value_iteration(temp=lmdp.lmbda)
+            # V_mdp, stats, _ = self.value_iteration()
+            V_mdp, stats, _ = self.value_iteration(temp=lmdp.lmbda)
             
             if not hasattr(self, "stats"):
                 self.stats = stats
@@ -624,8 +643,8 @@ class MDP(ABC):
         if not overflow:
             V_lmdp = lmdp_tdr.get_value_function(z)
             if not hasattr(self, "V"):
-                self.V, self.stats = self.value_iteration()
-            # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
+                self.V, self.stats, _ = self.value_iteration()
+            # V_mdp, _, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
             
             self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
         
@@ -705,8 +724,8 @@ class MDP(ABC):
         if not overflow:
             V_lmdp = lmdp_tdr.get_value_function(z)
             if not hasattr(self, "V"):
-                self.V, self.stats = self.value_iteration()
-            # V_mdp, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
+                self.V, self.stats, _ = self.value_iteration()
+            # V_mdp, _, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
             
             self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
         
@@ -793,7 +812,7 @@ class MDP(ABC):
         z, overflow = lmdp_tdr.power_iteration()
         if not overflow:
             V_lmdp = lmdp_tdr.get_value_function(z)
-            V_mdp, _ = self.value_iteration()
+            V_mdp, _, _ = self.value_iteration()
             
             self._print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
         
@@ -834,7 +853,7 @@ class MDP(ABC):
         
         if not overflow:
             V_lmdp = lmdp_tdr.get_value_function(z)
-            V_mdp, _ = self.value_iteration()
+            V_mdp, _, _ = self.value_iteration()
             
             self._print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
         

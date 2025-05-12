@@ -141,31 +141,20 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
 
 if __name__ == "__main__":
     
-    mdp = GridWorldMDP(
-        map=Map(grid_size=4),
-        behaviour="stochastic",
-        stochastic_prob=0.4,
+    mdp = MinigridMDP(
+        map=Maps.DOUBLE_KEY,
+        allowed_actions=MinigridActions.get_actions()[:3],
+        behaviour="deterministic",
         temperature=1,
-        verbose=True
+        dtype=np.float32
     )
     
-    _, stats, _ = mdp.to_LMDP_TDR(find_best_lmbda=True)
-    # stats.plot_stats(save_fig=False)
-    stats.visualize_ternary_search()
-    # fig = plt.figure(figsize=(10, 5))
-    # mdp.compute_value_function()
-    # for i in range(1, 8):
-    #     lmdp, _, _ = mdp.to_LMDP_TDR(lmbda=i, find_best_lmbda=False)
-    #     lmdp.compute_value_function()
-    #     plt.scatter(i, np.mean(np.square(mdp.V - lmdp.V)), color="blue")
+    mdp.compute_value_function()
+    print(mdp.policy)
+    
+    # mdp.stats.value_fun_evolution_gif(out_path="", out_name="vf_overflow_test.gif")
     
     
-    # # plt.plot(mdp.V, label="MDP")
-    # # plt.plot(lmdp.V, label="LMDP")
-    # # plt.title(np.mean(np.square(mdp.V - lmdp.V)))
-    # plt.xlabel("Temperature")
-    # plt.ylabel("MSE")
-    # plt.savefig("vf.png", dpi=300, bbox_inches="tight")
     
     exit()
     benchmark_iterative_vectorized_embedding(max_grid_size=10)
