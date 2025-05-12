@@ -262,7 +262,7 @@ def benchmark_mdp2lmdp_embedding(
     return stats_mdp, stats_lmdp
 
 
-def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path="assets/iterative_vs_vectorized_embedding_2.txt"):
+def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path="assets/benchmark/iterative_vs_vectorized_embedding.txt"):
     
     table_lines = []
     header_line = "+------------+-----------------------+-----------------------+"
@@ -272,6 +272,8 @@ def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path=
     
     sizes = np.arange(3, max_grid_size, 2)
     spinner = None
+    vectorized_times = []
+    iterative_times = []
     try:
         for grid_size in sizes:
             mdp = MinigridMDP(
@@ -295,7 +297,8 @@ def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path=
             _, iterative_stats, _ = mdp.to_LMDP_TDR(find_best_lmbda=True, vectorized=False)
             spinner.stop()
 
-            
+            vectorized_times.append(vectorized_stats.get_total_time())
+            iterative_times.append(iterative_stats.get_total_time())
             line = f"| {mdp.num_states:<10} | {vectorized_stats.get_total_time():<21.6f} | {iterative_stats.get_total_time():<21.6f} |"
             table_lines.append(line)
 
@@ -312,3 +315,28 @@ def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path=
 
     with open(save_path, "w") as f:
         f.write(table_str)
+    
+    
+    # Plot the results
+    plt.rcParams.update({"text.usetex": True})
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5))
+    
+    axes[0].plot(sizes, vectorized_times, label="Vectorized", color="blue", marker="x", linewidth=0.5)
+    axes[0].plot(sizes, iterative_times, label="Iterative", color="red", marker="x", linewidth=0.5)
+    axes[0].legend()
+    axes[0].set_title("Time comparison")
+    axes[0].set_ylabel("Time ($s$)")
+    
+    axes[1].plot(sizes, np.asarray(iterative_times) / np.asarray(vectorized_times), color="black")
+    axes[1].set_ylabel("Speedup")
+    axes[1].set_title("Speedup")
+    
+    axes[2].set_title("Absolute time difference")
+    axes[2].set_ylabel("Time ($s$)")
+    axes[2].plot(sizes, np.abs(np.asarray(iterative_times) - np.asarray(vectorized_times)), color="gray")
+    
+    plt.suptitle("Iterative vs vectorized embedding results")
+    fig.supxlabel("Grid size")
+    
+    plt.savefig(f"{save_path.split('.')[0]}.png", dpi=300, bbox_inches="tight")
+    
