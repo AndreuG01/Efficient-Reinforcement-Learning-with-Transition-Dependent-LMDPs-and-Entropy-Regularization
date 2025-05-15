@@ -141,20 +141,4 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
 
 if __name__ == "__main__":
     
-    mdp = MinigridMDP(
-        map=Maps.DOUBLE_KEY,
-        allowed_actions=MinigridActions.get_actions()[:3],
-        behaviour="deterministic",
-        temperature=1,
-        dtype=np.float32
-    )
-    
-    mdp.compute_value_function()
-    print(mdp.policy)
-    
-    # mdp.stats.value_fun_evolution_gif(out_path="", out_name="vf_overflow_test.gif")
-    
-    
-    
-    exit()
-    benchmark_iterative_vectorized_embedding(max_grid_size=10)
+    benchmark_value_iteration(save_fig=True)

@@ -15,40 +15,93 @@ from tqdm import tqdm
 from .spinner import Spinner
 
 
-def benchmark_value_iteration(savefig: bool = True):
+def benchmark_value_iteration(min_size: int = 2, max_size: int = 20, save_path: str = "assets/benchmark/value_iteration_comparison.txt", save_fig: bool = True):
     time_efficient = []
     time_inefficient = []
-    min_size = 2
-    max_size = 20
-    for size in range(min_size, max_size):
-        gridworld_mdp = GridWorldMDP(
-            map=Map(grid_size=size),
-            behaviour="deterministic"
-        )
-        print(f"[{size} / {max_size}]. Efficient...")
-        _, stats_efficient, _ = gridworld_mdp.value_iteration()
-        print(f"[{size} / {max_size}]. Inefficient...")
-        _, stats_inefficient = gridworld_mdp.value_iteration_inefficient()
-        
-        time_efficient.append(stats_efficient.time)
-        time_inefficient.append(stats_inefficient.time)
+    state_space_sizes = []
+    table_lines = []
+    spinner = None
+
+    header_line = "+------------+---------------------+-----------------------+"
+    table_lines.append(header_line)
+    table_lines.append("| Num States | Efficient Time (s) | Inefficient Time (s) |")
+    table_lines.append(header_line)
+
+    try:
+        for size in range(min_size, max_size):
+            gridworld_mdp = GridWorldMDP(
+                map=Map(grid_size=size),
+                behaviour="deterministic",
+                verbose=False
+            )
+            spinner = Spinner(f"[{size} / {max_size}] | Efficient")
+            spinner.start()
+            _, stats_efficient, _ = gridworld_mdp.value_iteration()
+            spinner.stop()
+            
+            spinner = Spinner(f"[{size} / {max_size}] | Inefficient")
+            spinner.start()
+            _, stats_inefficient = gridworld_mdp.value_iteration_inefficient()
+            spinner.stop()
+            
+            efficient_time = stats_efficient.time
+            inefficient_time = stats_inefficient.time
+            num_states = gridworld_mdp.num_states
+
+            time_efficient.append(efficient_time)
+            time_inefficient.append(inefficient_time)
+            state_space_sizes.append(num_states)
+
+            line = f"| {num_states:<10} | {efficient_time:<19.6f} | {inefficient_time:<21.6f} |"
+            table_lines.append(line)
+
+    except KeyboardInterrupt:
+        print(f"Stopping spinner threads".ljust(40))
+        if spinner and spinner.running:
+            spinner.stop(interrupted=True)
+        exit()
+
+    table_lines.append(header_line)
+    table_str = "\n".join(table_lines)
+    print(table_str)
+
+    if save_path:
+        with open(save_path, "w") as f:
+            f.write(table_str)
+
     
-    plt.figure(figsize=(10, 5))
     plt.rcParams.update({
         "text.usetex": True,
     })
-    plt.plot([i for i in range(min_size, max_size)], time_efficient, marker="o", label="Efficient Value Iteration", color="blue")
-    plt.plot([i for i in range(min_size, max_size)], time_inefficient, marker="o", label="Inefficient Value Iteration", color="red")
+    
+    fig1 = plt.figure(figsize=(8, 5))
+    plt.title("Iterative vs Vectorized Value Iteration Time Comparison", fontsize=14, fontweight="bold")
+    plt.plot(state_space_sizes, time_efficient, marker="o", label="Vectorized Value Iteration", color="blue")
+    plt.plot(state_space_sizes, time_inefficient, marker="o", label="Iterative Value Iteration", color="red")
     plt.legend()
     plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
-    plt.title("Comparison between two implementations of value iteration in a simple grid domain", fontsize=14, fontweight="bold")
-    plt.xlabel("Grid size")
     plt.ylabel("Time ($s$)")
+    plt.xlabel("Number of states")
     plt.grid()
-    if savefig:
-        plt.savefig("assets/benchmark/value_iteration.png", dpi=300)
+    
+    if save_fig:
+        plt.savefig("assets/benchmark/value_iteration_time_comparison.png", dpi=300, bbox_inches="tight")
     else:
         plt.show()
+
+    fig2 = plt.figure(figsize=(8, 5))
+    plt.title("Iterative vs Vectorized Value Iteration Speedup", fontsize=14, fontweight="bold")
+    plt.ylabel("Speedup")
+    plt.xlabel("Number of states")
+    plt.plot(state_space_sizes, np.array(time_inefficient) / np.array(time_efficient), color="gray")
+    plt.grid()
+    
+    if save_fig:
+        plt.savefig("assets/benchmark/value_iteration_speedup.png", dpi=300, bbox_inches="tight")
+    else:
+        plt.show()
+    
+
 
 
 def benchmark_parallel_p(
