@@ -483,6 +483,17 @@ def different_temperature_plots(model_type: Literal["MDP", "LMDP"] = "MDP", save
     sm.set_array([])
     
     map = Map(grid_size=5)
+    
+    if model_type == "MDP":
+        model = GridWorldMDP(
+            map=map,
+            allowed_actions=GridWorldActions.get_actions()[:4],
+            behaviour="deterministic",
+            temperature=0,
+            verbose=False
+        )
+        model.compute_value_function()
+        plt.plot(model.V, color="magenta", linewidth=3, zorder=3, label=r"$\beta = 0$", linestyle="--")
 
     for i, temp in enumerate(temperatures):
         if model_type == "MDP":
@@ -490,13 +501,15 @@ def different_temperature_plots(model_type: Literal["MDP", "LMDP"] = "MDP", save
                 map=map,
                 allowed_actions=GridWorldActions.get_actions()[:4],
                 behaviour="deterministic",
-                temperature=temp
+                temperature=temp,
+                verbose=False
             )
         else:
             model = GridWorldLMDP(
                 map=map,
                 allowed_actions=GridWorldActions.get_actions()[:4],
-                lmbda=temp
+                lmbda=temp,
+                verbose=False
             )
     
         model.compute_value_function()
@@ -509,6 +522,7 @@ def different_temperature_plots(model_type: Literal["MDP", "LMDP"] = "MDP", save
     cbar = plt.colorbar(sm, ax=ax)
     cbar.set_label(f"$\{temp_name}$")
     ax.set_title(f"Value function for different temperature parameters ($\{temp_name}$) values.")
+    plt.legend()
     plt.grid()
     if save_fig:
         plt.savefig(f"assets/{model_type}_different_temperature.png", dpi=300, bbox_inches="tight")
