@@ -141,4 +141,4 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
 
 if __name__ == "__main__":
     
-    benchmark_value_iteration()
+    lmdp_tdr_advantage(save_fig=False)

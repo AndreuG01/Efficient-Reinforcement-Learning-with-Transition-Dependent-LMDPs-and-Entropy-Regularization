@@ -1073,7 +1073,7 @@ class GridWorldPlotter:
                         ax.add_patch(triangle)
                     if show_prob:
                         ax.text(np.mean([p[0] for p in q_vertices]), np.mean([p[1] for p in q_vertices]), f"{prob:.2f}",
-                                color="white" if self.gridworld.V[idx] > 0.3 * np.min(self.gridworld.V) else "black",
+                                color="white" if (self.gridworld.V[idx] > 0.3 * np.min(self.gridworld.V)) and show_value_function else "black",
                                 fontweight="heavy" if prob == max_prob else None, fontsize=prob_size, ha="center", va="center")
             else:
                 if not show_actions: continue

@@ -180,7 +180,8 @@ def lmdp_tdr_advantage(save_fig: bool = True):
     map = Maps.CLIFF_WALKING
     mdp = GridWorldMDP(
         map=map,
-        behaviour="deterministic"
+        behaviour="deterministic",
+        temperature=1
     )
     lmdp = GridWorldLMDP(
         map=map,
