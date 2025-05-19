@@ -88,12 +88,14 @@ def benchmark_value_iteration(min_size: int = 2, max_size: int = 20, save_path: 
         plt.savefig("assets/benchmark/value_iteration_time_comparison.png", dpi=300, bbox_inches="tight")
     else:
         plt.show()
-
+    
+    palette = CustomPalette()
+    
     fig2 = plt.figure(figsize=(8, 5))
     plt.title("Iterative vs Vectorized Value Iteration Speedup", fontsize=14, fontweight="bold")
     plt.ylabel("Speedup")
     plt.xlabel("Number of states")
-    plt.plot(state_space_sizes, np.array(time_inefficient) / np.array(time_efficient), color="gray")
+    plt.plot(state_space_sizes, np.array(time_inefficient) / np.array(time_efficient), color=palette[16])
     plt.grid()
     
     if save_fig:
