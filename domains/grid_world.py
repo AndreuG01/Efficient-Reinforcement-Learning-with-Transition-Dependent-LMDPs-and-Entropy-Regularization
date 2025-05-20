@@ -469,8 +469,8 @@ class GridWorldMDP(MDP):
         return self.environment.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100, show_window=True)
     
     
-    def to_LMDP_policy(self):    
-        lmdp_policy = np.einsum("sa,sap->sp", self.policy, self.P)
+    def to_LMDP_policy(self):        
+        lmdp_policy = np.einsum("sa,sap->sp", self.policy[:self.num_non_terminal_states, :], self.P)
         
         assert np.all(np.sum(lmdp_policy, axis=1))
         
@@ -989,7 +989,8 @@ class GridWorldPlotter:
         show_prob: bool, 
         show_actions: bool, 
         prob_size: float, 
-        color_probs: bool
+        color_probs: bool,
+        show_colorbar: bool
     ) -> None:
         """
         Overlays the value function, policy, and action probabilities on the grid environment.
@@ -1008,6 +1009,7 @@ class GridWorldPlotter:
             show_actions (bool): Whether to display deterministic actions as arrows. Defaults to True.
             prob_size (float): The font size for displaying action probabilities. Defaults to 10.
             color_probs (bool): Whether to visualize action probabilities with color-coded polygons. Defaults to False.
+            show_colorbar (bool): Whether to add a colorbar either for actions or for the value function.
 
         Returns:
             None
@@ -1034,9 +1036,10 @@ class GridWorldPlotter:
                 value_grid[pos[1], pos[0]] = np.nan
 
             im = ax.imshow(value_grid, cmap="Blues", origin="upper")
-            cax = divider.append_axes("right", size="5%", pad=0.1)
-            cbar = plt.colorbar(im, cax=cax)
-            cbar.set_label("Value Function", fontsize=12)
+            if show_colorbar:
+                cax = divider.append_axes("right", size="5%", pad=0.1)
+                cbar = plt.colorbar(im, cax=cax)
+                cbar.set_label("Value Function", fontsize=12)
 
         for idx, pos in enumerate(grid_positions[CellType.NORMAL]):
             curr_state = [s for s in self.environment.custom_grid.states if s.x == pos[0] and s.y == pos[1]][0]
@@ -1084,7 +1087,7 @@ class GridWorldPlotter:
                         width=0.005, color=self.POLICY_COLOR, headaxislength=3, headlength=3
                     )
 
-        if not self.gridworld.deterministic and color_probs:
+        if not self.gridworld.deterministic and color_probs and show_colorbar:
             cax = divider.append_axes("bottom", size="5%", pad=0.1)
             cbar = colorbar.ColorbarBase(cax, cmap=prob_cmap, orientation='horizontal')
             cbar.set_label("Action Probabilities", fontsize=12)
@@ -1100,7 +1103,9 @@ class GridWorldPlotter:
         show_prob: bool = False,
         show_actions: bool = False,
         prob_size: float = None,
-        color_probs: bool = True
+        color_probs: bool = True,
+        show_colorbar: bool = True,
+        title: str = None
     ) -> None:
         """
         Plots the grid world environment, optionally displaying the value function, policy, action probabilities, and other elements.
@@ -1118,6 +1123,8 @@ class GridWorldPlotter:
             show_actions (bool, optional): Whether to display deterministic actions as arrows. Defaults to False.
             prob_size (float, optional): The font size for displaying action probabilities. Defaults to None.
             color_probs (bool, optional): Whether to visualize action probabilities with color-coded polygons. Defaults to True.
+            show_colorbar (bool, optional): Whether to show the colorbar associated to the actions or rewards. Defaults to True.
+            title (str, optional): The title to be added to the plot. Defaults to None
 
         Returns:
             None
@@ -1135,9 +1142,12 @@ class GridWorldPlotter:
             self.__plot_grid_overlays(
                 ax, divider,
                 show_value_function, policy, multiple_actions,
-                show_prob, show_actions, prob_size, color_probs
+                show_prob, show_actions, prob_size, color_probs, show_colorbar
             )
 
+        if title:
+            plt.title(title)
+        
         if savefig:
             if save_title is None:
                 save_title = f"{'deterministic' if self.gridworld.deterministic else 'stochastic'}_policy"
@@ -1267,7 +1277,7 @@ class GridWorldPlotter:
         return next(k for k, v in self.environment.custom_grid.state_index_mapper.items() if v == state), state
 
 
-    def __visualize_reward_mdp_lmdptdr(self, ax: matplotlib.axes.Axes, cmap_name: str = "jet") -> None:
+    def __visualize_reward_mdp_lmdptdr(self, ax: matplotlib.axes.Axes, cmap_name: str = "jet", show_colorbar: bool = True) -> None:
         """
         Visualizes the reward structure in MDP or LMDP_TDR environments.
 
@@ -1275,6 +1285,7 @@ class GridWorldPlotter:
         for both MDP and LMDP_TDR environments.
 
         Args:
+            show_colorbar (bool, optional): Whether to show the colorbar indicating the values of each reward or not. Defaults to True.
             ax (matplotlib.axes.Axes): The axis on which the reward visualization will be drawn.
             cmap_name (str, optional): The name of the colormap used to visualize the reward values. Defaults to "jet".
 
@@ -1319,13 +1330,14 @@ class GridWorldPlotter:
                 triangle = plt.Polygon(verts, color=cmap(norm(reward)), alpha=1)
                 ax.add_patch(triangle)
 
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array([])
-        cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
-        cbar.set_label("Reward")
+        if show_colorbar:
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm.set_array([])
+            cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+            cbar.set_label("Reward")
 
 
-    def __visualize_reward_lmdp(self, ax: matplotlib.axes.Axes, cmap_name: str = "jet") -> None:
+    def __visualize_reward_lmdp(self, ax: matplotlib.axes.Axes, cmap_name: str = "jet", show_colorbar: bool = True) -> None:
         """
         Visualizes the reward structure in LMDP environments.
 
@@ -1333,6 +1345,7 @@ class GridWorldPlotter:
         with colors based on the reward values for each state.
 
         Args:
+            show_colorbar (bool, optional): Whether to show the colorbar indicating the values of each reward or not. Defaults to True.
             ax (matplotlib.axes.Axes): The axis on which the reward visualization will be drawn.
             cmap_name (str, optional): The name of the colormap used to visualize the reward values. Defaults to "jet".
 
@@ -1350,13 +1363,14 @@ class GridWorldPlotter:
             reward = self.gridworld.R[state_idx]
             ax.add_patch(plt.Rectangle((x - 0.5, y - 0.5), 1, 1, color=cmap(norm(reward))))
 
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array([])
-        cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
-        cbar.set_label("Reward")
+        if show_colorbar:
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm.set_array([])
+            cbar = plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+            cbar.set_label("Reward")
     
     
-    def visualize_reward(self, ax: matplotlib.axes.Axes = None, savefig: bool = False) -> None:
+    def visualize_reward(self, ax: matplotlib.axes.Axes = None, show_colorbar: bool = True, savefig: bool = False) -> None:
         """
         Visualizes the reward structure of the grid world environment.
 
@@ -1365,6 +1379,7 @@ class GridWorldPlotter:
         can either be displayed or saved as an image file.
 
         Args:
+            show_colorbar (bool, optional): Whether to show the colorbar indicating the values of each reward or not. Defaults to True.
             savefig (bool, optional): Whether to save the generated plot as an image file. Defaults to False.
             axes (matplotlib.axses.Axes, optional): An axis where the reward should be plotted. Defaults to None.
 
@@ -1380,15 +1395,24 @@ class GridWorldPlotter:
 
         self.plot_base_grid(ax, grid_positions, color_start=False, color_goal=False)
         
+        title = ""
         if isinstance(self.gridworld, GridWorldLMDP):
-            self.__visualize_reward_lmdp(ax)
-        elif isinstance(self.gridworld, GridWorldMDP) or isinstance(self.gridworld, GridWorldLMDP_TDR):
-            self.__visualize_reward_mdp_lmdptdr(ax)
+            title = f"{self.environment.title} state-dependent LMDP"
+            self.__visualize_reward_lmdp(ax, show_colorbar=show_colorbar)
+        elif isinstance(self.gridworld, GridWorldMDP):
+            title = f"{self.environment.title} MDP"
+            self.__visualize_reward_mdp_lmdptdr(ax, show_colorbar=show_colorbar)
+        elif isinstance(self.gridworld, GridWorldLMDP_TDR):
+            title = f"{self.environment.title} transition-dependent LMDP"
+            self.__visualize_reward_mdp_lmdptdr(ax, show_colorbar=show_colorbar)
+        else:
+            raise TypeError("Invalid class type")
         
         if create_ax:
-            plt.title(self.environment.title)
+            plt.title(title)
         
             if savefig:
-                plt.savefig(f"assets/reward_{self.environment.title}_{type(self.gridworld).__name__}.png", dpi=300, bbox_inches="tight")
+                save_title = f"reward_{self.environment.title.replace(' ', '_')}_{type(self.gridworld).__name__}.png"
+                plt.savefig(os.path.join(self.__out_path, save_title), dpi=300, bbox_inches="tight")
             else:
                 plt.show()

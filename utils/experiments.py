@@ -17,6 +17,7 @@ from scipy.sparse import csr_matrix
 from sklearn.metrics import r2_score
 from typing import Literal
 from tqdm import tqdm
+from utils.utils import kl_divergence, plot_colorbar
 
 def visualize_stochasticity_rewards_embedded_lmdp(state: int, map: Map, num_actions=3, save_fig: bool = True):
     """
@@ -180,7 +181,8 @@ def lmdp_tdr_advantage(save_fig: bool = True):
     map = Maps.CLIFF_WALKING
     mdp = GridWorldMDP(
         map=map,
-        behaviour="deterministic",
+        behaviour="stochastic",
+        stochastic_prob=1,
         temperature=1
     )
     lmdp = GridWorldLMDP(
@@ -192,6 +194,8 @@ def lmdp_tdr_advantage(save_fig: bool = True):
         sparse_optimization=False
     )
     
+    lmdp_tdr.R[36, :] = -5
+    lmdp_tdr.R[37:47, :] = -50
     # Risky states are those between the index 25 and 34 (both included)
     for i in range(25, 34 + 1):
         mdp.R[i,:] = -20
@@ -205,20 +209,93 @@ def lmdp_tdr_advantage(save_fig: bool = True):
     lmdp_tdr.compute_value_function()
     
     output_dir = "LMDP_TDR_advantage"
-    
-    plotter = GridWorldPlotter(
+        
+    mdp_plotter = GridWorldPlotter(
         mdp,
         name=output_dir
     )
     
+    lmdp_plotter = GridWorldPlotter(
+        lmdp,
+        name=output_dir
+    )
+    
+    lmdp_tdr_plotter = GridWorldPlotter(
+        lmdp_tdr,
+        name=output_dir
+    )
+    
     # 1. Save the MAP
-    plotter.plot_grid_world(
+    mdp_plotter.plot_grid_world(
         show_value_function=False,
         show_prob=False,
         show_actions=False,
-        savefig=True,
+        savefig=save_fig,
         save_title="WALKING_CLIFF"
     )
+    
+    # 2. Save the rewards of each of the models
+    mdp_plotter.visualize_reward(savefig=save_fig, show_colorbar=False)
+    lmdp_plotter.visualize_reward(savefig=save_fig, show_colorbar=False)
+    lmdp_tdr_plotter.visualize_reward(savefig=save_fig, show_colorbar=False)
+    
+    # 3. Save the policies of each of the models
+    show_prob = False
+    show_actions = True
+    show_value_function = False
+    
+    mdp_plotter.plot_grid_world(
+        show_value_function=show_value_function,
+        show_prob=show_prob,
+        show_actions=show_actions,
+        savefig=save_fig,
+        save_title="mdp_policy",
+        show_colorbar=False,
+        title="CLIFF WALKING MDP"
+    )
+    
+    lmdp_plotter.plot_grid_world(
+        show_value_function=show_value_function,
+        show_prob=show_prob,
+        show_actions=show_actions,
+        savefig=save_fig,
+        save_title="lmdp_policy",
+        show_colorbar=False,
+        title="CLIFF WALKING state-dependent LMDP"
+    )
+    
+    lmdp_tdr_plotter.plot_grid_world(
+        show_value_function=show_value_function,
+        show_prob=show_prob,
+        show_actions=show_actions,
+        savefig=save_fig,
+        save_title="lmdptdr_policy",
+        show_colorbar=False,
+        title="CLIFF WALKING transition-dependent LMDP"
+    )
+    
+    mdp_policy = mdp.to_LMDP_policy().astype(np.float64)
+    print(f"KL(mdp, lmdp_tdr) = {kl_divergence(mdp_policy, lmdp_tdr.policy)}")
+    print(f"KL(mdp, lmdp) = {kl_divergence(mdp_policy, lmdp.policy)}")
+    
+    # 4. Plot a colorbar for the reward and for the action probabilities
+    plot_colorbar(
+        cmap_name="jet",
+        label="Reward",
+        min=min(np.min(mdp.R), np.min(lmdp.R), np.min(lmdp_tdr.R)),
+        max=max(np.max(mdp.R), np.max(lmdp.R), np.max(lmdp_tdr.R)),
+        output_dir=os.path.join(os.path.join("assets", output_dir), "reward_colorbar.png"),
+        vertical=False
+    )
+    plot_colorbar(
+        cmap_name="Greens",
+        label="Action Probabilities",
+        min=0,
+        max=1,
+        output_dir=os.path.join(os.path.join("assets", output_dir), "actions_colorbar.png"),
+        vertical=False
+    )
+    
     
     diff_mdp_lmdp = round(np.linalg.norm(mdp.V - lmdp.V), 4)
     diff_mdp_lmdptdr = round(np.linalg.norm(mdp.V - lmdp_tdr.V), 4)
@@ -739,12 +816,6 @@ def policies_comparison(
     zoom: bool = False,
     zoom_size: int = 50
 ):
-    def kl_divergence(P: np.ndarray, Q: np.ndarray, epsilon: float = 1e-10) -> float:
-    
-        Q_safe = np.clip(Q, epsilon, None)
-        Q_safe = Q_safe / np.sum(Q_safe, axis=1, keepdims=True)
-        
-        return np.mean(np.sum(P * (np.log(P + epsilon) - np.log(Q_safe)), axis=1))
 
     def extract_diagonal_window(matrix: np.ndarray, size: int) -> np.ndarray:
         n = matrix.shape[0]

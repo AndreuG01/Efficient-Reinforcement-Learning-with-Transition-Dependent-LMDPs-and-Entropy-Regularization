@@ -1,5 +1,7 @@
 import numpy as np
 from .coloring import TerminalColor
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 def print_overflow_message(values_new: np.ndarray, values_old: np.ndarray, dtype: np.dtype, temperature: float, target_value: float = np.inf):
     warning = TerminalColor.colorize("WARNING", "red", bold=True)
@@ -41,3 +43,29 @@ def print_overflow_message(values_new: np.ndarray, values_old: np.ndarray, dtype
     message = "\n".join([border] + [f"\t\t\t{TerminalColor.colorize('*', 'grey')} {line}{' ' * (max_width - len(TerminalColor.strip(line)) - 4)} {TerminalColor.colorize('*', 'grey')}" for line in lines] + [border])
 
     print(message)
+
+
+def kl_divergence(P: np.ndarray, Q: np.ndarray, epsilon: float = 1e-10) -> float:
+    
+    Q_safe = np.clip(Q, epsilon, None)
+    Q_safe = Q_safe / np.sum(Q_safe, axis=1, keepdims=True)
+    
+    return np.mean(np.sum(P * (np.log(P + epsilon) - np.log(Q_safe)), axis=1))
+
+
+def plot_colorbar(cmap_name: str, label: str, min: float, max: float, output_dir: str, vertical: bool = False, save_fig: bool = True):
+    cmap = plt.get_cmap(cmap_name)
+    plt.rcParams.update({"text.usetex": True})
+    fig, ax = plt.subplots(figsize=(6, 0.1))
+
+
+    norm = plt.Normalize(vmin=min, vmax=max)
+    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+
+    cbar = plt.colorbar(sm, cax=ax, orientation="vertical" if vertical else "horizontal")
+    cbar.set_label(label)
+    if save_fig:
+        plt.savefig(output_dir, dpi=300, bbox_inches="tight")
+    else:
+        plt.show()

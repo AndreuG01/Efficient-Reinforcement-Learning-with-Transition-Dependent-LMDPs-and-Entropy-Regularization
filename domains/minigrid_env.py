@@ -488,7 +488,7 @@ class MinigridMDP(MDP):
 
     
     def to_LMDP_policy(self):    
-        lmdp_policy = np.einsum("sa,sap->sp", self.policy, self.P)
+        lmdp_policy = np.einsum("sa,sap->sp", self.policy[:self.num_non_terminal_states, :], self.P)
         
         assert np.all(np.sum(lmdp_policy, axis=1))
         
