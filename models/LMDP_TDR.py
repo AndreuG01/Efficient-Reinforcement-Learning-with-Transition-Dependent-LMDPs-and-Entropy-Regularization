@@ -11,6 +11,7 @@ import models.LMDP
 from utils.coloring import TerminalColor
 from utils.utils import print_overflow_message
 from .utils import compare_models
+from utils.stats import ModelBasedAlgsStats
 
 class LMDP_TDR:
     def __init__(
@@ -138,7 +139,7 @@ class LMDP_TDR:
         return probs
 
     
-    def power_iteration(self, epsilon=1e-10, temp: float = None) -> tuple[np.ndarray, bool]:
+    def power_iteration(self, epsilon=1e-10, temp: float = None) -> tuple[np.ndarray, ModelBasedAlgsStats, bool]:
         if temp is not None:
             temperature = temp
         else:
@@ -158,6 +159,11 @@ class LMDP_TDR:
         iterations = 0
         delta = 0
         overflow = False
+        
+        start_time = time.time()
+        Vs = []
+        deltas = []
+        
         while True:
             z_new = G @ z
             z_new = np.concatenate((z_new, np.ones((self.num_terminal_states), dtype=self.dtype)))
@@ -166,8 +172,10 @@ class LMDP_TDR:
                 overflow = True
                 print_overflow_message(z_new, z, self.dtype, temperature)
                 break
-           
+            
+            Vs.append(self.get_value_function(z_new, temp=temp))
             delta = np.linalg.norm(self.get_value_function(z_new, temp=temp) - self.get_value_function(z, temp=temp), ord=np.inf)
+            deltas.append(delta)
             
             if iterations % 1000 == 0:
                 self._print(f"Iter: {iterations}. Delta: {delta}")
@@ -178,9 +186,11 @@ class LMDP_TDR:
             z = z_new
             iterations += 1
         
+        elapsed_time = time.time() - start_time
+        
         self.z = z
         self._print(f"Converged in {iterations} iterations")
-        return z, overflow
+        return z, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "PI"), overflow
         
     
     def get_value_function(self, z: np.ndarray = None, temp: float = None) -> np.ndarray:
@@ -201,7 +211,7 @@ class LMDP_TDR:
     def compute_value_function(self, temp: float = None):
         # if not hasattr(self, "z"):
         self._print("Will compute power iteration")
-        self.power_iteration(temp=temp)
+        _, self.stats, _ = self.power_iteration(temp=temp)
         
         self.V = self.get_value_function(temp=temp)
         

@@ -638,7 +638,7 @@ class MDP(ABC):
         
         stats.end_time()
         
-        z, overflow = lmdp_tdr.power_iteration()
+        z, _, overflow = lmdp_tdr.power_iteration()
         
         if not overflow:
             V_lmdp = lmdp_tdr.get_value_function(z)
@@ -719,7 +719,7 @@ class MDP(ABC):
         
         stats.end_time()
         
-        z, overflow = lmdp_tdr.power_iteration()
+        z, _, overflow = lmdp_tdr.power_iteration()
         
         if not overflow:
             V_lmdp = lmdp_tdr.get_value_function(z)
@@ -809,7 +809,7 @@ class MDP(ABC):
         lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
         lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
         
-        z, overflow = lmdp_tdr.power_iteration()
+        z, _, overflow = lmdp_tdr.power_iteration()
         if not overflow:
             V_lmdp = lmdp_tdr.get_value_function(z)
             V_mdp, _, _ = self.value_iteration()
@@ -849,7 +849,7 @@ class MDP(ABC):
             lmdp_tdr.R[state] = x + lmdp_tdr.lmbda * np.log(len_support)
         
         
-        z, overflow = lmdp_tdr.power_iteration()
+        z, _, overflow = lmdp_tdr.power_iteration()
         
         if not overflow:
             V_lmdp = lmdp_tdr.get_value_function(z)
