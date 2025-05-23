@@ -976,4 +976,125 @@ def policies_comparison(
         plt.show()
         
         
+def mdp_er_motivation(save_fig: bool = True):
+    
+    def find_best_actions(model: GridWorldMDP | GridWorldLMDP_TDR):
+        best_actions = {}
+        for state_idx in range(model.num_states):
+            state = model.environment.custom_grid.state_index_mapper[state_idx]
+            best_action = 0
+            best_dist = 1e10
+            best_next_state = None
+            best_is_terminal = None
+            for action in range(model.num_actions):
+                next_state, _, terminal = model.environment.custom_grid.move(state, action)
+                dist = model.environment.custom_grid.shortest_path_length_to_goal(next_state)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_action = action
+                    best_next_state = next_state
+                    best_is_terminal = terminal
+            
+            if type(model) == GridWorldMDP:
+                best_actions[state_idx] = (best_action, best_dist)
+            else:
+                # We need to conver the best action to the next state
+                if best_is_terminal:
+                    best_actions[state_idx] = (model.environment.custom_grid.terminal_states.index(best_next_state), best_dist)
+                else:
+                    best_actions[state_idx] = (model.environment.custom_grid.states.index(best_next_state), best_dist)
+            
+        return best_actions
 
+    def new_reward_mdp(best_movements: dict, shape: tuple[int, int], mdp: bool = True):
+        new_r = np.full(shape=shape, fill_value=-50)
+        # new_r = np.full(shape=shape, fill_value=min([val[1] * -1 for val in best_movements.values()]))
+        for state in range(new_r.shape[0]):
+            action, cost = best_movements[state]
+            new_r[state, action] = cost * -1 - 1
+        
+        if mdp:
+            new_r[-1, :] = 0 # Absorbing terminal states.
+        return new_r
+    
+    normal_mdp = GridWorldMDP(
+        map=Maps.MAZE,
+        temperature=0
+    )
+    mdp_er = GridWorldMDP(
+        map=Maps.MAZE,
+        temperature=3
+    )
+    
+    lmdp_tdr= GridWorldLMDP_TDR(
+        map=Maps.MAZE,
+        lmbda=3
+    )
+    
+    best_normal_mdp = find_best_actions(normal_mdp)
+    normal_mdp.R = new_reward_mdp(best_normal_mdp, shape=normal_mdp.R.shape)
+    
+    best_mdp_er = find_best_actions(mdp_er)
+    mdp_er.R = new_reward_mdp(best_mdp_er, shape=mdp_er.R.shape)
+    
+    best_lmdp = find_best_actions(lmdp_tdr)
+    lmdp_tdr.R = new_reward_mdp(best_lmdp, shape=lmdp_tdr.R.shape, mdp=False)
+    lmdp_tdr.R[69, 70] = 0
+    lmdp_tdr.R[60, 70] = 0
+    
+    mdp_plotter = GridWorldPlotter(
+        normal_mdp,
+        name="MDP_ER_motivation"
+    )
+            
+    lmdp_plotter = GridWorldPlotter(
+        lmdp_tdr,
+        name="MDP_ER_motivation"
+    )
+    
+    mdp_plotter.visualize_reward(savefig=save_fig, show_colorbar=False, title="MDP Reward")
+    lmdp_plotter.visualize_reward(savefig=save_fig, show_colorbar=False, title="transition-dependent LMDP Reward")
+    
+    plot_colorbar("jet", "Reward", -50, 0, output_dir="assets/MDP_ER_motivation/colorbar.png", vertical=True, save_fig=save_fig)
+    
+    normal_mdp.compute_value_function()
+    mdp_er.compute_value_function()
+    lmdp_tdr.compute_value_function()
+    
+    print(f"MSE(MDP, LMDP) = {np.mean(np.square(normal_mdp.V - lmdp_tdr.V))}")
+    print(f"MSE(MDP_ER, LMDP) = {np.mean(np.square(mdp_er.V - lmdp_tdr.V))}")
+    
+    plt.rcParams.update({"text.usetex": True})
+    
+    palette = CustomPalette()
+    
+    fig = plt.figure(figsize=(10, 5))
+    plt.plot(normal_mdp.V, label=fr"MDP, $\beta = {normal_mdp.temperature}$", color=palette[17])
+    plt.plot(mdp_er.V, label=fr"MDP, $\beta = {mdp_er.temperature}$", color=palette[3])
+    plt.plot(lmdp_tdr.V, label=f"transition-dependent LMDP, $\lambda = {lmdp_tdr.lmbda}$", color=palette[5])
+    plt.title("Value functions for the Maze problem")
+    plt.xlabel("State index")
+    plt.ylabel("$V(s)$")
+    plt.grid()
+    plt.legend(loc="lower right")
+    
+    out_dir = "MDP_ER_motivation"
+    if not os.path.exists(os.path.join("assets", out_dir)):
+        os.mkdir(out_dir)
+    
+    if save_fig:
+        plt.savefig(os.path.join(os.path.join("assets", out_dir), "value_functions.png"), dpi=300, bbox_inches="tight")
+    else:
+        plt.show()
+    
+
+    plotter = GridWorldPlotter(
+        normal_mdp,
+        name=out_dir
+    )
+    
+    plotter.plot_grid_world(
+        savefig=save_fig,
+        save_title="maze_map",
+        title="MAZE map"
+    )

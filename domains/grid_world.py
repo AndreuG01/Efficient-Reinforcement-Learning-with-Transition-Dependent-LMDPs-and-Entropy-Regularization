@@ -1370,7 +1370,7 @@ class GridWorldPlotter:
             cbar.set_label("Reward")
     
     
-    def visualize_reward(self, ax: matplotlib.axes.Axes = None, show_colorbar: bool = True, savefig: bool = False) -> None:
+    def visualize_reward(self, ax: matplotlib.axes.Axes = None, show_colorbar: bool = True, savefig: bool = False, title: str = None) -> None:
         """
         Visualizes the reward structure of the grid world environment.
 
@@ -1395,21 +1395,24 @@ class GridWorldPlotter:
 
         self.plot_base_grid(ax, grid_positions, color_start=False, color_goal=False)
         
-        title = ""
+        new_title = ""
         if isinstance(self.gridworld, GridWorldLMDP):
-            title = f"{self.environment.title} state-dependent LMDP"
+            new_title = f"{self.environment.title} state-dependent LMDP"
             self.__visualize_reward_lmdp(ax, show_colorbar=show_colorbar)
         elif isinstance(self.gridworld, GridWorldMDP):
-            title = f"{self.environment.title} MDP"
+            new_title = f"{self.environment.title} MDP"
             self.__visualize_reward_mdp_lmdptdr(ax, show_colorbar=show_colorbar)
         elif isinstance(self.gridworld, GridWorldLMDP_TDR):
-            title = f"{self.environment.title} transition-dependent LMDP"
+            new_title = f"{self.environment.title} transition-dependent LMDP"
             self.__visualize_reward_mdp_lmdptdr(ax, show_colorbar=show_colorbar)
         else:
             raise TypeError("Invalid class type")
         
         if create_ax:
-            plt.title(title)
+            if title:
+                plt.title(title)
+            else:
+                plt.title(new_title)
         
             if savefig:
                 save_title = f"reward_{self.environment.title.replace(' ', '_')}_{type(self.gridworld).__name__}.png"

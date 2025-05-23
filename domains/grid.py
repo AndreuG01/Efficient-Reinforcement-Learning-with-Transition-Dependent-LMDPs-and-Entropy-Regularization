@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 import time
 from utils.coloring import TerminalColor
+from collections import deque
 
 class MinigridActions:
     """
@@ -530,6 +531,29 @@ class CustomGrid:
                 
         return -1
         
+    
+    def shortest_path_length_to_goal(self, state: State) -> int:
+        """
+        Returns the length of the shortest path from the given state to any goal state.
+        If no path exists, returns -1.
+        """
+
+        visited = set()
+        queue = deque([(state, 0)])
+
+        while queue:
+            current_state, dist = queue.popleft()
+            if self.is_terminal(current_state):
+                return dist
+            if current_state in visited:
+                continue
+            visited.add(current_state)
+            for action in self.allowed_actions:
+                next_state, valid, _ = self.move(current_state, action)
+                if valid and next_state not in visited:
+                    queue.append((next_state, dist + 1))
+        return -1
+    
     
     def get_num_states(self) -> int:
         """

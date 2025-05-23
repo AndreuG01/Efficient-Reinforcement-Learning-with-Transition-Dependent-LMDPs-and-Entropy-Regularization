@@ -37,23 +37,17 @@ def stitch_images_vertical(image_paths: list[str]):
     return new_img
 
 
-RESULTS_PATH = "assets/LMDP_TDR_advantage"
-base_path = os.path.join("assets/LMDP_TDR_advantage")
+RESULTS_PATH = "assets/MDP_ER_motivation"
+# base_path = os.path.join("assets/LMDP_TDR_advantage")
+base_path = os.path.join("assets/MDP_ER_motivation")
 
 image_files = [
-    f"mdp_policy.png",
-    f"lmdp_policy.png",
-    f"lmdptdr_policy.png",
+    f"maze_map.png",
+    f"reward_Maze_GridWorldLMDP_TDR.png",
+    f"reward_Maze_GridWorldMDP.png",
+    f"colorbar.png",   
 ]
     
 result = stitch_images_horizontal([os.path.join(base_path, x) for x in image_files])
-result.save(os.path.join(RESULTS_PATH, f"joined_policies.png"))
+result.save(os.path.join(RESULTS_PATH, f"map_rewards.png"))
     
-    
-    
-image_files = [
-    f"joined_policies.png",
-    f"actions_colorbar.png",
-]
-result = stitch_images_vertical([os.path.join(base_path, x) for x in image_files])
-result.save(os.path.join(RESULTS_PATH, f"joined_policies.png"))

@@ -56,7 +56,7 @@ def kl_divergence(P: np.ndarray, Q: np.ndarray, epsilon: float = 1e-10) -> float
 def plot_colorbar(cmap_name: str, label: str, min: float, max: float, output_dir: str, vertical: bool = False, save_fig: bool = True):
     cmap = plt.get_cmap(cmap_name)
     plt.rcParams.update({"text.usetex": True})
-    fig, ax = plt.subplots(figsize=(6, 0.1))
+    fig, ax = plt.subplots(figsize=(6, 0.1) if not vertical else (0.3, 6))
 
 
     norm = plt.Normalize(vmin=min, vmax=max)

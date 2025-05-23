@@ -13,7 +13,7 @@ import numpy as np
 from utils.maps import Maps, Map
 from utils.benchmarks import benchmark_value_iteration, benchmark_parallel_p, benchmark_lmdp2mdp_embedding, benchmark_mdp2lmdp_embedding, benchmark_iterative_vectorized_embedding
 from custom_palette import CustomPalette
-from utils.experiments import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table, generate_parallel_p_table, different_gammas_plot, different_temperature_plots, regularized_embedding_error_plot, embedding_value_function_reg, embedding_errors_different_temp, policies_comparison
+from utils.experiments import visualize_stochasticity_rewards_embedded_lmdp, compare_value_function_by_stochasticity, lmdp_tdr_advantage, uniform_assumption_plot, generate_vi_pi_table, generate_parallel_p_table, different_gammas_plot, different_temperature_plots, regularized_embedding_error_plot, embedding_value_function_reg, embedding_errors_different_temp, policies_comparison, mdp_er_motivation
 from typing import Literal
 import time
 
@@ -141,4 +141,4 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
 
 if __name__ == "__main__":
     
-    uniform_assumption_plot(save_fig=False)
+    mdp_er_motivation(save_fig=True)
