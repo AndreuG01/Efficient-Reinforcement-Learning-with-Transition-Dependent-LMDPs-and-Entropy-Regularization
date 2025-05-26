@@ -2,6 +2,7 @@ import matplotlib.cm as cm
 from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.colorbar import ColorbarBase
 import numpy as np
 from custom_palette import CustomPalette
 from domains.minigrid_env import MinigridMDP, MinigridLMDP, MinigridLMDP_TDR
@@ -139,14 +140,19 @@ def compare_value_function_by_stochasticity(map: Map, save_fig: bool = True):
     - map (optional): The environment map, if applicable.
     - grid_size (int, default=3): The size of the grid for the MDP environment.
     """
-    palette = CustomPalette()
     map_name = map.name
     
     plt.rcParams.update({"text.usetex": True})
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    linewidth = 0.5
+    fig, axes = plt.subplots(1, 3, figsize=(10, 5), gridspec_kw={"width_ratios": [1, 1, 0.03]})
+    ax_mdp, ax_lmdp, ax_cbar = axes
+    
+    linewidth = 0.6
+    cmap = cm.get_cmap("jet")
+    norm = Normalize(vmin=0.1, vmax=0.9)
 
-    for i, stochasticity in enumerate(np.arange(0.1, 1.0, 0.1)):
+    for stochasticity in np.arange(0.1, 1.0, 0.1):
+        color = cmap(norm(stochasticity))
+        
         mdp = MinigridMDP(
             map=map,
             allowed_actions=MinigridActions.get_actions(),
@@ -156,19 +162,28 @@ def compare_value_function_by_stochasticity(map: Map, save_fig: bool = True):
         mdp.compute_value_function()
         embedded_lmdp, _ = mdp.to_LMDP()
         embedded_lmdp.compute_value_function()
-        axes[0].plot([i for i in range(mdp.num_states)], mdp.V, label=f"$p = {round(stochasticity, 1)}$, Iter: ${mdp.stats.iterations}$", linewidth=linewidth, color=palette[i])
-        axes[1].plot([i for i in range(embedded_lmdp.num_states)], embedded_lmdp.V, linewidth=linewidth, color=palette[i])
+        
+        ax_mdp.plot(range(mdp.num_states), mdp.V, linewidth=linewidth, color=color)
+        ax_lmdp.plot(range(embedded_lmdp.num_states), embedded_lmdp.V, linewidth=linewidth, color=color)
     
-    axes[0].set_xlabel("State $s$")
-    axes[0].set_ylabel("$V_{MDP}^*(s)$")
-    axes[0].legend()
-    axes[1].set_xlabel("State $s$")
-    axes[1].set_ylabel("$V_{LMDP}^*(s)$")
+    # Format plots
+    ax_mdp.grid()
+    ax_mdp.set_xlabel("State $s$")
+    ax_mdp.set_ylabel("$V_{\\mathcal{M}}(s)$")
     
-    plt.suptitle(f"Value function comparison of MDP and its embedded LMDP with different stochasticity $p$\nMap: {map_name}")
+    ax_lmdp.grid()
+    ax_lmdp.set_xlabel("State $s$")
+    ax_lmdp.set_ylabel("$V_{\\mathcal{L}}(s)$")
     
+    # Add colorbar
+    cb = ColorbarBase(ax_cbar, cmap=cmap, norm=norm)
+    cb.set_label("Stochasticity $p$", rotation=90)
+
+    plt.suptitle(f"Value function comparison of MDP $\\mathcal{{M}}$ and its embedded LMDP $\\mathcal{{L}}$\nwith different stochasticity $p$\nMap: {map_name}")
+    
+    plt.tight_layout()
     if save_fig:
-        plt.savefig(f"assets/stochasticity_comparison_{map_name}.png", dpi=300)
+        plt.savefig(f"assets/stochasticity_comparison_{map_name.replace(' ', '_')}.png", dpi=300, bbox_inches="tight")
     else:
         plt.show()
 
