@@ -234,7 +234,8 @@ class CustomMinigridEnv(MiniGridEnv):
     
                     if save_gif:
                         frame = self.render()
-                        frames.append(self._add_frame_with_title(frame, game_title))
+                        # frames.append(self._add_frame_with_title(frame, game_title))
+                        frames.append(Image.fromarray(frame))
                     _, _, done, _, info = self.step(action)
                     
                     actions += 1
@@ -249,7 +250,8 @@ class CustomMinigridEnv(MiniGridEnv):
                 if save_gif:
                     # Add the last frame with title
                     frame = self.render()
-                    frames.append(self._add_frame_with_title(frame, game_title))
+                    # frames.append(self._add_frame_with_title(frame, game_title))
+                    frames.append(Image.fromarray(frame))
         
         self._print(game_stats.GAME_INFO)
         if not save_gif:
@@ -269,6 +271,59 @@ class CustomMinigridEnv(MiniGridEnv):
     def _print(self, msg, end: str = "\n"):
         if self.verbose:
             print(msg, end=end)
+    
+    
+    def visualize_state(self, state: State, save_path: str = None, title: str = None) -> Image:
+        """
+        Visualizes a given state by rendering the environment at that state.
+
+        Args:
+            state (State): The state to visualize.
+            title (str): Optional title to overlay on the rendered image.
+            show (bool): Whether to show the image or just return it.
+
+        Returns:
+            Image: The rendered image of the environment at the specified state.
+        """
+        self.grid = Grid(self.custom_grid.size_y, self.custom_grid.size_x)
+        self.grid.wall_rect(0, 0, self.custom_grid.size_y, self.custom_grid.size_x)
+        
+        # Generate the walls
+        for pos in self.custom_grid.positions[CellType.WALL]:
+            self.grid.set(pos[0], pos[1], Wall())
+        
+        first_goal = self.custom_grid.goal_pos[0]
+        self.put_obj(Goal(), first_goal[0], first_goal[1])
+        for goal_state in self.custom_grid.goal_pos:
+            if goal_state[0] != first_goal[0] and goal_state[1] != first_goal[1]:
+                self.put_obj(Goal(), goal_state[0], goal_state[1])
+        
+        for pos, object in state.layout.items():
+            if object is not None:
+                if object.type == "door":
+                    self.grid.set(pos[1], pos[0], Door(object.color, is_open=state.properties[str(object)], is_locked=True))
+                elif object.type == "key":
+                    self.grid.set(pos[1], pos[0], Key(object.color))
+        
+        for pos in self.custom_grid.positions[CellType.CLIFF]:
+            self.put_obj(Lava(), pos[0], pos[1])
+        
+        # Place the agent
+        self.agent_pos = (state.x, state.y)
+        self.agent_dir = state.properties["orientation"]
+        
+        
+        frame = self.render()
+        
+        if title is not None:
+            img = self._add_frame_with_title(frame, title)
+        else:
+            img = Image.fromarray(frame)
+        
+        if save_path:
+            img.save(save_path)
+            
+        return img
 
 
 class MinigridMDP(MDP):
