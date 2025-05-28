@@ -281,7 +281,7 @@ class EmbeddingStats:
             tuple: A tuple containing the dense lambdas and the dense errors.
         """
         # sorted_lambdas, sorted_errors = zip(*sorted(zip(self.ternary_search_lambdas, self.ternary_search_errors)))
-        sorted_lambdas, sorted_errors = zip(*sorted(zip((self.ternary_search_lambdas + self.ternary_search_lefts + self.ternary_search_rights), (self.ternary_search_errors + self.ternary_search_errors_lefts + self.ternary_search_errors_rights))))
+        sorted_lambdas, sorted_errors = zip(*sorted(zip((self.linear_search_lambdas[-3:] + self.ternary_search_lambdas + self.ternary_search_lefts + self.ternary_search_rights), (self.linear_search_errors[-3:] + self.ternary_search_errors + self.ternary_search_errors_lefts + self.ternary_search_errors_rights))))
         unique = {}
         for lmbda, error in zip(sorted_lambdas, sorted_errors):
             if lmbda not in unique: unique[lmbda] = error
@@ -296,7 +296,7 @@ class EmbeddingStats:
         return dense_lambdas, dense_errors
     
     
-    def plot_stats(self, save_fig: bool = True):
+    def plot_stats(self, save_fig: bool = True, save_path: str = None, include_time: bool = False):
         """
         Plot the statistics of the embedding process.
         Args:
@@ -305,7 +305,9 @@ class EmbeddingStats:
         
         plt.rcParams.update({"text.usetex": True})
         fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        plt.suptitle(f"Optimal temperature $\lambda$ selection in MDP-LMDP embedding. Time taken: {round(self.get_total_time(), 3)}s")
+        title = f"Optimal temperature $\lambda$ selection in MDP-LMDP embedding."
+        title += f" Time taken: {round(self.get_total_time(), 3)}s" if include_time else ""
+        plt.suptitle(title)
         
         fig.supxlabel("$\lambda$")
         fig.supylabel("Error")
@@ -323,7 +325,8 @@ class EmbeddingStats:
         if len(self.ternary_search_lambdas) >= 2:
             dense_lambdas, dense_errors = self._interpolate_errors()
             axes[1].plot(dense_lambdas, dense_errors, linestyle="--", color="gray", label="Interpolated error")
-
+        plt.xlim((self.linear_search_lambdas[-2] - 0.25, dense_lambdas[-1] + 0.75))
+        axes[1].axvspan(self.ternary_search_lefts[0], self.ternary_search_rights[0], color="gray", alpha=0.2)
         
         min_delta = 0.05
         last_annotated = None
@@ -335,7 +338,8 @@ class EmbeddingStats:
         axes[1].legend()
         
         if save_fig:
-            plt.savefig(f"assets/embedding_stats.png", dpi=300, bbox_inches="tight")
+            save_path = save_path if save_path is not None else "assets/embedding_stats.png"
+            plt.savefig(save_path, dpi=300, bbox_inches="tight")
         else:
             plt.show()
     

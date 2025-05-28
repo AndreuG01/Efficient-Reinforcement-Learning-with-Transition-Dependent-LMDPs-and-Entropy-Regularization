@@ -284,7 +284,7 @@ class MDP(ABC):
             Vs.append(V_new)
             delta = np.linalg.norm(V - V_new, np.inf)
             
-            if iterations % 1000 == 0:
+            if iterations % 500 == 0:
                 self._print(f"Iter: {iterations}. Delta: {delta}")
             
             
@@ -529,7 +529,7 @@ class MDP(ABC):
         """
         start_lmbda = max(0.05, self.temperature)
         lmbda = start_lmbda
-        step = 2
+        step = 1
 
         tried = []
         errors = []

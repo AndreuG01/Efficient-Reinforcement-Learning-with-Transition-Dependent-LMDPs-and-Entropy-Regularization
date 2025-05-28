@@ -189,9 +189,19 @@ if __name__ == "__main__":
     # )
     # policies_comparison(mdp, save_fig=True, zoom=True, zoom_size=2000)
     # exit()
+    mdp = MinigridMDP(
+        map=Maps.CHALLENGE_DOOR,
+        allowed_actions=MinigridActions.get_actions(),
+        temperature=1.0,
+        behaviour="stochastic",
+        stochastic_prob=0.5
+    )
     
+    lmdp, stats, _ = mdp.to_LMDP_TDR()
     
-    mse_lambda(Maps.CHALLENGE_DOOR, 2, 0.5)
+    # stats.plot_stats(save_path="assets/challenge_door_report_embedding_stats_1.png", save_fig=True)
+    
+    policies_comparison(mdp, save_fig=True, zoom=True, zoom_size=100)
     
     # for i in range(lmdp.R.toarray().shape[0]):
     #     print(lmdp.R.toarray()[i, :])

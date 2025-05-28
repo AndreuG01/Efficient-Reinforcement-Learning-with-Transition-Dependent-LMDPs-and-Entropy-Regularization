@@ -980,7 +980,7 @@ def policies_comparison(
     cbar_ax = fig.add_axes([0.88, 0.15, 0.02, 0.7])
     fig.colorbar(im1, cax=cbar_ax)
 
-    plt.suptitle(f"{'Zoomed policy' if zoom else 'Policy'} comparison between MDP $\mathcal{{M}}$ and embedded LMDP $\mathcal{{L}}$ with different $\\beta = \lambda$. Stochastic prob: {mdp.stochastic_prob}. {mdp.environment.custom_grid.map.name}")
+    plt.suptitle(f"Policy comparison between MDP $\mathcal{{M}}$ and embedded LMDP $\mathcal{{L}}$. $p = {mdp.stochastic_prob}$. {mdp.environment.custom_grid.map.name} map")
 
     plt.tight_layout(rect=[0, 0, 0.85, 1])
 
