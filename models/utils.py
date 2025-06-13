@@ -15,10 +15,12 @@ def compare_models(src: MDP | LMDP | LMDP_TDR, dest: MDP | LMDP | LMDP_TDR, excl
     """
     Compare two models (MDP, LMDP, or LMDP_TDR) to check if they are equal.
     The equality is defined as having the same attributes except for the excluded ones.
+    
     Args:
         src (MDP | LMDP | LMDP_TDR): The source model to compare.
         dest (MDP | LMDP | LMDP_TDR): The destination model to compare.
         exclude_attributes (list[str]): List of attribute names to exclude from the comparison.
+    
     Returns:
         bool: True if the models are equal, False otherwise.
     """

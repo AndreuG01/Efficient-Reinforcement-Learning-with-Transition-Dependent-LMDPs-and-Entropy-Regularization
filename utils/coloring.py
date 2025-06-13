@@ -2,6 +2,12 @@ import platform
 import re
 
 class TerminalColor:
+    """
+    A utility class for terminal text coloring and formatting.
+    It supports ANSI escape codes for colorizing text in terminals that support it.
+    The class automatically detects if the terminal supports ANSI colors and provides methods to colorize text,
+    strip ANSI escape codes, and initialize color settings based on the platform.
+    """
     ENABLED = None
     CODES = {
         "blue": "\033[34m",
@@ -17,6 +23,9 @@ class TerminalColor:
 
     @staticmethod
     def _init():
+        """
+        Initializes the terminal color settings based on the platform.
+        """
         if platform.system() in ["Linux", "Darwin"]:
             TerminalColor.ENABLED = True
         elif platform.system() == "Windows":
@@ -30,6 +39,17 @@ class TerminalColor:
 
     @staticmethod
     def colorize(text: str, color: str, bold: bool = False) -> str:
+        """
+        Colorizes the given text with the specified color and optional bold formatting.
+        
+        Args:
+            text (str): The text to colorize.
+            color (str): The color to apply. Must be one of the keys in TerminalColor.CODES.
+            bold (bool): If True, applies bold formatting to the text.
+        
+        Returns:
+            str: The colorized text with ANSI escape codes, or the original text if coloring is not enabled or the color is invalid.
+        """
         if TerminalColor.ENABLED is None:
             TerminalColor._init()
 
@@ -40,4 +60,13 @@ class TerminalColor:
 
     @staticmethod
     def strip(text: str) -> str:
+        """
+        Strips ANSI escape codes from the given text.
+        
+        Args:
+            text (str): The text from which to strip ANSI escape codes.
+        
+        Returns:
+            str: The text without ANSI escape codes.
+        """
         return TerminalColor.ANSI_ESCAPE_RE.sub("", text)

@@ -4,6 +4,20 @@ from .coloring import TerminalColor
 import numpy as np
 
 class Map:
+    """
+    Represents a grid-based map, used by the GridWorld and MiniGrid classes.
+    The map can be defined by a grid size or a specific layout.
+    The map can contain various objects, and it can be represented as a string for display purposes.
+    The map can also have reward (R) and transition probability (P) matrices associated with it.
+    
+    Attributes:
+        name (str): The name of the map.
+        grid_size (int): The size of the grid if no layout is provided.
+        layout (list[str]): The layout of the map as a list of strings.
+        objects (list[Object]): A list of objects present in the map.
+        R (np.ndarray): Reward matrix associated with the map.
+        P (np.ndarray): Transition probability matrix associated with the map.
+    """
     def __init__(
         self,
         name: str = None,
@@ -13,6 +27,17 @@ class Map:
         R: np.ndarray = None,
         P: np.ndarray = None
     ):
+        """
+        Initializes a Map instance.
+        
+        Args:
+            name (str): The name of the map. If not provided, a default name is generated based on grid size. Defaults to None.
+            grid_size (int): The size of the grid if no layout is provided. Defaults to None.
+            layout (list[str]): The layout of the map as a list of strings. If provided, grid_size is ignored. Defaults to None.
+            objects (list[Object]): A list of objects present in the map. Defaults to None.
+            R (np.ndarray): Reward matrix associated with the map. Defaults to None.
+            P (np.ndarray): Transition probability matrix associated with the map. Defaults to None.
+        """
         if layout is None:
             assert grid_size is not None, "If no layout is provided, either specify grid size or provide a layout"
         else:
@@ -39,7 +64,17 @@ class Map:
         self.P = P
     
     
-    def __create_layout(self):
+    def __create_layout(self) -> list[str]:
+        """
+        Creates a default layout for the map based on the grid size.
+        The layout is a square grid surrounded by walls. The agent starts at the top-left corner of the grid and ends at the bottom-right corner.
+        
+        Args:
+            None
+        
+        Returns:
+            list[str]: A list of strings representing the layout of the map.
+        """
         layout = []
         for x in range(self.__width):
             curr_line = ""
@@ -57,6 +92,9 @@ class Map:
         return layout
     
     def __str__(self) -> str:
+        """
+        Returns a string representation of the map, including its name, layout, and objects.
+        """
         TerminalColor.init()
         object_layer = { (obj.y, obj.x): obj.symbol() for obj in self.objects }
 
@@ -90,9 +128,21 @@ class Map:
     
 
 class Maps:
-    
+    """
+    A collection of predefined maps frequently used in the experiments for the thesis.
+    Each map is represented as a static class variable of type Map.
+    """
     @classmethod
     def get_maps(cls) -> list[Map]:
+        """
+        Returns a list of all Map instances defined in the Maps class.
+        
+        Args:
+            None
+        
+        Returns:
+            list[Map]: A list of Map instances defined in the Maps class.
+        """
         return [value for _, value in cls.__dict__.items() if type(value) == Map]
         
     

@@ -22,22 +22,29 @@ class MDP(ABC):
     """
     A class representing a Markov Decision Process (MDP).
 
-    The MDP is defined by a 4-tuple: (S, A, P, R) where:
-    - S: A finite set of states (num_states)
-    - A: A finite set of actions (num_actions)
-    - P: A state transition probability function P(s' | s, a)
-    - R: A reward function R(s, a)
+    The MDP is defined by a 5-tuple: (S, A, P, R, gamma) where:
+        - S: A finite set of states (num_states)
+        - A: A finite set of actions (num_actions)
+        - P: A state transition probability function P(s' | s, a)
+        - R: A reward function R(s, a)
+        - gamma: A discount factor (0 <= gamma < 1).
 
     Attributes:
-    - num_states (int): The total number of states in the MDP.
-    - num_terminal_states (int): The number of terminal states.
-    - num_non_terminal_states (int): The number of non-terminal states.
-    - num_actions (int): The number of actions available in the MDP.
-    - s0 (int): The initial state index.
-    - gamma (float): The discount factor (must be between 0 and 1).
-    - P (np.ndarray): The state transition probability matrix.
-    - R (np.ndarray): The reward matrix for each state-action pair.
-    #TODO: complete when code is finished
+        num_states (int): The total number of states in the MDP.
+        num_terminal_states (int): The number of terminal states.
+        num_non_terminal_states (int): The number of non-terminal states.
+        __allowed_actions (list[int]): A list of allowed actions in the MDP.
+        num_actions (int): The number of actions available in the MDP.
+        s0 (int): The initial state index.
+        gamma (float): The discount factor (must be between 0 and 1).
+        deterministic (bool): Whether the MDP is deterministic or stochastic.
+        behavior (str): The behavior of the MDP, can be "deterministic", "stochastic", or "mixed".
+        temperature (float): The temperature parameter in case it is an entropy-regularized MDP.
+        policy_ref (np.ndarray): A reference policy for the MDP, used in entropy-regularized MDPs.
+        P (np.ndarray): The state transition probability matrix.
+        R (np.ndarray): The reward matrix for each state-action pair.
+        verbose (bool): Whether to print verbose output during computations.
+        dtype (np.dtype): The data type for the matrices, can be np.float32, np.float64, or np.float128.
     """
 
     def __init__(
@@ -49,7 +56,7 @@ class MDP(ABC):
         s0: int = 0,
         deterministic: bool = False,
         temperature: float = 0.0,
-        behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
+        behavior: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         verbose: bool = True,
         policy_ref: np.ndarray = None,
         dtype: np.dtype = np.float128
@@ -58,11 +65,18 @@ class MDP(ABC):
         Initialize the MDP with the given parameters.
 
         Args:
-        - num_states (int): The total number of states in the MDP.
-        - num_terminal_states (int): The number of terminal states in the MDP.
-        - num_actions (int): The number of actions available.
-        - gamma (float, optional): The discount factor (default is 1).
-        - s0 (int, optional): The initial state (default is 0).
+            num_states (int): The total number of states in the MDP.
+            num_terminal_states (int): The number of terminal states in the MDP.
+            allowed_actions (list[int]): A list of allowed actions in the MDP.
+            gamma (float, optional): The discount factor. Defaults to 1.
+            s0 (int, optional): The initial state. Defaults to 0.
+            deterministic (bool, optional): Whether the MDP is deterministic. Defaults to False.
+            temperature (float, optional): The temperature parameter for entropy-regularized MDPs. Defaults to 0.0.
+            behavior (str, optional): The behavior of the MDP, can be "deterministic", "stochastic", or "mixed". Defaults to "deterministic".
+            verbose (bool, optional): Whether to print verbose output during computations. Defaults to True.
+            policy_ref (np.ndarray, optional): A reference policy for the MDP, used in entropy-regularized MDPs. Defaults to None.
+            dtype (np.dtype): The data type for the matrices, can be np.float32, np.float64, or np.float128.
+            
 
         Raises:
         - AssertionError: If the initial state is not valid or the number of terminal states is greater than or equal to the total number of states.
@@ -70,7 +84,7 @@ class MDP(ABC):
         assert 0 <= s0 <= num_states - 1, "Initial state must be a valid state"
         assert num_terminal_states < num_states, "There must be fewer terminal states than the total number of states"
         assert 0 <= gamma <= 1, "Discount factor must be in the range [0, 1]"
-        assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
+        assert behavior in ["deterministic", "stochastic", "mixed"], f"{behavior} behavior not supported."
         assert dtype in [np.float32, np.float64, np.float128], f"Only allowed data types: {[np.float32, np.float64, np.float128]}"
         
         self.dtype = dtype
@@ -83,34 +97,35 @@ class MDP(ABC):
         self.s0 = s0
         self.gamma = gamma
         self.deterministic = deterministic
-        self.behaviour = behaviour
+        self.behavior = behavior
         self.temperature = temperature
         self.policy_ref = np.full((self.num_states, self.num_actions), 1.0 / self.num_actions, dtype=self.dtype) if policy_ref is None else policy_ref
-
-
         
         # Initialize transition probabilities and rewards to zero
         self.P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states), dtype=self.dtype)
         self.R = np.zeros((self.num_states, self.num_actions), dtype=self.dtype)
         
-        
         self.verbose = verbose
     
 
-    def generate_P(self, grid: CustomGrid, stochastic_prob: float = 0.9, num_threads: int = 4, benchmark: bool = False) -> float:
+    def generate_P(self, grid: CustomGrid, stochastic_prob: float = 0.9, num_threads: int = 4, benchmark: bool = False) -> tuple[np.ndarray, float]:
         """
-        Generates the transition probability matrix (P) for the MDP, based on the dynamics of the environment
-        (deterministic or stochastic).
+        Generates the transition probability matrix (P) for the LMDP, based on the dynamics of the environment.
 
         Args:
-        - pos (dict[int, list]): The different positions of the grid
-        - move (Callable): A function that determines the next state based on the current state and action.
-        The function signature should be `move(state: State, action: int) -> tuple[next_state: State, reward: float, done: bool]`.
-        - grid (CustomGrid): The grid environment for which the transition matrix is being generated.
+            grid (CustomGrid): The grid environment containing the states and their properties, as well as the movement logic.
+            stochastic_prob (float): Probability of taking the intended action. Defaults to 0.9.
+            actions (list[int]): List of actions that can be taken in the environment.
+            num_threads (int): Number of threads to use for parallel processing. Defaults to 10.
+            benchmark (bool): If True, measures the time taken to generate the transition matrix. Defaults to False.
+        
+        Returns:
+            tuple[np.ndarray, float]: A tuple containing the transition probability matrix (P) and the time taken to generate it.
         """
         pos = grid.states
         terminal_pos = grid.terminal_states
         self._print(f"Allowed actions {self.__allowed_actions}")
+        P = np.zeros((self.num_non_terminal_states, self.num_actions, self.num_states), dtype=self.dtype)
         
         def process_state(state: int) -> list[float]:
             row_updates = []
@@ -155,7 +170,7 @@ class MDP(ABC):
         
         for row_updates in results:
             for state_idx, next_state_idx, action, prob in row_updates:
-                self.P[state_idx, action, next_state_idx] += prob
+                P[state_idx, action, next_state_idx] += prob
         
         if benchmark:
             end_time = time.time()
@@ -163,7 +178,7 @@ class MDP(ABC):
         
         self._print(f"Generated matrix P with {self.P.size:,} elements")
         
-        return total_time
+        return P, total_time
     
     def _generate_R(self):
         raise NotImplementedError("Implement in the subclass.")
@@ -171,16 +186,17 @@ class MDP(ABC):
 
     def transition(self, action: int, state: int) -> tuple[int, float, bool]:
         """
-        Simulate a state transition given an action and current state.
-
+        Simulate a transition in the MDP given the current state and action.
+        
         Args:
-        - action (int): The action taken.
-        - state (int): The current state.
-
+            state (int): The current state index from which to transition.
+            action (int): The action to take.
+        
         Returns:
-        - next_state (int): The state reached after the transition.
-        - reward (float): The reward obtained for the transition.
-        - terminal (bool): True if the next state is a terminal state, False otherwise.
+            tuple[int, float, bool]: A tuple containing:
+                - next_state (int): The index of the next state after the transition.
+                - reward (float): The reward received for transitioning to the next state.
+                - is_terminal (bool): A boolean indicating whether the next state is a terminal state.
         """
         # With probability P, choose one of the next states
         next_state = np.random.choice(self.num_states, p=self.P[state, action] if self.dtype != np.float128 else self.P[state, action].astype(np.float64))
@@ -194,14 +210,15 @@ class MDP(ABC):
     def value_iteration_inefficient(self, epsilon=1e-5) -> tuple[np.ndarray, ModelBasedAlgsStats]:
         """
         Perform value iteration to compute the optimal value function.
-        From Sutton and Barto, page 83 from my references PDF #TODO: remove in a future.
+        This implementation is inefficient and uses a nested loop to compute the value function.
 
         Args:
-        - epsilon (float, optional): The threshold for stopping the iteration (default is 1e-5).
+            epsilon (float, optional): The threshold for stopping the iteration. Defaults to 1e-5.
 
         Returns:
-        - V (np.ndarray): The optimal value function for each state.
-        - ModelBasedAlgsStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
+            tuple[np.ndarray, ModelBasedAlgsStats]: A tuple containing:
+                - V (np.ndarray): The optimal value function for each state.
+                - ModelBasedAlgsStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
         """
         V = np.zeros(self.num_states, dtype=self.dtype)
         iterations = 0
@@ -234,19 +251,21 @@ class MDP(ABC):
         return V, ModelBasedAlgsStats(elapsed_time, rewards, iterations, deltas, self.num_states, descriptor="VI")
     
     
-    def value_iteration(self, epsilon=1e-10, max_iterations=10000, temp: float = None) -> tuple[np.ndarray, ModelBasedAlgsStats, bool]:
+    def value_iteration(self, epsilon=1e-10, max_iterations=30000, temp: float = None) -> tuple[np.ndarray, ModelBasedAlgsStats, bool]:
         """
         Perform value iteration to compute the optimal value function.
-        Efficiently implemented with matrix operations
-        From Sutton and Barto, page 83 from my references PDF #TODO: remove in a future.
+        This implementation uses a more efficient approach with matrix operations to compute the value function.
 
         Args:
-        - epsilon (float, optional): The threshold for stopping the iteration (default is 1e-5).
-
+            epsilon (float, optional): The threshold for stopping the iteration. Defaults to 1e-5.
+            max_iterations (int, optional): The maximum number of iterations to perform. Defaults to 30000.
+            temp (float, optional): The temperature parameter for entropy-regularized MDPs. Defaults to None.
+        
         Returns:
-        - V (np.ndarray): The optimal value function for each state.
-        - ModelBasedAlgsStats: An object containing statistics about the value iteration process (time, rewards, deltas, etc.).
-        - overflow (bool): True if overflow occurred during the computation, False otherwise.        
+            tuple[np.ndarray, ModelBasedAlgsStats, bool]: A tuple containing:
+                - V (np.ndarray): The optimal value function for each state.
+                - ModelBasedAlgsStats: An object containing statistics about the value iteration process (time, iterations, deltas, etc.).
+                - overflow (bool): A boolean indicating whether an overflow occurred during the computation.
         """
         
         if temp is not None:
@@ -309,9 +328,15 @@ class MDP(ABC):
         return V, ModelBasedAlgsStats(elapsed_time, iterations, deltas, self.num_states, Vs, "VI"), overflow
     
     
-    def compute_value_function(self, temp: float = None):
+    def compute_value_function(self, temp: float = None) -> None:
         """
         Computes the value function using value iteration and extracts the optimal policy.
+        
+        Args:
+            temp (float, optional): The temperature parameter for entropy-regularized MDPs. Defaults to None.
+            
+        Returns:
+            None
         """
         self.V, self.stats, _ = self.value_iteration(temp=temp)
         
@@ -325,10 +350,12 @@ class MDP(ABC):
         Derive the optimal policy from the value function.
 
         Args:
-        - V (np.ndarray): The computed value function.
+            V (np.ndarray): The computed value function.
+            multiple_actions (bool): If True, allows multiple actions per state in the policy. Defaults to False.
+            temp (float, optional): The temperature parameter for entropy-regularized MDPs. Defaults to None.
 
         Returns:
-        - policy (np.ndarray): The optimal policy, where each element corresponds to the optimal action for a state.
+            policy (np.ndarray): The optimal policy, where each element corresponds to the optimal action for a state.
         """
         
         if temp is not None:
@@ -352,6 +379,17 @@ class MDP(ABC):
     
         
     def to_LMDP(self, lmbda: float = None) -> tuple[LMDP, bool]:
+        """
+        Convert the MDP into an LMDP using Todorov's method.
+        
+        Args:
+            lmbda (float, optional): The regularization parameter for the LMDP. If None, defaults to 1. Defaults to None.
+        
+        Returns:
+            tuple[LMDP, bool]: A tuple containing:
+                - lmdp (LMDP): The LMDP representation of the MDP.
+                - overflow (bool): A boolean indicating whether an overflow occurred during the computation.
+        """
         self._print(f"Computing the LMDP embedding of this MDP...")
         
         
@@ -369,7 +407,6 @@ class MDP(ABC):
         
         epsilon = 1e-10
         for state in range(self.num_non_terminal_states):
-            # print(f"STATE: {state}")
             B = self.P[state, :, :]
             zero_cols = np.all(B == 0, axis=0)
             zero_cols_idx = np.where(zero_cols)[0]
@@ -387,7 +424,6 @@ class MDP(ABC):
             x = B_dagger @ v
             
             if lmdp.lmbda != 0 and self.deterministic:
-                # TODO: vectorize or make it more efficient
                 for i, next_state in enumerate(np.where(zero_cols == False)[0]):
                     res = 0
                     for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
@@ -404,7 +440,6 @@ class MDP(ABC):
         
         if not overflow:
             lmdp.V = lmdp.get_value_function(z)
-            # V_mdp, stats, _ = self.value_iteration()
             V_mdp, stats, _ = self.value_iteration(temp=lmdp.lmbda)
             
             if not hasattr(self, "stats"):
@@ -523,9 +558,15 @@ class MDP(ABC):
         self._print(msg.ljust(120), end="\r")
 
 
-    def _find_best_lambda(self, stats: EmbeddingStats):
+    def _find_best_lambda(self, stats: EmbeddingStats) -> float:
         """
         Find the best lambda value for the LMDP embedding using a combination of iterative search and ternary search.
+        
+        Args:
+            stats (EmbeddingStats): The statistics object to store information about the search process.
+            
+        Returns:
+            float: The best lambda value found.
         """
         start_lmbda = max(0.05, self.temperature)
         lmbda = start_lmbda
@@ -583,6 +624,21 @@ class MDP(ABC):
 
     
     def to_LMDP_TDR_iterative(self, lmbda: float = None, find_best_lmbda: bool = True) -> tuple[LMDP_TDR, EmbeddingStats, bool]:
+        """
+        Convert the MDP into an LMDP with transition-dependent rewards using the adaptation of Todorov's method derived in this thesis.
+        
+        This is an inefficient implementation that uses a nested loop to compute the LMDP-TDR representation.
+        
+        Args:
+            lmbda (float, optional): The regularization parameter for the LMDP. If None, defaults to 1. Defaults to None.
+            find_best_lmbda (bool): If True, finds the best lambda value for the LMDP embedding. Defaults to True.
+        
+        Returns:
+            tuple[LMDP_TDR, EmbeddingStats, bool]: A tuple containing:
+                - lmdp_tdr (LMDP_TDR): The LMDP-TDR representation of the MDP.
+                - stats (EmbeddingStats): Statistics about the embedding process.
+                - overflow (bool): A boolean indicating whether an overflow occurred during the computation.
+        """
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         stats = EmbeddingStats("iterative")
         stats.start_time()
@@ -608,7 +664,6 @@ class MDP(ABC):
         )
         epsilon = 1e-10
         for state in range(self.num_non_terminal_states):
-            # print(f"STATE: {state}")
             B = self.P[state, :, :]
             zero_cols = np.all(B == 0, axis=0)
             
@@ -620,7 +675,6 @@ class MDP(ABC):
             B /= np.sum(B, axis=1).reshape(-1, 1)
 
             log_B = np.where(B != 0, np.log(B), B)
-            # y = self.R[state] + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
             y = self.R[state] - self.temperature * np.log(1 / self.policy_ref[state, :]) + lmdp_tdr.lmbda * np.sum(B * log_B, axis=1)
             B_dagger = np.linalg.pinv(B.astype(np.float64))
             x = B_dagger @ y
@@ -651,6 +705,21 @@ class MDP(ABC):
         return lmdp_tdr, stats, overflow
     
     def to_LMDP_TDR_vectorized(self, lmbda: float = None, find_best_lmbda: bool = True) -> tuple[LMDP_TDR, EmbeddingStats, bool]:
+        """
+        Convert the MDP into an LMDP with transition-dependent rewards using the adaptation of Todorov's method derived in this thesis.
+        
+        This approach is more efficient than the iterative one, as it uses vectorized operations to compute the embedding.
+        
+        Args:
+            lmbda (float, optional): The regularization parameter for the LMDP. If None, defaults to 1. Defaults to None.
+            find_best_lmbda (bool): If True, finds the best lambda value for the LMDP embedding. Defaults to True.
+        
+        Returns:
+            tuple[LMDP_TDR, EmbeddingStats, bool]: A tuple containing:
+                - lmdp_tdr (LMDP_TDR): The LMDP-TDR representation of the MDP.
+                - stats (EmbeddingStats): Statistics about the embedding process.
+                - overflow (bool): A boolean indicating whether an overflow occurred during the computation.
+        """
         self._print(f"Computing the LMDP-TDR embedding of this MDP...")
         stats = EmbeddingStats("vectorized")
         stats.start_time()
@@ -680,7 +749,6 @@ class MDP(ABC):
         num_possible_transitions = np.unique(np.sum(possible_transitions, axis=1))
         
         for num in num_possible_transitions:
-            # print(f"STATE: {state}")
             states = np.where(np.sum(possible_transitions, axis=1) == num)[0]
             
             # Remove 0 columns
@@ -698,15 +766,6 @@ class MDP(ABC):
             
             x = np.einsum("sap,sp->sa", B_dagger.transpose(0, 2, 1), y)
 
-            
-            # if lmdp_tdr.lmbda != 0 and self.deterministic:
-            #     # TODO: vectorize or make it more efficient
-            #     for i, next_state in enumerate(np.where(zero_cols == False)[0]):
-            #         res = 0
-            #         for next_action in np.where(self.P[state, :, next_state] != 0)[0]:
-            #             res += self.policy_ref[state, next_action] * np.exp(self.R[state, next_action] / lmdp_tdr.lmbda)
-            #         res = lmdp_tdr.lmbda * np.log(res)
-            #         x[i] = res
             next_states = np.where(possible_transitions[states])[1]
             states = np.repeat(states, num)
             lmdp_tdr.R[states, next_states] = (x + lmdp_tdr.lmbda * np.log(num)).flatten()
@@ -725,7 +784,6 @@ class MDP(ABC):
             V_lmdp = lmdp_tdr.get_value_function(z)
             if not hasattr(self, "V"):
                 self.V, self.stats, _ = self.value_iteration()
-            # V_mdp, _, _ = self.value_iteration(temp=lmdp_tdr.lmbda)
             
             self._print(f"EMBEDDING ERROR: {np.mean(np.square(V_lmdp - self.V))}")
         
@@ -733,131 +791,25 @@ class MDP(ABC):
     
     
     def to_LMDP_TDR(self, lmbda: float = None, find_best_lmbda: bool = True, vectorized: bool = True) -> tuple[LMDP_TDR, EmbeddingStats, bool]:
+        """
+        A wrapper function to convert the MDP into an LMDP with transition-dependent rewards.
+        It chooses between the vectorized and iterative implementations based on the `vectorized` parameter.
+        
+        Args:
+            lmbda (float, optional): The temperature parameter for the LMDP. If None, defaults to 1. Defaults to None.
+            find_best_lmbda (bool): If True, finds the best lambda value for the LMDP embedding. Defaults to True.
+            vectorized (bool): If True, uses the vectorized implementation; otherwise, uses the iterative one. Defaults to True.
+        
+        Returns:
+            tuple[LMDP_TDR, EmbeddingStats, bool]: A tuple containing:
+                - lmdp_tdr (LMDP_TDR): The LMDP-TDR representation of the MDP.
+                - stats (EmbeddingStats): Statistics about the embedding process.
+                - overflow (bool): A boolean indicating whether an overflow occurred during the computation.
+        """
         if vectorized:
             return self.to_LMDP_TDR_vectorized(lmbda, find_best_lmbda)
         else:
             return self.to_LMDP_TDR_iterative(lmbda, find_best_lmbda)
-    
-    
-    def to_LMDP_TDR_2(self):
-        self._print(f"Computing the LMDP-TDR embedding of this MDP...")
-        
-        lmdp_tdr = LMDP_TDR(
-            num_states=self.num_states,
-            num_terminal_states=self.num_terminal_states,
-            sparse_optimization=True,
-            lmbda=1,
-            s0=self.s0,
-            verbose=self.verbose,
-            dtype=self.dtype
-        )
-        
-        R_1 = np.einsum("san,na->sn", self.P, self.R) / self.num_actions
-        R_1[R_1 == 0] = 1e-10
-                
-        epsilon = 1e-10
-        for state in range(self.num_non_terminal_states):
-            # print(f"STATE: {state}")
-            B = self.P[state, :, :]
-            zero_cols = np.all(B == 0, axis=0)
-            zero_cols_idx = np.where(zero_cols)[0]
-            
-            # Remove 0 columns
-            B = B[:, ~zero_cols]
-            curr_r1 = R_1[state, ~zero_cols]
-            
-            # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
-            B[B == 0] = epsilon
-            B /= np.sum(B, axis=1).reshape(-1, 1)
-            
-
-            log_B = np.where(B != 0, np.log(B), B)
-            y_1 = self.R[state] + np.sum(B * log_B, axis=1)
-            y = self.R[state] + np.sum(B * (lmdp_tdr.lmbda * log_B - curr_r1), axis=1)
-            
-            test_1 = np.zeros_like(self.R[state])
-            for s in range(self.num_states):
-                if s in zero_cols_idx: continue
-                test_1 += self.P[state, :, s] * (np.log(self.P[state, :, s]))
-            
-            test_1 += self.R[state]
-            assert np.all(test_1 == y_1)
-            
-            test_2 = np.zeros_like(self.R[state])
-            for s in range(self.num_states):
-                if s in zero_cols_idx: continue
-                test_2 += self.P[state, :, s] * (np.log(self.P[state, :, s]) - R_1[state, s])
-            
-            test_2 += self.R[state]
-            
-            assert np.all(test_2 == y)
-            
-            B_dagger = np.linalg.pinv(B)
-            x_1 = B_dagger @ y_1 # From first version of the embedding to do some checkings
-            x = B_dagger @ y
-            
-            assert np.all(np.isclose(np.sum(B_dagger * test_2, axis=1) + curr_r1, x_1)) # If this does not fail, it means that the results obtained here are the same as in the first embedding version and therefore, the LMDP and LMDP with TDR will be equivalent
-            
-            support_x = [col for col in zero_cols if col == False]
-            len_support = len(support_x)
-            
-            
-            lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support) # R_2
-            lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
-                
-        lmdp_tdr.R += R_1
-        lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
-        lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
-        
-        z, _, overflow = lmdp_tdr.power_iteration()
-        if not overflow:
-            V_lmdp = lmdp_tdr.get_value_function(z)
-            V_mdp, _, _ = self.value_iteration()
-            
-            self._print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
-        
-        return lmdp_tdr, overflow
-
-    
-    def to_LMDP_TDR_3(self):
-        self._print(f"Computing the LMDP-TDR embedding of this MDP...")
-        
-        self.compute_value_function()
-        lmdp_tdr = LMDP_TDR(
-            num_states=self.num_states,
-            num_terminal_states=self.num_terminal_states,
-            sparse_optimization=False,
-            lmbda=1,
-            s0=self.s0,
-            verbose=self.verbose,
-            dtype=self.dtype
-        )
-        
-        epsilon = 1e-10
-        for state in range(self.num_non_terminal_states):
-            x = np.sum(self.P[state, :, :] * self.R[state, :].reshape(-1, 1), axis=0)
-            denominator = np.sum(self.P[state, :, :], axis=0)
-            nonzero_cols = np.where(x != 0)[0]
-            len_support = len(nonzero_cols)
-            
-            x = np.where(denominator != 0, x / denominator, 0)
-            
-            if state == 0: self._print("x ldmp-tdr", x)
-            
-            # lmdp_tdr.P[state, nonzero_cols] = np.exp(-np.log(len_support))
-            lmdp_tdr.P[state] = self.P[state, self.policy[state]]
-            lmdp_tdr.R[state] = x + lmdp_tdr.lmbda * np.log(len_support)
-        
-        
-        z, _, overflow = lmdp_tdr.power_iteration()
-        
-        if not overflow:
-            V_lmdp = lmdp_tdr.get_value_function(z)
-            V_mdp, _, _ = self.value_iteration()
-            
-            self._print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
-        
-        return lmdp_tdr, overflow
     
 
     def print_rewards(self):
@@ -912,3 +864,127 @@ class MDP(ABC):
 
         exclude_attributes = ["verbose", "num_actions", "__allowed_actions"] # Num actions and __allowed_actions can be ommitted from the comparison because they are accounted in the matrix P.
         return compare_models(self, obj, exclude_attributes=exclude_attributes)
+
+    
+    """
+    SOME ALTERNATIVE EMBEDDING METHODS TO CONVERT AN MDP INTO AN LMDP WITH TRANSITION-DEPENDENT REWARDS THAT HAVE NOT WORKED AS EXPECTED
+    """
+    # def to_LMDP_TDR_2(self):
+    #     self._print(f"Computing the LMDP-TDR embedding of this MDP...")
+        
+    #     lmdp_tdr = LMDP_TDR(
+    #         num_states=self.num_states,
+    #         num_terminal_states=self.num_terminal_states,
+    #         sparse_optimization=True,
+    #         lmbda=1,
+    #         s0=self.s0,
+    #         verbose=self.verbose,
+    #         dtype=self.dtype
+    #     )
+        
+    #     R_1 = np.einsum("san,na->sn", self.P, self.R) / self.num_actions
+    #     R_1[R_1 == 0] = 1e-10
+                
+    #     epsilon = 1e-10
+    #     for state in range(self.num_non_terminal_states):
+    #         # print(f"STATE: {state}")
+    #         B = self.P[state, :, :]
+    #         zero_cols = np.all(B == 0, axis=0)
+    #         zero_cols_idx = np.where(zero_cols)[0]
+            
+    #         # Remove 0 columns
+    #         B = B[:, ~zero_cols]
+    #         curr_r1 = R_1[state, ~zero_cols]
+            
+    #         # If an element of B is zero, its entire column must be 0, otherwise, replace the problematic element by epsilon and renormalize
+    #         B[B == 0] = epsilon
+    #         B /= np.sum(B, axis=1).reshape(-1, 1)
+            
+
+    #         log_B = np.where(B != 0, np.log(B), B)
+    #         y_1 = self.R[state] + np.sum(B * log_B, axis=1)
+    #         y = self.R[state] + np.sum(B * (lmdp_tdr.lmbda * log_B - curr_r1), axis=1)
+            
+    #         test_1 = np.zeros_like(self.R[state])
+    #         for s in range(self.num_states):
+    #             if s in zero_cols_idx: continue
+    #             test_1 += self.P[state, :, s] * (np.log(self.P[state, :, s]))
+            
+    #         test_1 += self.R[state]
+    #         assert np.all(test_1 == y_1)
+            
+    #         test_2 = np.zeros_like(self.R[state])
+    #         for s in range(self.num_states):
+    #             if s in zero_cols_idx: continue
+    #             test_2 += self.P[state, :, s] * (np.log(self.P[state, :, s]) - R_1[state, s])
+            
+    #         test_2 += self.R[state]
+            
+    #         assert np.all(test_2 == y)
+            
+    #         B_dagger = np.linalg.pinv(B)
+    #         x_1 = B_dagger @ y_1 # From first version of the embedding to do some checkings
+    #         x = B_dagger @ y
+            
+    #         assert np.all(np.isclose(np.sum(B_dagger * test_2, axis=1) + curr_r1, x_1)) # If this does not fail, it means that the results obtained here are the same as in the first embedding version and therefore, the LMDP and LMDP with TDR will be equivalent
+            
+    #         support_x = [col for col in zero_cols if col == False]
+    #         len_support = len(support_x)
+            
+            
+    #         lmdp_tdr.R[state, ~zero_cols] = x + lmdp_tdr.lmbda * np.log(len_support) # R_2
+    #         lmdp_tdr.P[state, ~zero_cols] = np.exp(-np.log(len_support))
+                
+    #     lmdp_tdr.R += R_1
+    #     lmdp_tdr.R = csr_matrix(lmdp_tdr.R)
+    #     lmdp_tdr.P = csr_matrix(lmdp_tdr.P)
+        
+    #     z, _, overflow = lmdp_tdr.power_iteration()
+    #     if not overflow:
+    #         V_lmdp = lmdp_tdr.get_value_function(z)
+    #         V_mdp, _, _ = self.value_iteration()
+            
+    #         self._print("EMBEDDING ERROR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        
+    #     return lmdp_tdr, overflow
+
+    
+    # def to_LMDP_TDR_3(self):
+    #     self._print(f"Computing the LMDP-TDR embedding of this MDP...")
+        
+    #     self.compute_value_function()
+    #     lmdp_tdr = LMDP_TDR(
+    #         num_states=self.num_states,
+    #         num_terminal_states=self.num_terminal_states,
+    #         sparse_optimization=False,
+    #         lmbda=1,
+    #         s0=self.s0,
+    #         verbose=self.verbose,
+    #         dtype=self.dtype
+    #     )
+        
+    #     epsilon = 1e-10
+    #     for state in range(self.num_non_terminal_states):
+    #         x = np.sum(self.P[state, :, :] * self.R[state, :].reshape(-1, 1), axis=0)
+    #         denominator = np.sum(self.P[state, :, :], axis=0)
+    #         nonzero_cols = np.where(x != 0)[0]
+    #         len_support = len(nonzero_cols)
+            
+    #         x = np.where(denominator != 0, x / denominator, 0)
+            
+    #         if state == 0: self._print("x ldmp-tdr", x)
+            
+    #         # lmdp_tdr.P[state, nonzero_cols] = np.exp(-np.log(len_support))
+    #         lmdp_tdr.P[state] = self.P[state, self.policy[state]]
+    #         lmdp_tdr.R[state] = x + lmdp_tdr.lmbda * np.log(len_support)
+        
+        
+    #     z, _, overflow = lmdp_tdr.power_iteration()
+        
+    #     if not overflow:
+    #         V_lmdp = lmdp_tdr.get_value_function(z)
+    #         V_mdp, _, _ = self.value_iteration()
+            
+    #         self._print("EMBEDDING ERROR MDP to LMDP-TDR:", np.mean(np.square(V_lmdp - V_mdp)))    
+        
+    #     return lmdp_tdr, overflow

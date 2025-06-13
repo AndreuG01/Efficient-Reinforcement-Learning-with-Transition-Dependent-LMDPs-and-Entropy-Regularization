@@ -40,6 +40,7 @@ class Spinner:
         
         Args:
             None
+        
         Returns:
             None
         """
@@ -54,6 +55,7 @@ class Spinner:
         
         Args:
             None
+        
         Returns:
             None
         """
@@ -69,7 +71,8 @@ class Spinner:
         This ensures that the spinner stops cleanly and does not leave any hanging threads.
         
         Args:
-            None
+            interrupted (bool): A flag to indicate if the spinner was interrupted. If True, it will not print the finished message.
+        
         Returns:
             None
         """

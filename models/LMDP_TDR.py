@@ -14,6 +14,27 @@ from .utils import compare_models
 from utils.stats import ModelBasedAlgsStats
 
 class LMDP_TDR:
+    """
+    A class representing a Linearly-Solvable Markov Decision Process (LMDP) with Transition-Dependent Rewards (TDR)
+    
+    The LMDP-TDR is defined by a 4-tuple: (S, P, R, lambda) where:
+        - S: A finite set of states (num_states)
+        - P: A state transition probability function P(s'| s). Known as passive dynamics.
+        - R: A reward function R(s, s')
+        - lambda: A temperature parameter that controls the penalty for the LMDP deviating from the passive dynamics.
+        
+    Attributes:
+        num_states (int): Total number of states in the LMDP.
+        num_terminal_states (int): Number of terminal states in the LMDP.
+        num_non_terminal_states (int): Number of non-terminal states in the LMDP.
+        s0 (int): The initial state index.
+        lmbda (int): The temperature parameter for the LMDP.
+        sparse_optimization (bool): Whether to use sparse optimization for the transition matrix P and reward matrix R.
+        verbose (bool): Whether to print verbose output during operations.
+        dtype (np.dtype): The data type for the matrices, can be np.float32, np.float64, or np.float128.
+        P (np.ndarray | csr_matrix): The transition probability matrix of the LMDP.
+        R (np.ndarray): The reward matrix of the LMDP.
+    """
     def __init__(
         self,
         num_states: int,
@@ -24,6 +45,19 @@ class LMDP_TDR:
         verbose: bool = True,
         dtype: np.dtype = np.float128
     ) -> None:
+        """
+        Initializes the LMDP_TDR instance with the given parameters.
+        
+        Args:
+            num_states (int): Total number of states in the LMDP.
+            num_terminal_states (int): Number of terminal states in the LMDP.
+            lmbda (int): The temperature parameter for the LMDP. Defaults to 1.
+            s0 (int): The initial state index. Defaults to 0.
+            sparse_optimization (bool): Whether to use sparse optimization for the transition matrix P and reward matrix R. Defaults to True.
+            verbose (bool): Whether to print verbose output during operations. Defaults to True.
+            dtype (np.dtype): The data type for the matrices, can be np.float32, np.float64, or np.float128. Defaults to np.float128.
+        """
+        
         assert dtype in [np.float32, np.float64, np.float128], f"Only allowed data types: {[np.float32, np.float64, np.float128]}"
         self.dtype = dtype
         
@@ -45,10 +79,13 @@ class LMDP_TDR:
         Generates the transition probability matrix (P) for the LMDP, based on the dynamics of the environment.
 
         Args:
-        - move (Callable): A function that determines the next state based on the current state and action.
-        The function signature should be `move(state: State, action: int) -> tuple[next_state: State, reward: float, done: bool]`.
-        - grid (CustomGrid): The grid environment for which the transition matrix is being generated.
-        - actions (list[int]): List of possible actions that can be taken in the environment (NOTE THAT THE LMDP DOES NOT HAVE ACTIONS INTO ACOUNT)
+            grid (CustomGrid): The grid environment containing the states and their properties, as well as the movement logic.
+            actions (list[int]): List of actions that can be taken in the environment.
+            num_threads (int): Number of threads to use for parallel processing. Defaults to 10.
+            benchmark (bool): If True, measures the time taken to generate the transition matrix. Defaults to False.
+        
+        Returns:
+            float: The total time taken to generate the transition matrix if benchmark is True, otherwise 0.
         """
         pos = grid.states
         terminal_pos = grid.terminal_states
@@ -108,6 +145,18 @@ class LMDP_TDR:
     
     
     def transition(self, state: int) -> tuple[int, float, bool]:
+        """
+        Simulates a transition from the given state to the next state based on the transition probabilities.
+        
+        Args:
+            state (int): The current state index from which to transition.
+        
+        Returns:
+            tuple[int, float, bool]: A tuple containing:
+                - next_state (int): The index of the next state after the transition.
+                - reward (float): The reward received for transitioning to the next state.
+                - is_terminal (bool): A boolean indicating whether the next state is a terminal state.
+        """
         next_state = np.random.choice(self.num_states, p=self.P[state] if self.dtype != np.float128 else self.P[state].astype(np.float64))
         
         return (
@@ -118,6 +167,16 @@ class LMDP_TDR:
     
     
     def get_control(self, z: np.ndarray, o: np.ndarray | csr_matrix) ->np.ndarray:
+        """
+        Computes the control vector (or policy) for the LMDP-TDR.
+        
+        Args:
+            z (np.ndarray): The exponentiated value function vector for the LMDP-TDR.
+            o (np.ndarray | csr_matrix): The reward matrix.
+        
+        Returns:
+            np.ndarray: The control vector (or policy) for the LMDP-TDR, normalized to sum to 1 across each row.
+        """
         
         if self.sparse_optimization:
             control = self.P.multiply(o).multiply(z)
@@ -132,7 +191,17 @@ class LMDP_TDR:
         return control
         
     
-    def get_optimal_policy(self, z: np.ndarray, o: np.ndarray | csr_matrix, multiple_states: bool = False) -> np.ndarray:
+    def get_optimal_policy(self, z: np.ndarray, o: np.ndarray | csr_matrix) -> np.ndarray:
+        """
+        Computes the optimal policy for the LMDP-TDR based on the value function and reward matrix. It is a wrapper around `get_control`.
+        
+        Args:
+            z (np.ndarray): The exponentiated value function vector for the LMDP-TDR.
+            o (np.ndarray | csr_matrix): The reward matrix.
+        
+        Returns:
+            np.ndarray: The optimal policy for the LMDP-TDR, where each row corresponds to a state and contains the probabilities of transitioning to the next states.
+        """
         probs = self.get_control(z, o)
         if self.sparse_optimization:
             probs = probs.toarray()
@@ -140,6 +209,22 @@ class LMDP_TDR:
 
     
     def power_iteration(self, epsilon=1e-10, temp: float = None) -> tuple[np.ndarray, ModelBasedAlgsStats, bool]:
+        """
+        Performs power iteration to compute the value function for the LMDP-TDR.
+        The algorithm iteratively computes the exponentiated value function vector until convergence using the following formula:
+                                                    z = Gz^+
+                                                    z^+ = z || reward for the terminal states 
+        
+        Args:
+            epsilon (float): The convergence threshold for the power iteration. Defaults to 1e-10.
+            temp (float): The temperature parameter for the LMDP-TDR. If None, uses the instance's lmbda attribute. Defaults to None.
+        
+        Returns:
+            tuple[np.ndarray, ModelBasedAlgsStats, bool]: A tuple containing:
+                - z (np.ndarray): The exponentiated value function vector for the LMDP-TDR.
+                - stats (ModelBasedAlgsStats): Statistics about the power iteration process, including time taken and number of iterations.
+                - overflow (bool): A boolean indicating whether an overflow occurred during the computation.
+        """
         if temp is not None:
             temperature = temp
         else:
@@ -155,7 +240,7 @@ class LMDP_TDR:
             G = self.P * self.o
     
     
-        z = np.ones(self.num_states, dtype=self.dtype)
+        z = np.ones(self.num_states, dtype=self.dtype) * 3
         iterations = 0
         delta = 0
         overflow = False
@@ -194,6 +279,17 @@ class LMDP_TDR:
         
     
     def get_value_function(self, z: np.ndarray = None, temp: float = None) -> np.ndarray:
+        """
+        Computes the value function for the LMDP-TDR based on the exponentiated value function vector z.
+        Since z = e^(V / lambda), to recover the original value function, the opposite transformation is done: V = lambda * log(z).
+        
+        Args:
+            z (np.ndarray): The exponentiated value function vector for the LMDP-TDR. If None, uses the instance's z attribute. Defaults to None.
+            temp (float): The temperature parameter for the LMDP-TDR. If None, uses the instance's lmbda attribute. Defaults to None.
+            
+        Returns:
+            np.ndarray: The value function for the LMDP-TDR, where each element corresponds to the value of a state.
+        """
         if temp is not None:
             temperature = temp
         else:
@@ -208,7 +304,18 @@ class LMDP_TDR:
         return result
     
     
-    def compute_value_function(self, temp: float = None):
+    def compute_value_function(self, temp: float = None) -> None:
+        """
+        Computes the value function for the LMDP-TDR using power iteration.
+        This method calls the `power_iteration` method to compute the exponentiated value function vector z,
+        and then computes the value function V using the `get_value_function` method.
+        
+        Args:
+            temp (float): The temperature parameter for the LMDP-TDR. If None, uses the instance's lmbda attribute. Defaults to None.
+        
+        Returns:
+            None
+        """
         # if not hasattr(self, "z"):
         self._print("Will compute power iteration")
         _, self.stats, _ = self.power_iteration(temp=temp)
@@ -216,14 +323,29 @@ class LMDP_TDR:
         self.V = self.get_value_function(temp=temp)
         
         self.policy = self.get_optimal_policy(self.z, self.o)
-        # self.policy_multiple_states = self.get_optimal_policy(self.z, self.o, multiple_states=True)
         
     
     def to_MDP(self):
         raise NotImplementedError("Not implemented yet")
     
     
-    def to_LMDP(self):
+    def to_LMDP(self) -> models.LMDP:
+        """
+        Converts the LMDP with transition dependent rewards to an equivalent LMDP with state-dependent rewards, using the transformations
+        derived in this thesis.
+        
+        First:
+                                        x_s(s') = R(s, s') + lambda * log(P(s' | s))
+        
+        Then, the reward function is defined as:
+                                R(s) = lambda * log(sum(exp(x_s(s') / lambda))) for all s in S
+        
+        The transition probabilities are defined as:
+                            P(s' | s) = exp(x_s(s') / lambda) / sum(exp(x_s(s') / lambda)) for all s in S
+        
+        Returns:
+            models.LMDP: the equivalent LMDP with state-dependent rewards.
+        """
         lmdp = models.LMDP(
             self.num_states,
             self.num_terminal_states,

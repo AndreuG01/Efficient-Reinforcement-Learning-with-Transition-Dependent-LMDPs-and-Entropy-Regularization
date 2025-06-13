@@ -45,7 +45,7 @@ class CustomMinigridEnv(MiniGridEnv):
         map: Map,
         properties: dict[str, list] = None,
         agent_start_dir=0,
-        max_steps: int = 200,
+        max_steps: int = 100000, # Update depending on the needs.
         allowed_actions: list[int] = None,
         verbose: bool = True,
         **kwargs,
@@ -179,9 +179,10 @@ class CustomMinigridEnv(MiniGridEnv):
             save_gif (bool): Whether to save the visualization as a GIF (default is False).
             save_path (str): The path to save the GIF if `save_gif` is True.
             show_window (bool, optional): Whether to show the window when playing the game or not. Defaults to False.
+            title (str, optional): The title to display on the rendered frames. If None, the default title from the map will be used.
         
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
         game_stats = deepcopy(GameStats())
         frames = []
@@ -208,10 +209,13 @@ class CustomMinigridEnv(MiniGridEnv):
                     
                     if isinstance(model, MinigridMDP):
                         action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64) if model.dtype == np.float128 else policy[state_idx])
+                        # action = np.argmax(policy[state_idx])
                         next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :].astype(np.float64) if model.dtype == np.float128 else model.P[state_idx, action, :])
-                        if next_state != np.argmax(model.P[state_idx, action, :]):
+                        
+                        if next_state != np.argmax(model.P_det[state_idx, action, :]):
                             num_mistakes += 1
                             self._print(f"Game {i}. [{num_mistakes} mistakes / {actions} total actions]".ljust(50), end="\r")
+                        
                         # We need to get the action that leads to the next state
                         action = self.custom_grid.transition_action(state_idx, next_state, model.allowed_actions)
                             
@@ -234,7 +238,6 @@ class CustomMinigridEnv(MiniGridEnv):
     
                     if save_gif:
                         frame = self.render()
-                        # frames.append(self._add_frame_with_title(frame, game_title))
                         frames.append(Image.fromarray(frame))
                     _, _, done, _, info = self.step(action)
                     
@@ -250,7 +253,6 @@ class CustomMinigridEnv(MiniGridEnv):
                 if save_gif:
                     # Add the last frame with title
                     frame = self.render()
-                    # frames.append(self._add_frame_with_title(frame, game_title))
                     frames.append(Image.fromarray(frame))
         
         self._print(game_stats.GAME_INFO)
@@ -279,8 +281,8 @@ class CustomMinigridEnv(MiniGridEnv):
 
         Args:
             state (State): The state to visualize.
+            save_path (str): Optional path to save the rendered image. If None, the image will not be saved.
             title (str): Optional title to overlay on the rendered image.
-            show (bool): Whether to show the image or just return it.
 
         Returns:
             Image: The rendered image of the environment at the specified state.
@@ -331,17 +333,19 @@ class MinigridMDP(MDP):
     A specialized Markov Decision Process (MDP) for MiniGrid environments.
 
     This class constructs an MDP representation from a MiniGrid-based map. It supports deterministic, stochastic,
-    and mixed behaviour (stochastic for navigation and deterministic for manipulation) modes.
+    and mixed behavior (stochastic for navigation and deterministic for manipulation) modes.
 
     Attributes:
         OFFSETS (dict[int, tuple[int, int]]): Maps direction indices to (dx, dy) movement.
         stochastic_prob (float): Probability of following the intended action in a stochastic setting.
-        behaviour (Literal["deterministic", "stochastic", "mixed"]): Transition behaviour type. Defaults to "deterministic".
+        behavior (Literal["deterministic", "stochastic", "mixed"]): Transition behavior type. Defaults to "deterministic".
         num_actions (int): Number of allowed actions.
         allowed_actions (list[int]): List of action indices.
         environment (CustomMinigridEnv): MiniGrid environment wrapper.
         start_state (State): Initial state of the agent.
         num_states (int): The total numbe rof states (excluding terminal states).
+        p_time (float): Time taken to generate the transition probability matrix.
+        P_det (np.ndarray): Deterministic transition probability matrix.
     """
     
     OFFSETS = {
@@ -357,7 +361,7 @@ class MinigridMDP(MDP):
         allowed_actions: list[int] = None,
         properties: dict[str, list] = {"orientation": [i for i in range(4)]},
         stochastic_prob: float = 0.9,
-        behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
+        behavior: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         benchmark_p: bool = False,
         threads: int = 4,
         gamma: float = 1.0,
@@ -374,16 +378,16 @@ class MinigridMDP(MDP):
             allowed_actions (list[int], optional): List of allowed action indices. If None, defaults to [0, 1, 2].
             properties (dict[str, list], optional): State properties for initialization. Defaults to {"orientation": [0, 1, 2, 3]}.
             stochastic_prob (float): Probability of following the intended action in a stochastic setting. Defaults to 0.9.
-            behaviour (str): One of "deterministic", "stochastic", or "mixed". Defaults to "deterministic".
+            behavior (str): One of "deterministic", "stochastic", or "mixed". Defaults to "deterministic".
             gamma (float, optional): The discount factor for the MDP. Defaults to 1.0
             mdp (MDP, optional): If provided, initializes this MinigridMDP using an existing MDP's parameters. Defaults to None.
         """
         self.dtype = dtype
         self.verbose = verbose
         self.stochastic_prob = stochastic_prob
-        assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
-        self.behaviour = behaviour
-        deterministic = self.behaviour == "deterministic"
+        assert behavior in ["deterministic", "stochastic", "mixed"], f"{behavior} behavior not supported."
+        self.behavior = behavior
+        deterministic = self.behavior == "deterministic"
         
         if allowed_actions:
             self.num_actions = len(allowed_actions)
@@ -409,7 +413,7 @@ class MinigridMDP(MDP):
                 allowed_actions=self.allowed_actions,
                 s0=self.environment.custom_grid.states.index(self.start_state),
                 deterministic=deterministic,
-                behaviour=self.behaviour,
+                behavior=self.behavior,
                 gamma=gamma,
                 temperature=temperature,
                 verbose=self.verbose,
@@ -419,15 +423,22 @@ class MinigridMDP(MDP):
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
                 self.P = map.P
             else:
-                self.p_time = self.generate_P(
+                self.P, self.p_time = self.generate_P(
                     self.environment.custom_grid,
                     stochastic_prob=self.stochastic_prob,
                     benchmark=benchmark_p,
                     num_threads=threads
                 )
+                
+            self.P_det, _ = self.generate_P(
+                self.environment.custom_grid,
+                stochastic_prob=1,
+                benchmark=False,
+                num_threads=threads
+            )
             
-            # If the agent has a mixed behaviour, we have to make navigation actions deterministic.
-            if self.behaviour == "mixed":
+            # If the agent has a mixed behavior, we have to make navigation actions deterministic.
+            if self.behavior == "mixed":
                 manip_start = MinigridActions.PICKUP
                 states = np.arange(self.num_non_terminal_states)
                 manip_probs = self.P[states, manip_start:, :]
@@ -445,8 +456,6 @@ class MinigridMDP(MDP):
             self._print(f"Created MDP with {self.num_states} states. ({self.num_terminal_states} terminal and {self.num_non_terminal_states} non-terminal)")
         else:
             # Useful when wanting to create a MinigridMDP from an embedding of an LMDP into an MDP
-            # self.num_actions = mdp.num_actions
-            # self.allowed_actions = [i for i in range(self.num_actions)]
             super().__init__(
                 num_states=mdp.num_states,
                 num_terminal_states=mdp.num_terminal_states,
@@ -454,7 +463,7 @@ class MinigridMDP(MDP):
                 s0=mdp.s0,
                 gamma=mdp.gamma,
                 deterministic=mdp.deterministic,
-                behaviour=self.behaviour,
+                behavior=self.behavior,
                 temperature=mdp.temperature,
                 verbose=mdp.verbose,
                 dtype=mdp.dtype
@@ -498,10 +507,10 @@ class MinigridMDP(MDP):
         
         
         while not self.environment.custom_grid.is_terminal(curr_state):
-            if self.behaviour == "stochastic":
+            if self.behavior == "stochastic":
                 curr_state_idx = np.random.choice(self.environment.custom_grid.get_num_states(), p=self.P[curr_state_idx, self.policy[curr_state_idx], :].astype(np.float64) if self.dtype == np.float128 else self.P[curr_state_idx, self.policy[curr_state_idx], :])
                 curr_state = self.environment.custom_grid.state_index_mapper[curr_state_idx]
-            elif self.behaviour == "deterministic":
+            elif self.behavior == "deterministic":
                 curr_action = self.policy[curr_state_idx][0]
                 print(curr_state)
                 curr_state, _, terminal = self.environment.custom_grid.move(self.environment.custom_grid.state_index_mapper[curr_state_idx], curr_action)
@@ -529,9 +538,10 @@ class MinigridMDP(MDP):
             num_times (int): Number of times to run the game. Defaults to 10.
             save_gif (bool): If True, saves the game sequence as a GIF. Defaults to False.
             save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+            show_window (bool): If True, shows the game window while playing. Defaults to True.
         
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
@@ -542,7 +552,13 @@ class MinigridMDP(MDP):
             return self.environment.visualize_policy(policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path, model=self, show_window=show_window)
 
     
-    def to_LMDP_policy(self):    
+    def to_LMDP_policy(self) -> np.ndarray:
+        """
+        Converts the MDP policy to an LMDP policy.
+        
+        Returns:
+            np.ndarray: The LMDP policy.
+        """
         lmdp_policy = np.einsum("sa,sap->sp", self.policy[:self.num_non_terminal_states, :], self.P)
         
         assert np.all(np.sum(lmdp_policy, axis=1))
@@ -569,6 +585,7 @@ class MinigridLMDP(LMDP):
         allowed_actions (list[int]): List of action indices.
         start_state (State): Initial state of the agent.
         num_states (int): The total number of states (excluding terminal states).
+        p_time (float): Time taken to generate the transition probability matrix.
     """
     
     OFFSETS = {
@@ -664,7 +681,7 @@ class MinigridLMDP(LMDP):
             self.R = lmdp.R
 
                   
-    def _generate_R(self):
+    def _generate_R(self) -> None:
         """
         Generates the reward matrix (R) for the minigrid, setting the default reward to -50 for cliff states and to -5 for normal states.
         Terminal states get a reward of 0.
@@ -715,9 +732,10 @@ class MinigridLMDP(LMDP):
             num_times (int): Number of times to run the game. Defaults to 10.
             save_gif (bool): If True, saves the game sequence as a GIF. Defaults to False.
             save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+            show_window (bool): If True, shows the game window while playing. Defaults to True.
         
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if not hasattr(self, "V") and policies is None:
@@ -880,9 +898,11 @@ class MinigridLMDP_TDR(LMDP_TDR):
             num_times (int): Number of times to run the game. Defaults to 10.
             save_gif (bool): If True, saves the game sequence as a GIF. Defaults to False.
             save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+            
+            
         
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if not hasattr(self, "V") and policies is None:

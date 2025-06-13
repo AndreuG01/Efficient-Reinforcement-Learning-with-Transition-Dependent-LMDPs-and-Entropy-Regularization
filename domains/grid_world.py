@@ -1,7 +1,3 @@
-# Simple grid, where there may be obstacles or not and the actions are:
-# UP (0), RIGHT (1), DOWN (2), LEFT (3)
-# (0, 0) is the top left corner
-
 # Postpones the evaluation of the notations. This allows to specify the type of GridWorldMDP
 # or GridWorldLMDP in the GridworldEnv class without them having been defined yet.
 from __future__ import annotations
@@ -160,7 +156,7 @@ class GridWorldEnv:
             show_window (bool, optional): Whether to show the window or not. Defaults to True
 
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
         game_stats = deepcopy(GameStats())
         if not save_gif:
@@ -168,7 +164,6 @@ class GridWorldEnv:
             screen = None
         plotter = GridWorldPlotter(model)
         frames = []
-        # self.max_steps = 30
         
         for policy_epoch, policy in policies:
             self._print(f"Visualizing policy from training epoch: {policy_epoch}")
@@ -216,7 +211,7 @@ class GridWorldEnv:
                         if isinstance(model, GridWorldMDP):
                             action = np.random.choice(np.arange(len(policy[state_idx])), p=policy[state_idx].astype(np.float64) if model.dtype == np.float128 else policy[state_idx])
                             next_state = np.random.choice(self.custom_grid.get_num_states(), p=model.P[state_idx, action, :].astype(np.float64) if model.dtype == np.float128 else model.P[state_idx, action, :])
-                            if next_state != np.argmax(model.P[state_idx, action, :]):
+                            if next_state != np.argmax(model.P_det[state_idx, action, :]):
                                 num_mistakes += 1
                                 self._print(f"Game {i}. [{num_mistakes} mistakes / {actions} total actions]".ljust(50), end="\r")
                             # We need to get the action that leads to the next state
@@ -297,10 +292,12 @@ class GridWorldMDP(MDP):
         num_actions (int): The number of possible actions the agent can take.
         allowed_actions (list[int]): List of allowed actions.
         stochastic_prob (float): Probability of stochastic transitions.
-        behaviour (str): The behaviour type for the environment ("deterministic", "stochastic", or "mixed").
+        behavior (str): The behavior type for the environment ("deterministic", "stochastic", or "mixed").
         environment (GridWorldEnv): The environment object representing the grid world.
         start_state (State): The starting state of the agent.
         num_states (int): The total number of states (excluding terminal states).
+        p_time (float): The time it takes to generate the transition matrix (if applicable).
+        P_det (np.ndarray): Deterministic transition probability matrix.
     """
 
     OFFSETS = {
@@ -315,7 +312,7 @@ class GridWorldMDP(MDP):
         map: Map,
         allowed_actions: list[int] = None,
         stochastic_prob: float = 0.9,
-        behaviour: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
+        behavior: Literal["deterministic", "stochastic", "mixed"] = "deterministic",
         benchmark_p: bool = False,
         threads: int = 4,
         gamma: float = 1.0,
@@ -333,13 +330,14 @@ class GridWorldMDP(MDP):
             map (Map): The map for the environment.
             allowed_actions (list[int], optional): List of allowed actions. Defaults to None.
             stochastic_prob (float, optional): Probability of stochastic transitions. Defaults to 0.9.
-            behaviour (Literal["deterministic", "stochastic", "mixed"], optional): Behaviour type for the environment. Defaults to "deterministic".
+            behavior (Literal["deterministic", "stochastic", "mixed"], optional): Behaviour type for the environment. Defaults to "deterministic".
             threads (int, optional): Number of threads for parallel processing when generating transition probabilities. Defaults to 4.
             gamma (float, optional): The discount factor for the MDP. Defaults to 1.
             mdp (MDP, optional): An existing MDP object to initialize the superclass. Defaults to None.
         """
         self.verbose = verbose
         self.dtype = dtype
+        self.p_time = 0.0
         if mdp is not None:
             assert type(mdp) == MDP, "MDP must be of type mdp"
             
@@ -352,9 +350,9 @@ class GridWorldMDP(MDP):
 
         self.stochastic_prob = stochastic_prob
         
-        assert behaviour in ["deterministic", "stochastic", "mixed"], f"{behaviour} behaviour not supported."
-        self.behaviour = behaviour
-        deterministic = self.behaviour == "deterministic"
+        assert behavior in ["deterministic", "stochastic", "mixed"], f"{behavior} behavior not supported."
+        self.behavior = behavior
+        deterministic = self.behavior == "deterministic"
         
         self.environment = GridWorldEnv(map=map, allowed_actions=self.allowed_actions, verbose=self.verbose)
         start_pos = self.environment.custom_grid.start_pos
@@ -371,7 +369,7 @@ class GridWorldMDP(MDP):
                 allowed_actions=self.allowed_actions,
                 s0=self.environment.custom_grid.states.index(self.start_state),
                 deterministic=deterministic,
-                behaviour=self.behaviour,
+                behavior=self.behavior,
                 gamma=gamma,
                 temperature=temperature,
                 verbose=self.verbose,
@@ -382,12 +380,19 @@ class GridWorldMDP(MDP):
                 assert map.P.shape == self.P.shape, f"Dimensions of custom transition probability function {map.P.shape} do not match the expected ones: {self.P.shape}"
                 self.P = map.P
             else:
-                self.p_time = self.generate_P(
+                self.P, self.p_time = self.generate_P(
                     self.environment.custom_grid,
                     stochastic_prob=self.stochastic_prob,
                     num_threads=threads,
                     benchmark=benchmark_p,
                 )
+            
+            self.P_det, _ = self.generate_P(
+                self.environment.custom_grid,
+                stochastic_prob=1,
+                benchmark=False,
+                num_threads=threads
+            )
             
             if map.R is not None:
                 assert map.R.shape == self.R.shape, f"Dimensions of custom reward function {map.R.shape} do not match the expected ones: {self.R.shape}"
@@ -404,7 +409,7 @@ class GridWorldMDP(MDP):
                 allowed_actions=self.allowed_actions,
                 s0=mdp.s0,
                 deterministic=mdp.deterministic,
-                behaviour=self.behaviour,
+                behavior=self.behavior,
                 gamma=mdp.gamma,
                 temperature=mdp.temperature,
                 verbose=mdp.verbose,
@@ -447,9 +452,10 @@ class GridWorldMDP(MDP):
             num_times (int, optional): Number of times to run the game. Defaults to 10.
             save_gif (bool, optional): If True, saves the game sequence as a GIF. Defaults to False
             save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+            show_window (bool, optional): Whether to show the window or not. Defaults to True.
 
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
@@ -464,12 +470,18 @@ class GridWorldMDP(MDP):
         Allows the user to play with the agent manually through the map.
 
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
         return self.environment.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100, show_window=True)
     
     
-    def to_LMDP_policy(self):        
+    def to_LMDP_policy(self) -> np.ndarray:
+        """
+        Converts the MDP policy to an LMDP policy.
+        
+        Returns:
+            np.ndarray: The LMDP policy.
+        """
         lmdp_policy = np.einsum("sa,sap->sp", self.policy[:self.num_non_terminal_states, :], self.P)
         
         assert np.all(np.sum(lmdp_policy, axis=1))
@@ -537,6 +549,7 @@ class GridWorldLMDP(LMDP):
         self.dtype = dtype
         self.deterministic = False
         self.verbose = verbose
+        self.p_time = 0.0
         if allowed_actions:
             self.allowed_actions = allowed_actions
             self.num_actions = len(allowed_actions)
@@ -622,7 +635,7 @@ class GridWorldLMDP(LMDP):
             save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
 
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
@@ -633,14 +646,14 @@ class GridWorldLMDP(LMDP):
             return self.environment.play_game(model=self, policies=policies, num_times=num_times, save_gif=save_gif, save_path=save_path)
 
             
-    def play_map(self) -> None:
+    def play_map(self) -> GameStats:
         """
         Allows the user to play with the agent manually through the map.
 
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
-        self.environment.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
+        return self.environment.play_game(model=self, policies=[[0, None]], manual_play=True, num_times=100)
 
     def _print(self, msg, end: str = "\n"):
         if self.verbose:
@@ -699,6 +712,7 @@ class GridWorldLMDP_TDR(LMDP_TDR):
         self.dtype = dtype
         self.deterministic = False
         self.verbose = verbose
+        self.p_time = 0.0
         if allowed_actions:
             self.allowed_actions = allowed_actions
             self.num_actions = len(allowed_actions)
@@ -802,9 +816,10 @@ class GridWorldLMDP_TDR(LMDP_TDR):
             num_times (int, optional): Number of times to run the game. Defaults to 10.
             save_gif (bool, optional): If True, saves the game sequence as a GIF. Defaults to False
             save_path (str, optional): Path to save the GIF if `save_gif` is True. Defaults to None.
+            show_window (bool, optional): Whether to show the window or not. Defaults to True.
 
         Returns:
-            None
+            GameStats: An object containing statistics about the game played, such as number of moves, errors, and deaths.
         """
         assert not save_gif or save_path is not None, "Must specify save path"
         if policies is None:
@@ -1157,7 +1172,7 @@ class GridWorldPlotter:
         else:
             plt.show()
     
-    def plot_state(self, state: State) -> None:
+    def plot_state(self, state: State, save_fig: bool = True, fig_name: str = None) -> None:
         """
         Plots the grid world environment for a specific state.
 
@@ -1165,6 +1180,8 @@ class GridWorldPlotter:
 
         Args:
             state (State): The current state of the environment.
+            save_fig (bool, optional): If True, saves the plot as an image file; otherwise, displays it. Defaults to True.
+            fig_name (str, optional): The filename for saving the plot. If not provided, a default name will be used. Defaults to None.
 
         Returns:
             None
@@ -1174,7 +1191,11 @@ class GridWorldPlotter:
 
         self.plot_base_grid(ax, grid_positions, state=state)
         
-        plt.show()
+        if not save_fig:
+            plt.show()
+        else:
+            assert fig_name is not None
+            plt.savefig(os.path.join(self.__out_path, fig_name), dpi=300, bbox_inches="tight")
 
 
     def get_action_probs(self, curr_state: State, probs: list[float]) -> dict[int, float]:
@@ -1214,14 +1235,16 @@ class GridWorldPlotter:
             
             
 
-    def plot_stats(self, savefig: bool=False):
+    def plot_stats(self, savefig: bool=False) -> None:
         """
         Plots statistics for the grid world, including cumulative rewards over time.
+        The statistics are based on the `GridWorldMDP` instance's `stats` attribute, which contains relevant data such as cumulative rewards.
 
         Args:
             savefig (bool, optional): If True, the plot is saved to a file; otherwise, it is displayed. Defaults to False.
 
-        The statistics are based on the `GridWorldMDP` instance's `stats` attribute, which contains relevant data such as cumulative rewards.
+        Returns:
+            None
         """
         self.gridworld.stats.print_statistics()
         fig = self.gridworld.stats.plot_cum_reward(deterministic=self.gridworld.deterministic, mdp=True)
@@ -1231,7 +1254,7 @@ class GridWorldPlotter:
             plt.show()
 
     
-    def _get_common_reward_params(self, cmap_name: str = "jet"):
+    def _get_common_reward_params(self, cmap_name: str = "jet") -> tuple[list[tuple[int, int]], matplotlib.colors.Colormap, matplotlib.colors.Normalize]:
         """
         Retrieves common parameters for visualizing rewards across different types of grid world environments.
 

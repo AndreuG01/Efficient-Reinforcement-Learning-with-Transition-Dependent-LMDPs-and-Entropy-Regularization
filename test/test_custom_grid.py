@@ -7,6 +7,12 @@ from copy import deepcopy
 
 
 class CustomGridTester(unittest.TestCase):
+    """
+    Unit tests for the CustomGrid class, covering both GridWorld and Minigrid functionalities.
+    It tests that the move method in both environments works as expected in a variety of scenarios, including:
+        - Moving in all four directions (up, down, left, right)
+        - Handling of doors and keys
+    """
     def setUp(self):
         self.gridworld_grid = CustomGrid(
             type="gridworld",

@@ -86,15 +86,22 @@ class CustomGrid:
     Represents a customizable grid world for navigation and simulation.
 
     Attributes:
-    - POSITIONS_CHAR (dict): Maps characters to `CellType` values.
-    - map (list[str]): The textual representation of the grid.
-    - char_positions (dict): Maps `CellType` values to their corresponding characters.
-    - positions (dict): Stores grid positions grouped by `CellType`.
-    - start_pos (tuple[int, int]): The starting position in the grid.
-    - goal_pos (list[tuple[int, int]]): List of goal positions in the grid.
-    - size_x (int): The width of the grid.
-    - size_y (int): The height of the grid.
-    - state_index_mapper (dict): Maps state indices to grid positions.
+        POSITIONS_CHAR (dict): Maps characters to `CellType` values.
+        type (str): The type of grid, either "gridworld" or "minigrid".
+        map (Map): The map object containing the grid layout and objects.
+        allowed_actions (list[int]): List of allowed actions for the agent.
+        verbose (bool): If True, prints progress information during state generation.
+        positions (dict[CellType, list[tuple[int, int]]]): Dictionary mapping cell types to their positions in the grid.
+        objects (list[Object]): List of objects present in the grid.
+        state_properties (dict[str, list]): Properties of the states.
+        states (list[State]): List of all navigable states in the grid.
+        terminal_states (list[State]): List of terminal states (goal positions).
+        original_states (list[State]): Copy of the original states before any modifications.
+        original_terminal_states (list[State]): Copy of the original terminal states before any modifications.
+        max_state_space_size (int): Maximum size of the state space.
+        state_index_mapper (dict[int, State]): Maps state indices to their corresponding `State` objects.
+        start_pos (tuple[int, int]): Starting position of the agent in the grid.
+        goal_pos (list[tuple[int, int]]): List of goal positions in the grid.        
     """
     
     POSITIONS_CHAR = {
@@ -117,8 +124,11 @@ class CustomGrid:
         Initializes the grid with either a predefined map or generates a simple grid.
 
         Args:
-        - map (list[str], optional): A list of strings representing the grid.
-        - grid_size (int, optional): The size of the grid if generating a simple grid (default is 3).
+            type (str): The type of grid, either "gridworld" or "minigrid".
+            map (Map): The map object containing the grid layout and objects.
+            properties (dict[str, list]): Properties of the states.
+            allowed_actions (list[int]): List of allowed actions for the agent.
+            verbose (bool): If True, prints progress information during state generation.
         """
         self.verbose = verbose
         self.type = type
@@ -150,7 +160,15 @@ class CustomGrid:
         self.remove_unreachable_states()
         
     
-    def _generate_states(self):
+    def _generate_states(self) -> tuple[list[State], list[State]]:
+        """
+        Generates all possible states in the grid based.
+        
+        Returns:
+            tuple[list[State], list[State]]: A tuple containing two lists:
+                - The first list contains all normal states.
+                - The second list contains all terminal states (goal states).
+        """
         states = []
         terminal_states = []
         for pos in tqdm(self.positions[CellType.NORMAL], desc="Generating normal states", total=len(self.positions[CellType.NORMAL]), disable=not self.verbose):
@@ -166,7 +184,14 @@ class CustomGrid:
         return states, terminal_states        
 
 
-    def _get_layout_combinations(self):
+    def _get_layout_combinations(self) -> list[dict[tuple[int, int], Object]]:
+        """
+        Generates all possible layout combinations for the grid based on the positions of keys and doors.
+        
+        Returns:
+            list[dict[tuple[int, int], Object]]: A list of dictionaries representing all possible layout combinations.
+        """
+        
         if len(self.objects) == 0: return [None]
         key_objects = [copy.deepcopy(obj) for obj in self.objects if obj.type == "key"]
         door_objects = [obj for obj in self.objects if obj.type == "door"]
@@ -218,7 +243,17 @@ class CustomGrid:
         return all_placements
 
 
-    def __extend_properties(self, properties: dict[str, list]):
+    def __extend_properties(self, properties: dict[str, list]) -> dict[str, list]:
+        """
+        Extends the properties dictionary with additional properties based on the objects in the grid.
+        It sets the door properties for each object, indicating whether the door is open or closed.
+        
+        Args:
+            properties (dict[str, list]): The initial properties dictionary.
+        
+        Returns:
+            dict[str, list]: The extended properties dictionary with additional properties for each object.
+        """
         # Do not consider key objects
         for object in self.objects:
             if object.type == "key": continue
@@ -226,7 +261,13 @@ class CustomGrid:
         
         return properties
 
-    def _get_property_combinations(self):
+    def _get_property_combinations(self) -> list[tuple]:
+        """
+        Generates all combinations of the state properties defined in the grid.
+        
+        Returns:
+            list[tuple]: A list of tuples, where each tuple contains a combination of state properties.
+        """
         property_keys = list(self.state_properties.keys())
         property_values = [self.state_properties[key] for key in property_keys]
         combinations = product(*property_values)
@@ -258,22 +299,46 @@ class CustomGrid:
     
     
     def move(self, state: State, action: int):
+        """
+        Computes the next position after performing an action in a given state.
+        It acts as a wrapper method that calls the appropriate move method based on the grid type.
+        
+        Args:
+            state (State): The current state of the agent.
+            action (int): The action to be performed.
+        
+        Returns:
+            tuple[State, bool, bool]: A tuple containing:
+                - The next state after the action.
+                - A boolean indicating whether the move is valid.
+                - A boolean indicating whether the agent has reached a terminal state.
+        
+        """
         if self.type == "gridworld":
             return self.__move_gridworld(state, action)
         else:
             return self.__move_minigrid(state, action)
     
     
-    def __move_gridworld(self, state: State, action: int, offsets: dict ={0: (-1, 0), 1: (0, 1), 2: (1, 0), 3: (0, -1)}):
+    def __move_gridworld(
+        self,
+        state: State,
+        action: int,
+        offsets: dict ={0: (-1, 0), 1: (0, 1), 2: (1, 0), 3: (0, -1)}
+    ) -> tuple[State, bool, bool]:
         """
-        Computes the next position after performing an action, and returns whether the move is valid and whether the agent has reached a terminal state.
+        Computes the next position after performing an action in a GridWorld environment.
 
         Args:
-        - pos (tuple[int, int]): The current position of the agent.
-        - action (int): The action taken (0: up, 1: right, 2: down, 3: left).
+            state (State): The current state of the agent.
+            action (int): The action to be performed.
+            offsets (dict): A dictionary mapping actions to their corresponding (dy, dx) offsets.
 
         Returns:
-        - tuple[tuple[int, int], bool, bool]: The next position, whether the move is valid, and whether the position is terminal.
+            tuple[State, bool, bool]: A tuple containing:
+                - The next state after the action.
+                - A boolean indicating whether the move is valid.
+                - A boolean indicating whether the agent has reached a terminal state.
         """
         y, x, curr_layout = state.y, state.x, state.layout
         next_state = State(y, x, layout=deepcopy(state.layout), **state.properties)
@@ -355,7 +420,26 @@ class CustomGrid:
         else:
             return next_state, True, self.is_terminal(next_state)
     
-    def __move_minigrid(self, state: State, action: int, offsets: dict ={0: (0, 1), 1: (1, 0), 2: (0, -1), 3: (-1, 0)}):
+    def __move_minigrid(
+        self,
+        state: State,
+        action: int,
+        offsets: dict ={0: (0, 1), 1: (1, 0), 2: (0, -1), 3: (-1, 0)}
+    ) -> tuple[State, bool, bool]:
+        """
+        Computes the next position after performing an action in a MiniGrid environment.
+
+        Args:
+            state (State): The current state of the agent.
+            action (int): The action to be performed.
+            offsets (dict): A dictionary mapping actions to their corresponding (dy, dx) offsets.
+
+        Returns:
+            tuple[State, bool, bool]: A tuple containing:
+                - The next state after the action.
+                - A boolean indicating whether the move is valid.
+                - A boolean indicating whether the agent has reached a terminal state.
+        """
         orientation = state.properties["orientation"]
         y, x, curr_layout = state.y, state.x, state.layout
         
@@ -433,9 +517,20 @@ class CustomGrid:
             return next_state, self.is_valid(next_state), self.is_terminal(next_state)
     
     
-    def _unrechable_info(self, steps, queue_len, reachable_len, last_count, last_time, start_time):
+    def _unrechable_info(self, steps: int, queue_len: int, reachable_len: int, last_count: int, last_time: float, start_time: float) -> tuple[int, float]:
         """
         Prints the information message shown during the removal of unreachable states
+        
+        Args:
+            steps (int): The number of steps taken so far.
+            queue_len (int): The length of the queue of states to be processed.
+            reachable_len (int): The number of reachable states found so far.
+            last_count (int): The last count of reachable states.
+            last_time (float): The last time when the count was updated.
+            start_time (float): The time when the process started.
+        
+        Returns:
+            tuple[int, float]: A tuple containing the updated reachable length and the current time.
         """
         now = time.time()
         rate = (reachable_len - last_count) / (now - last_time) if now > last_time else 0
@@ -507,13 +602,14 @@ class CustomGrid:
         self.generate_state_index_mapper()
     
     
-    def transition_action(self, state_idx: int, next_state_idx: int, allowed_actions: list[int], ) -> int:
+    def transition_action(self, state_idx: int, next_state_idx: int, allowed_actions: list[int]) -> int:
         """
         Identifies the action that leads from one state index to another.
 
         Args:
             state_idx (int): Index of the starting state.
             next_state_idx (int): Index of the resulting state.
+            allowed_actions (list[int]): List of allowed actions to consider.
 
         Returns:
             int: The action that causes the transition, or -1 if none match.
@@ -535,7 +631,12 @@ class CustomGrid:
     def shortest_path_length_to_goal(self, state: State) -> int:
         """
         Returns the length of the shortest path from the given state to any goal state.
-        If no path exists, returns -1.
+        
+        Args:
+            state (State): The current state from which to calculate the shortest path length.
+        
+        Returns:
+            int: The length of the shortest path to a goal state, or -1 if no path exists.
         """
 
         visited = set()
@@ -622,12 +723,6 @@ class CustomGrid:
         - bool: True if the position is terminal, False otherwise.
         """
         return state in self.terminal_states
-    
-    
-    # def terminal_state_idx(self, state: State) -> int:
-    #     y, x = state.y, state.x
-    #     assert (y, x) in self.goal_pos
-    #     return len(self.states) + self.goal_pos.index((y, x))
     
     
     def is_key(self, state: State) -> bool:

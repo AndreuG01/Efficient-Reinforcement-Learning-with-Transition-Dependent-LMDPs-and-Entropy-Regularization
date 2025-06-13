@@ -11,11 +11,9 @@ class MiniGridMDPTester(unittest.TestCase):
 
 
 class MiniGridLMDPTester(unittest.TestCase):
-    #TODO: complete
     pass
 
 class MiniGridLMDP_TDRTester(unittest.TestCase):
-    #TODO: complete
     pass
 
 

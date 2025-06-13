@@ -1,3 +1,5 @@
+# This file contains the benchmark functions used to evaluate the performance of different implementations and algorithms.
+
 from domains.grid_world import GridWorldMDP
 from domains.minigrid_env import MinigridMDP, MinigridLMDP
 from domains.grid import MinigridActions
@@ -15,7 +17,21 @@ from tqdm import tqdm
 from .spinner import Spinner
 
 
-def benchmark_value_iteration(min_size: int = 2, max_size: int = 20, save_path: str = "assets/benchmark/value_iteration_comparison.txt", save_fig: bool = True):
+def benchmark_value_iteration(min_size: int = 2, max_size: int = 20, save_path: str = "assets/benchmark/value_iteration_comparison.txt", save_fig: bool = True) -> None:
+    """
+    Benchmark the time taken by the vectorized and iterative value iteration algorithms.
+    
+    The function stores the results in a text file and optionally saves figures comparing the time taken by both algorithms.
+    
+    Args:
+        min_size (int): Minimum grid size for the benchmark.
+        max_size (int): Maximum grid size for the benchmark.
+        save_path (str): Path to save the benchmark results.
+        save_fig (bool): Whether to save the figures or show them.
+    
+    Returns:
+        None
+    """
     time_efficient = []
     time_inefficient = []
     state_space_sizes = []
@@ -31,7 +47,7 @@ def benchmark_value_iteration(min_size: int = 2, max_size: int = 20, save_path: 
         for size in range(min_size, max_size):
             gridworld_mdp = GridWorldMDP(
                 map=Map(grid_size=size),
-                behaviour="deterministic",
+                behavior="deterministic",
                 verbose=False
             )
             spinner = Spinner(f"[{size} / {max_size}] | Efficient")
@@ -112,11 +128,25 @@ def benchmark_parallel_p(
     min_grid: int = 10,
     max_grid: int = 65,
     framewok: Literal["MDP", "LMDP"] = "MDP",
-    behaviour: Literal["stochastic", "deterministic"] = "deterministic"
-):
+    behavior: Literal["stochastic", "deterministic"] = "deterministic"
+) -> None | dict[int, list[list[int | float]]]:
+    """
+    Benchmark the parallelization of the transition matrix P generation with different numbers of CPU cores and grid sizes.
+    
+    Args:
+        savefig (bool): Whether to save the figure or show it.
+        visual (bool): Whether to visualize the results or not. If not visual, returns the results as a dictionary.
+        min_grid (int): Minimum grid size for the benchmark.
+        max_grid (int): Maximum grid size for the benchmark.
+        framewok (Literal["MDP", "LMDP"]): The framework to use, either "MDP" or "LMDP". Defaults to "MDP".
+        behavior (Literal["stochastic", "deterministic"]): The behavior of the environment, either "stochastic" or "deterministic". Defaults to "deterministic".
+        
+    Returns:
+        None or dict[int, list[list[int | float]]]: If visual is False, returns a dictionary with the number of jobs as keys and a list of [num_states, p_time] as values. If visual is True, returns None.
+    """
     
     assert framewok in ["MDP", "LMDP"], "Invalid framework"
-    assert behaviour in ["stochastic", "deterministic"], "Invalid behaviour"
+    assert behavior in ["stochastic", "deterministic"], "Invalid behavior"
     
     results = defaultdict(list)
     
@@ -129,7 +159,7 @@ def benchmark_parallel_p(
                     allowed_actions=MinigridActions.get_actions(),
                     benchmark_p=True,
                     threads=jobs,
-                    behaviour=behaviour
+                    behavior=behavior
                 )
             elif framewok == "LMDP":
                 model = MinigridLMDP(
@@ -169,7 +199,7 @@ def benchmark_parallel_p(
     plt.ylabel("Time ($s$)")
     
     if savefig:
-        plt.savefig(f"assets/benchmark/parallel_p_{framewok}_{behaviour}.png", dpi=300)
+        plt.savefig(f"assets/benchmark/parallel_p_{framewok}_{behavior}.png", dpi=300)
     else:
         plt.show()
     
@@ -179,7 +209,17 @@ def benchmark_parallel_p(
 def benchmark_lmdp2mdp_embedding(
     map: Map,
     savefig: bool = True,
-    ):
+) -> None:
+    """
+    Benchmark the embedding of a LMDP into an MDP.
+    
+    Args:
+        map (Map): The map to use for the benchmark.
+        savefig (bool): Whether to save the figures or show them.
+        
+    Returns:
+        None
+    """
     
     custom_palette = CustomPalette()
     lmdp_color = custom_palette[3]
@@ -254,6 +294,18 @@ def benchmark_mdp2lmdp_embedding(
     allowed_actions: list = None,
     visual: bool = False
 ) -> tuple[ModelBasedAlgsStats, ModelBasedAlgsStats]:
+    """
+    Benchmark the embedding of an MDP into a LMDP.
+    
+    Args:
+        map (Map): The map to use for the benchmark.
+        savefig (bool): Whether to save the figures or show them.
+        allowed_actions (list): List of allowed actions for the MDP.
+        visual (bool): Whether to visualize the results or not. If not visual, returns the stats.
+    
+    Returns:
+        tuple[ModelBasedAlgsStats, ModelBasedAlgsStats]: The stats of the MDP and LMDP.
+    """
     custom_palette = CustomPalette()
     lmdp_color = custom_palette[3]
     mdp_color = custom_palette[4]
@@ -263,7 +315,7 @@ def benchmark_mdp2lmdp_embedding(
     minigrid_mdp = MinigridMDP(
         map=map,
         allowed_actions=allowed_actions,
-        behaviour="stochastic", #TODO: change when embedding for deterministic MDP is implemented
+        behavior="stochastic",
     )
     
     
@@ -317,8 +369,18 @@ def benchmark_mdp2lmdp_embedding(
     return stats_mdp, stats_lmdp
 
 
-def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path="assets/benchmark/iterative_vs_vectorized_embedding.txt"):
+def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path="assets/benchmark/iterative_vs_vectorized_embedding.txt") -> None:
+    """
+    Benchmark the time taken by the vectorized and iterative MDP to LMDP_TDR embedding.
+    It stores the results in a text file and plots the speedup and absolute time difference.
     
+    Args:
+        max_grid_size (int): Maximum grid size for the benchmark.
+        save_path (str): Path to save the benchmark results.
+    
+    Returns:
+        None
+    """
     table_lines = []
     header_line = "+------------+-----------------------+-----------------------+"
     table_lines.append(header_line)
@@ -334,7 +396,7 @@ def benchmark_iterative_vectorized_embedding(max_grid_size: int = 60, save_path=
             mdp = MinigridMDP(
                 map=Map(grid_size=grid_size),
                 allowed_actions=MinigridActions.get_actions(),
-                behaviour="stochastic",
+                behavior="stochastic",
                 stochastic_prob=0.3,
                 temperature=4.5,
                 verbose=False

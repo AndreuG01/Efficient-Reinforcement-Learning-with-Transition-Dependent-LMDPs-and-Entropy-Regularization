@@ -7,25 +7,34 @@ import numpy as np
 
 
 class GridWorldMDPTester(unittest.TestCase):
-    
+    """
+    Unit tests for the GridWorldMDP class.
+    This class tests the initialization, value function computation, and policy visualization of the GridWorldMDP.
+    """
     def setUp(self):
         print('\n', unittest.TestCase.id(self))
     
     def test_one_thread(self):
+        """
+        Tests the initialization of the GridWorldMDP with a single thread.
+        """
         mdp = GridWorldMDP(
             map=Map(grid_size=4),
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="deterministic",
+            behavior="deterministic",
             threads=1,
             verbose=False
         )
         self.assertIsNotNone(mdp)
     
     def test_multiple_thread(self):
+        """
+        Tests the initialization of the GridWorldMDP with 4 threads.
+        """
         mdp = GridWorldMDP(
             map=Map(grid_size=4),
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="deterministic",
+            behavior="deterministic",
             threads=4,
             verbose=False
         )
@@ -33,10 +42,13 @@ class GridWorldMDPTester(unittest.TestCase):
     
     
     def test_value_function_det(self):
+        """
+        Tests the value function computation for a deterministic GridWorldMDP.
+        """
         mdp = GridWorldMDP(
             map=Map(grid_size=4),
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="deterministic",
+            behavior="deterministic",
             threads=4,
             verbose=False
         )
@@ -45,10 +57,13 @@ class GridWorldMDPTester(unittest.TestCase):
     
     
     def test_value_function_stochastic(self):
+        """
+        Tests the value function computation for a stochastic GridWorldMDP.
+        """
         mdp = GridWorldMDP(
             map=Map(grid_size=4),
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="stochastic",
+            behavior="stochastic",
             threads=4,
             verbose=False
         )
@@ -57,10 +72,13 @@ class GridWorldMDPTester(unittest.TestCase):
         
 
     def test_visualize_stochastic_mdp_policy_128(self):
+        """
+        Tests the visualization of the policy for a stochastic GridWorldMDP with a datatype of np.float128.
+        """
         mdp = GridWorldMDP(
             map=Map(grid_size=4),
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="stochastic",
+            behavior="stochastic",
             threads=4,
             verbose=False
         )
@@ -72,10 +90,13 @@ class GridWorldMDPTester(unittest.TestCase):
 
     
     def test_visualize_deterministic_mdp_policy_128(self):
+        """
+        Tests the visualization of the policy for a deterministic GridWorldMDP with a datatype of np.float128.
+        """
         mdp = GridWorldMDP(
             map=Map(grid_size=4),
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="deterministic",
+            behavior="deterministic",
             threads=4,
             verbose=False
         )
@@ -87,10 +108,13 @@ class GridWorldMDPTester(unittest.TestCase):
     
     
     def test_visualize_stochastic_mdp_policy_64(self):
+        """
+        Tests the visualization of the policy for a stochastic GridWorldMDP with a datatype of np.float64.
+        """
         mdp = GridWorldMDP(
             map=Map(grid_size=10),
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="stochastic",
+            behavior="stochastic",
             threads=4,
             verbose=False,
             dtype=np.float64
@@ -103,10 +127,13 @@ class GridWorldMDPTester(unittest.TestCase):
 
     
     def test_visualize_deterministic_mdp_policy_64(self):
+        """
+        Tests the visualization of the policy for a deterministic GridWorldMDP with a datatype of np.float64.
+        """
         mdp = GridWorldMDP(
             map=Map(grid_size=4),
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="deterministic",
+            behavior="deterministic",
             threads=4,
             verbose=False,
             dtype=np.float64
@@ -119,10 +146,13 @@ class GridWorldMDPTester(unittest.TestCase):
 
 
     def test_LMDP_policy(self):
+        """
+        Tests the conversion of a GridWorldMDP to an LMDP policy.
+        """
         mdp = GridWorldMDP(
             map=Map(grid_size=4),
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="stochastic",
+            behavior="stochastic",
             verbose=False
         )
         
@@ -161,36 +191,13 @@ class GridWorldMDPTester(unittest.TestCase):
         np.testing.assert_array_almost_equal(reference_policy, mdp.to_LMDP_policy())
     
     
-    
-    # TODO: this does not currently work as lambda = 0 cannot be used in power iteration.
-    # def test_deterministic_lmdp_embedding(self):
-    #     mdp = GridWorldMDP(
-    #         map=Maps.CLIFF,
-    #         behaviour="deterministic",
-    #         temperature=0,
-    #         verbose=False
-    #     )
-    #     embedded_lmdp = mdp.to_LMDP()
-    #     self.assertIsNotNone(embedded_lmdp)
-    
-    
-    # TODO: this does not currently work as lambda = 0 cannot be used in power iteration.
-    # def test_stochastic_lmdp_embedding(self):
-    #     mdp = GridWorldMDP(
-    #         map=Maps.CLIFF,
-    #         behaviour="stochastic",
-    #         temperature=0,
-    #         stochastic_prob=0.1,
-    #         verbose=False
-    #     )
-    #     embedded_lmdp = mdp.to_LMDP()
-    #     self.assertIsNotNone(embedded_lmdp)
-    
-    
     def test_reg_deterministic_lmdp_embedding(self):
+        """
+        Tests the embedding of an entropy-regularized deterministic GridWorldMDP into an LMDP.
+        """
         mdp = GridWorldMDP(
             map=Maps.CLIFF,
-            behaviour="deterministic",
+            behavior="deterministic",
             temperature=5,
             verbose=False
         )
@@ -199,9 +206,12 @@ class GridWorldMDPTester(unittest.TestCase):
     
     
     def test_reg_stochastic_lmdp_embedding(self):
+        """
+        Tests the embedding of an entropy-regularized stochastic GridWorldMDP into an LMDP.
+        """
         mdp = GridWorldMDP(
             map=Maps.CLIFF,
-            behaviour="stochastic",
+            behavior="stochastic",
             temperature=3.5,
             stochastic_prob=0.1,
             verbose=False
@@ -210,37 +220,13 @@ class GridWorldMDPTester(unittest.TestCase):
         self.assertIsNotNone(embedded_lmdp)
     
     
-    # TODO: this does not currently work as lambda = 0 cannot be used in power iteration.
-    # def test_deterministic_lmdp_tdr_embedding(self):
-    #     mdp = GridWorldMDP(
-    #         map=Maps.CLIFF,
-    #         behaviour="deterministic",
-    #         temperature=0,
-    #         verbose=False,
-    #         dtype=np.float64
-    #     )
-    #     embedded_lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
-    #     self.assertIsNotNone(embedded_lmdp)
-    
-    
-    # TODO: this does not currently work as lambda = 0 cannot be used in power iteration.
-    # def test_stochastic_lmdp_tdr_embedding(self):
-    #     mdp = GridWorldMDP(
-    #         map=Maps.CLIFF,
-    #         behaviour="stochastic",
-    #         temperature=0,
-    #         stochastic_prob=0.1,
-    #         verbose=False,
-    #         dtype=np.float64
-    #     )
-    #     embedded_lmdp = mdp.to_LMDP_TDR(lmbda=mdp.temperature)
-    #     self.assertIsNotNone(embedded_lmdp)
-    
-    
     def test_reg_deterministic_lmdp_tdr_embedding(self):
+        """
+        Tests the embedding of an entropy-regularized deterministic GridWorldMDP into an LMDP with transition-dependent rewards.
+        """
         mdp = GridWorldMDP(
             map=Maps.CLIFF,
-            behaviour="deterministic",
+            behavior="deterministic",
             temperature=5,
             verbose=False
         )
@@ -249,9 +235,12 @@ class GridWorldMDPTester(unittest.TestCase):
     
     
     def test_reg_stochastic_lmdp_tdr_embedding(self):
+        """
+        Tests the embedding of an entropy-regularized stochastic GridWorldMDP into an LMDP with transition-dependent rewards.
+        """
         mdp = GridWorldMDP(
             map=Maps.CLIFF,
-            behaviour="stochastic",
+            behavior="stochastic",
             temperature=3.5,
             stochastic_prob=0.1,
             verbose=False
@@ -261,11 +250,9 @@ class GridWorldMDPTester(unittest.TestCase):
     
     
 class GridWorldLMDPTester(unittest.TestCase):
-    #TODO: complete
     pass
 
 class GridWorldLMDP_TDRTester(unittest.TestCase):
-    #TODO: complete
     pass
 
 
