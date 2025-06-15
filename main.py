@@ -20,12 +20,12 @@ from tqdm import tqdm
 
 def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], save_fig: bool = True):
     for prob in probs:
-        mdp = GridWorldMDP(
+        mdp = MinigridMDP(
             map=map,
-            allowed_actions=GridWorldActions.get_actions(),
-            # allowed_actions=GridWorldActions.get_actions()[:4],
+            # allowed_actions=GridWorldActions.get_actions(),
+            allowed_actions=MinigridActions.get_actions()[:3],
             temperature=mdp_temperature,
-            behaviour="stochastic",
+            behavior="stochastic",
             stochastic_prob=prob,
             verbose=True
         )
@@ -33,15 +33,16 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
         mdp.compute_value_function()
         
         plt.rcParams.update({"text.usetex": True})
-        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+        fig, axes = plt.subplots(1, 2, figsize=(11, 5))
         
-        axes[0].plot(mdp.V, label="MDP", color="black", zorder=3, linewidth=1.5, linestyle="dashed")
+        axes[0].plot(mdp.V, label="MDP", color="black", zorder=3, linewidth=1, linestyle="dashed")
         
         # Bias starting lambda based on stochastic probability
         bias = (prob - 0.5) * 2  # from -1 to 1
 
         start_lmbda = mdp.temperature * (1 - 0.5 * bias)
         start_lmbda = max(0.05, start_lmbda)  # ensure it's positive
+        # start_lmbda = 1
 
         step = 0.25
         lmdp_lmbdas = [start_lmbda]
@@ -50,7 +51,6 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
 
         # Scale how far right to extend based on how deterministic it is
         # At prob=1 → extend 80 steps; at prob=0 → extend 10 steps
-        right_extension_steps = int(10 + 70 * prob)
 
         # Dynamic search
         step = 0
@@ -86,12 +86,10 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
             
             step += 1
 
-        cmap = plt.get_cmap("rainbow")
+        cmap = plt.get_cmap("winter")
         normalizer = Normalize(vmin=min(lmdp_lmbdas), vmax=max(lmdp_lmbdas))
         sm = cm.ScalarMappable(cmap=cmap, norm=normalizer)
 
-        for i, curr_lmbda in enumerate(lmdp_lmbdas):
-            axes[0].plot(value_functions[i], color=cmap(normalizer(curr_lmbda)))
 
         cbar = fig.colorbar(sm, ax=axes[0])
         cbar.set_label("$\lambda$")
@@ -102,7 +100,10 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
         best_error = min(errors)
         lmdp, _, _ = mdp.to_LMDP_TDR(lmbda=best_lmbda, find_best_lmbda=False)
         lmdp.compute_value_function()
-        axes[0].plot(lmdp.V, label=f"Best LMDP ($\lambda = {round(best_lmbda, 2)})$", color="gray", zorder=3, linewidth=1.5, linestyle="dashed")
+        # axes[0].plot(lmdp.V, label=fr"Best LMDP ($\lambda \approx {round(best_lmbda, 2)})$", color="red", zorder=3, linewidth=1, linestyle="dashed")
+        for i, curr_lmbda in enumerate(lmdp_lmbdas):
+            if curr_lmbda == best_lmbda: continue
+            axes[0].plot(value_functions[i], color=cmap(normalizer(curr_lmbda)))
 
         for i, curr_lmbda in enumerate(lmdp_lmbdas):
             if curr_lmbda == best_lmbda:
@@ -110,8 +111,8 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
             else:
                 axes[1].scatter(curr_lmbda, errors[i], color=cmap(normalizer(curr_lmbda)), s=10)
 
-        axes[1].axvline(x=best_lmbda, color="gray", linestyle="dashed", linewidth=1, label=f"Best $\lambda = {round(best_lmbda, 2)}$")
-        axes[1].axhline(y=best_error, color="gray", linestyle="dashed", linewidth=1, label=f"MSE = {round(best_error, 4)}")
+        axes[1].axvline(x=best_lmbda, color="gray", linestyle="dashed", linewidth=0.5, label=rf"Best $\lambda \approx {round(best_lmbda, 2)}$")
+        axes[1].axhline(y=best_error, color="gray", linestyle="dashed", linewidth=0.5, label=rf"MSE $\approx {round(best_error, 4)}$")
 
         axes[1].set_title("Error vs. $\lambda$")
         axes[1].set_xlabel("$\lambda$")
@@ -122,7 +123,7 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
         axes[0].set_ylabel("$V(s)$")
         axes[0].legend(loc="lower left")
         
-        plt.suptitle(f"MDP with $\\beta = {mdp.temperature}$. Stochastic probability ${mdp.stochastic_prob if mdp.behaviour != 'deterministic' else '1'}$. LMDP with $\lambda = {best_lmbda}$.\nMap: {map.name}")
+        plt.suptitle(f"MDP with $\\beta = {mdp.temperature}$. Stochastic probability ${mdp.stochastic_prob if mdp.behavior != 'deterministic' else '1'}$. LMDP with $\lambda = {round(best_lmbda, 3)}$.\nMap: {map.name}")
 
         if save_fig:
             directory_1 = "assets/temperature_exploration/"
@@ -135,7 +136,7 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
             if not os.path.exists(directory_2):
                 os.mkdir(directory_2)
             
-            plt.savefig(os.path.join(directory_2, f"temp_{mdp.temperature}_prob_{mdp.stochastic_prob if mdp.behaviour != 'deterministic' else '1'}_v2.png"), dpi=300, bbox_inches="tight")
+            plt.savefig(os.path.join(directory_2, f"temp_{mdp.temperature}_prob_{mdp.stochastic_prob if mdp.behavior != 'deterministic' else '1'}_v2.png"), dpi=300, bbox_inches="tight")
     
     if not save_fig:
         plt.show()
@@ -144,8 +145,8 @@ def explore_temperature(map: Map, mdp_temperature: float, probs: list[float], sa
 def mse_lambda(map: Map, beta: float, p: float, save_fig: bool = True):
     mdp = MinigridMDP(
         map=map,
-        allowed_actions=MinigridActions.get_actions(),
-        behaviour="stochastic",
+        allowed_actions=MinigridActions.get_actions()[:3],
+        behavior="stochastic",
         stochastic_prob=p,
         temperature=beta,
         # verbose=False
@@ -156,7 +157,7 @@ def mse_lambda(map: Map, beta: float, p: float, save_fig: bool = True):
     
     palette = CustomPalette()
     
-    lambdas = np.arange(beta, beta + 36, 1)
+    lambdas = np.arange(beta, beta + 145, 1)
     errors = []
     for lmbda in tqdm(lambdas, total=len(lambdas)):
         lmdp, _, _ = mdp.to_LMDP_TDR(lmbda=lmbda, find_best_lmbda=False)
@@ -177,31 +178,96 @@ def mse_lambda(map: Map, beta: float, p: float, save_fig: bool = True):
         plt.show()
 
 
-if __name__ == "__main__":
+def draw_maps_initial_state():
+    """
+    Plots the initial state of all the maps + 2 simple grids for the report
+    """
+    dest_path = os.path.join("assets", "maps")
+    if not os.path.exists(dest_path):
+        os.mkdir(dest_path)
+    
+    for map in [Map(grid_size=25)] + Maps.get_maps() + [Map(grid_size=4)]:
+        map.R = None
+        mdp_minigrid = MinigridMDP(
+            map=map,
+            allowed_actions=MinigridActions.get_actions()[:3],
+            threads=1
+        )
         
-    # explore_temperature(Maps.CHALLENGE_DOOR, mdp_temperature=1, probs=[0.5])
-    # mdp = MinigridMDP(
-    #     map=Maps.CHALLENGE_DOOR,
-    #     allowed_actions=GridWorldActions.get_actions(),
-    #     behaviour="stochastic",
-    #     stochastic_prob=0.5,
-    #     temperature=1
+        mdp_gridworld = GridWorldMDP(
+            map=map,
+            allowed_actions=GridWorldActions.get_actions()[:4],
+        )
+        
+        
+        plotter = GridWorldPlotter(
+            mdp_gridworld,
+            name="maps",
+        )
+        plotter.plot_state(mdp_gridworld.environment.custom_grid.state_index_mapper[mdp_gridworld.s0], save_fig=True, fig_name=f"{map.name.replace(' ', '_')}_gridworld.png")
+        
+        mdp_minigrid.environment.visualize_state(mdp_minigrid.environment.custom_grid.state_index_mapper[mdp_minigrid.s0], save_path=f"{os.path.join(dest_path, map.name.replace(' ', '_'))}_minigrid.png")
+        
+
+
+if __name__ == "__main__":
+    
+    lmdp_tdr_advantage(save_fig=True)
+    
+    
+    
+    
+    exit()
+    # mdp_2 = MinigridMDP(
+    #     map=Map(grid_size=4),
+    #     allowed_actions=MinigridActions.get_actions(),
+    #     stochastic_prob=0.1,
+    #     behavior="stochastic",
+    #     temperature=0,
+    #     verbose=True,
+    #     threads=1
     # )
-    # policies_comparison(mdp, save_fig=True, zoom=True, zoom_size=2000)
-    # exit()
+    
+    # mdp_1.compute_value_function()
+    # mdp_2.compute_value_function()
+    # plt.figure(figsize=(10, 5))
+    # plt.plot(mdp_1.V, label=f"{mdp_1.temperature}")
+    # plt.plot(mdp_2.V, label=f"{mdp_2.temperature}")
+    # plt.legend()
+    # plt.show()
+    
+    # mdp_1.visualize_policy(policies=[(0, mdp_1.policy)], num_times=100, show_window=False)#, save_gif=True, save_path="mdp1.gif")
+    # mdp_2.visualize_policy(policies=[(0, mdp_2.policy)], num_times=100, show_window=False)#, save_gif=True, save_path="mdp2.gif")
+    
+
     mdp = MinigridMDP(
-        map=Maps.CHALLENGE_DOOR,
-        allowed_actions=MinigridActions.get_actions(),
-        temperature=1.0,
-        behaviour="stochastic",
-        stochastic_prob=0.5
+        map=Map(grid_size=4),
+        allowed_actions=MinigridActions.get_actions()[:3],
+        stochastic_prob=0.2,
+        behavior="stochastic",
+        temperature=2,
+        verbose=True,
+        threads=1
     )
     
-    lmdp, stats, _ = mdp.to_LMDP_TDR()
+    # explore_temperature(map=Map(grid_size=25), mdp_temperature=1, probs=[0.6], save_fig=True)
+    policies_comparison(mdp, save_fig=True)
     
-    # stats.plot_stats(save_path="assets/challenge_door_report_embedding_stats_1.png", save_fig=True)
     
-    policies_comparison(mdp, save_fig=True, zoom=True, zoom_size=100)
+    exit()
     
-    # for i in range(lmdp.R.toarray().shape[0]):
-    #     print(lmdp.R.toarray()[i, :])
+    
+    
+    mdp = MinigridMDP(
+        map=Map(grid_size=25),
+        # allowed_actions=GridWorldActions.get_actions(),
+        allowed_actions=MinigridActions.get_actions()[:3],
+        temperature=1.0,
+        behavior="stochastic",
+        stochastic_prob=0.6,
+        verbose=True
+    )
+    # mdp.to_LMDP_TDR()
+    
+    # explore_temperature(Map(grid_size=20), 1.0, [0.4])
+    explore_temperature(map=Map(grid_size=25), mdp_temperature=1, probs=[0.6], save_fig=False)

@@ -60,7 +60,7 @@ def visualize_stochasticity_rewards_embedded_lmdp(state: int, map: Map, num_acti
         minigrid_mdp = MinigridMDP(
             allowed_actions=MinigridActions.get_actions()[:num_actions],
             map=map,
-            behaviour="stochastic",
+            behavior="stochastic",
             stochastic_prob=main_prob
         )
         
@@ -156,7 +156,7 @@ def compare_value_function_by_stochasticity(map: Map, save_fig: bool = True):
         mdp = MinigridMDP(
             map=map,
             allowed_actions=MinigridActions.get_actions(),
-            behaviour="deterministic" if stochasticity == 1 else "stochastic",
+            behavior="deterministic" if stochasticity == 1 else "stochastic",
             stochastic_prob=stochasticity
         )
         mdp.compute_value_function()
@@ -196,7 +196,7 @@ def lmdp_tdr_advantage(save_fig: bool = True):
     map = Maps.CLIFF_WALKING
     mdp = GridWorldMDP(
         map=map,
-        behaviour="stochastic",
+        behavior="stochastic",
         stochastic_prob=1,
         temperature=1
     )
@@ -224,6 +224,10 @@ def lmdp_tdr_advantage(save_fig: bool = True):
     lmdp_tdr.compute_value_function()
     
     output_dir = "LMDP_TDR_advantage"
+    
+    lmdp.visualize_policy(num_times=1, save_gif=save_fig, save_path=os.path.join(os.path.join("assets", output_dir), "lmdp.gif"))
+    mdp.visualize_policy(num_times=1, save_gif=save_fig, save_path=os.path.join(os.path.join("assets", output_dir), "mdp.gif"))
+    lmdp_tdr.visualize_policy(num_times=1, save_gif=save_fig, save_path=os.path.join(os.path.join("assets", output_dir), "lmdp_tdr.gif"))
         
     mdp_plotter = GridWorldPlotter(
         mdp,
@@ -453,10 +457,10 @@ def generate_parallel_p_table(save_path: str = "assets/parallel_p_table.txt"):
     
     results = []
     
-    for behaviour in ["deterministic", "stochastic"]:
+    for behavior in ["deterministic", "stochastic"]:
         first_line = "|--------------------------------------|"
         table_lines.append(first_line)
-        title = f"| {behaviour} MDP"
+        title = f"| {behavior} MDP"
         title += (" " * (len(first_line) - len(title) - 1)) + "|"
         table_lines.append(title)
         table_lines.append("|--------------------------------------|")
@@ -464,7 +468,7 @@ def generate_parallel_p_table(save_path: str = "assets/parallel_p_table.txt"):
         table_lines.append("|------------|-------|-----------------|")
         
         res = benchmark_parallel_p(
-            behaviour=behaviour,
+            behavior=behavior,
             savefig=True,
             visual=True
         )
@@ -491,9 +495,9 @@ def generate_parallel_p_table(save_path: str = "assets/parallel_p_table.txt"):
     })
     palette = CustomPalette()
     
-    for i, behaviour in zip(range(len(results)), ["deterministic", "stochastic"]):
+    for i, behavior in zip(range(len(results)), ["deterministic", "stochastic"]):
         axes[i].grid()
-        axes[i].set_title(behaviour.capitalize(), fontsize=10, fontweight="bold")
+        axes[i].set_title(behavior.capitalize(), fontsize=10, fontweight="bold")
         for j, core in enumerate(results[i].keys()):
             times = [elem[1] for elem in results[i][core]]
             states = [elem[0] for elem in results[i][core]]
@@ -537,7 +541,7 @@ def different_gammas_plot(save_fig: bool = True):
         mdp = GridWorldMDP(
             map=Maps.GRIDWORLD_MDP_MYOPIC,
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="deterministic",
+            behavior="deterministic",
             gamma=gamma,
         )
         
@@ -568,7 +572,7 @@ def different_temperature_plots(model_type: Literal["MDP", "LMDP"] = "MDP", save
     plt.rcParams.update({"text.usetex": True})
     fig, ax = plt.subplots(figsize=(10, 5))
     plt.tight_layout()
-    temperatures = np.arange(0.1, 10.1, 0.1)
+    temperatures = np.arange(0.1, 50.1, 0.1)
     
     cmap = plt.colormaps["turbo"]
     norm = Normalize(vmin=temperatures.min(), vmax=temperatures.max())
@@ -577,13 +581,15 @@ def different_temperature_plots(model_type: Literal["MDP", "LMDP"] = "MDP", save
     
     map = Map(grid_size=5)
     
+    verbose = True
+    
     if model_type == "MDP":
         model = GridWorldMDP(
             map=map,
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour="deterministic",
+            behavior="deterministic",
             temperature=0,
-            verbose=False
+            verbose=verbose
         )
         model.compute_value_function()
         plt.plot(model.V, color="magenta", linewidth=3, zorder=3, label=r"$\beta = 0$", linestyle="--")
@@ -593,16 +599,16 @@ def different_temperature_plots(model_type: Literal["MDP", "LMDP"] = "MDP", save
             model = GridWorldMDP(
                 map=map,
                 allowed_actions=GridWorldActions.get_actions()[:4],
-                behaviour="deterministic",
+                behavior="deterministic",
                 temperature=temp,
-                verbose=False
+                verbose=verbose
             )
         else:
             model = GridWorldLMDP(
                 map=map,
                 allowed_actions=GridWorldActions.get_actions()[:4],
                 lmbda=temp,
-                verbose=False
+                verbose=verbose
             )
     
         model.compute_value_function()
@@ -632,7 +638,7 @@ def regularized_embedding_error_plot(map: Map, min_temp: float = 0.1, max_temp: 
     for temp in temperatures:
         mdp = MinigridMDP(
             map=map,
-            behaviour="deterministic",
+            behavior="deterministic",
             allowed_actions=MinigridActions.get_actions(),
             temperature=temp
         )
@@ -677,12 +683,12 @@ def regularized_embedding_error_plot(map: Map, min_temp: float = 0.1, max_temp: 
         plt.show()
 
 
-def create_models(map, f, t, temp_mdp, temp_lmdp, behaviour, stochastic_prob):
+def create_models(map, f, t, temp_mdp, temp_lmdp, behavior, stochastic_prob):
     if f == "MDP":
         mdp = GridWorldMDP(
             map=map,
             allowed_actions=GridWorldActions.get_actions()[:4],
-            behaviour=behaviour,
+            behavior=behavior,
             stochastic_prob=stochastic_prob,
             temperature=temp_mdp
         )
@@ -715,11 +721,11 @@ def compute_value_metrics(mdp, lmdp):
     return mse, r2, corr
 
 
-def embedding_value_function_reg(map, f="MDP", t="LMDP", behaviour="deterministic", stochastic_prob=0.9, save_fig=False):
+def embedding_value_function_reg(map, f="MDP", t="LMDP", behavior="deterministic", stochastic_prob=0.9, save_fig=False):
     assert f in ["MDP", "LMDP"]
     assert t in ["MDP", "LMDP"]
     assert t != f
-    assert behaviour in ["deterministic", "stochastic", "mixed"]
+    assert behavior in ["deterministic", "stochastic", "mixed"]
 
     temps = np.arange(1, 7, 0.05)
     lmdp_color = plt.get_cmap("Reds")
@@ -738,7 +744,7 @@ def embedding_value_function_reg(map, f="MDP", t="LMDP", behaviour="deterministi
     mse_vals, r2_vals, corr_vals = [], [], []
 
     for temp in temps:
-        mdp, lmdp = create_models(map, f, t, temp, temp, behaviour, stochastic_prob)
+        mdp, lmdp = create_models(map, f, t, temp, temp, behavior, stochastic_prob)
         mse, r2, corr = compute_value_metrics(mdp, lmdp)
 
         mse_vals.append(mse)
@@ -768,22 +774,22 @@ def embedding_value_function_reg(map, f="MDP", t="LMDP", behaviour="deterministi
     plot_metric(ax_r2, r2_vals, "Max", r"$R^2$")
     plot_metric(ax_corr, corr_vals, "Max", r"Correlation ($\rho$)")
 
-    plt.suptitle(f"{f} to {t} embedding. Stochastic MDP with prob ${stochastic_prob if behaviour != 'deterministic' else '1'}$. Map: {map.name}")
+    plt.suptitle(f"{f} to {t} embedding. Stochastic MDP with prob ${stochastic_prob if behavior != 'deterministic' else '1'}$. Map: {map.name}")
     plt.tight_layout(rect=[0, 0, 1, 0.95])
 
     if save_fig:
         name = map.name.lower().replace(" ", "_")
-        path = f"assets/{f}_to_{t}_prob_{stochastic_prob if behaviour != 'deterministic' else 'det'}_{name}.png"
+        path = f"assets/{f}_to_{t}_prob_{stochastic_prob if behavior != 'deterministic' else 'det'}_{name}.png"
         plt.savefig(path, dpi=300, bbox_inches="tight")
     else:
         plt.show()
 
 
-def embedding_errors_different_temp(map, f="MDP", t="LMDP", behaviour="deterministic", stochastic_prob=0.9, save_fig=False):
+def embedding_errors_different_temp(map, f="MDP", t="LMDP", behavior="deterministic", stochastic_prob=0.9, save_fig=False):
     assert f in ["MDP", "LMDP"]
     assert t in ["MDP", "LMDP"]
     assert t != f
-    assert behaviour in ["deterministic", "stochastic", "mixed"]
+    assert behavior in ["deterministic", "stochastic", "mixed"]
 
     mdp_temps = [1, 2, 3, 4]
     lmdp_range = np.arange(1, 8, 0.2)
@@ -795,7 +801,7 @@ def embedding_errors_different_temp(map, f="MDP", t="LMDP", behaviour="determini
     for beta in mdp_temps:
         mse_list, r2_list, corr_list = [], [], []
         for lmbda in lmdp_range:
-            mdp, lmdp = create_models(map, f, t, beta, lmbda, behaviour, stochastic_prob)
+            mdp, lmdp = create_models(map, f, t, beta, lmbda, behavior, stochastic_prob)
             mse, r2, corr = compute_value_metrics(mdp, lmdp)
             mse_list.append(mse)
             r2_list.append(r2)
@@ -815,10 +821,10 @@ def embedding_errors_different_temp(map, f="MDP", t="LMDP", behaviour="determini
         ax.set_ylabel(ylabel)
         ax.legend()
 
-    plt.suptitle(f"{f} to {t} embedding. Stochastic MDP with prob ${stochastic_prob if behaviour != 'deterministic' else '1'}$. Map: {map.name}")
+    plt.suptitle(f"{f} to {t} embedding. Stochastic MDP with prob ${stochastic_prob if behavior != 'deterministic' else '1'}$. Map: {map.name}")
     if save_fig:
         name = map.name.lower().replace(" ", "_")
-        path = f"assets/{f}_to_{t}_prob_{stochastic_prob if behaviour != 'deterministic' else 'det'}_{name}_lmbda_choosing.png"
+        path = f"assets/{f}_to_{t}_prob_{stochastic_prob if behavior != 'deterministic' else 'det'}_{name}_lmbda_choosing.png"
         # plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.savefig("assets/new_version_2.png", dpi=300, bbox_inches="tight")
     else:

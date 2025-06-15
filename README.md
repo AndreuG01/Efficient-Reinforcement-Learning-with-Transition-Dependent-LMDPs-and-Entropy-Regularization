@@ -92,7 +92,7 @@ The `models` directory encapsulates the core mathematical formulations used in t
 - `utils.py`: Includes utility functions shared across the models. The main function provided here checks whether two models—regardless of type—are equal. This is useful for debugging, testing, and verifying consistency between model implementations.
 
 
-### 3.2. `domains` directory
+### 3.2. `domains` directory
 
 The `domains` directory defines the environments in which the `models` from the models directory are deployed and tested. These environments simulate grid-based worlds where an agent interacts through actions and receives feedback in the form of rewards. Each file supports different configurations of grid environments, and integrates with the corresponding MDP variants.
 
